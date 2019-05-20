@@ -1,0 +1,9 @@
+stages:
+  - build
+
+x86_build:
+  stage: build
+  script:
+    - mkdir build && cd build && cmake .. && make
+  tags:
+    - x86_64
