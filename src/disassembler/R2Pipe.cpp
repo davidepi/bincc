@@ -1,4 +1,4 @@
-#include "r2pipe.hpp"
+#include "R2Pipe.hpp"
 #include <unistd.h>
 #include <cstdio>
 #include <cstdlib>
@@ -10,9 +10,10 @@
 #define FOLDER_TEMPLATE "/tmp/bcc_XXXXXX"
 char* R2Pipe::folder = NULL;
 
-R2Pipe::R2Pipe():executable("r2"), analyzed(NULL), process(), r2_read(NULL),
+R2Pipe::R2Pipe():analyzed(NULL), process(), r2_read(NULL),
                  r2_write(NULL)
 {
+    executable = strdup("r2");
     //create folder for temporary fifo
     if(folder == NULL)
     {
@@ -32,11 +33,16 @@ R2Pipe::~R2Pipe()
     free((void*)executable);
 }
 
+const char* R2Pipe::get_executable() const
+{
+    return executable;
+}
+
 bool R2Pipe::set_executable(const char* r2exe)
 {
     bool retval;
     //assert existence of executable
-    if(access(r2exe, X_OK) == 1)
+    if(access(r2exe, X_OK) == -1)
     {
         fprintf(stderr, "The radare2 executable %s does not exist or has "
                         "wrong permissions", r2exe);
@@ -44,17 +50,23 @@ bool R2Pipe::set_executable(const char* r2exe)
     }
     else
     {
+        free((void*)executable);
         executable = strdup(r2exe);
         retval = true;
     }
     return retval;
 }
 
+const char* R2Pipe::get_analyzed_file() const
+{
+    return analyzed;
+}
+
 bool R2Pipe::set_analyzed_file(const char* binary)
 {
     bool retval;
     //assert existence of binary
-    if(access(binary, R_OK) == 1)
+    if(access(binary, R_OK) == -1)
     {
         fprintf(stderr, "The binary to be analyzed %s does not exist or "
                         "has wrong permissions", binary);
@@ -62,6 +74,8 @@ bool R2Pipe::set_analyzed_file(const char* binary)
     }
     else
     {
+        if(analyzed != NULL)
+            free((void*)analyzed);
         analyzed = strdup(binary);
         retval = true;
     }
@@ -162,6 +176,7 @@ bool R2Pipe::close()
     {
         exec("q", NULL);
     }
+    analyzed = NULL;
     unlink(r2_write);
     unlink(r2_read);
     free(r2_write);

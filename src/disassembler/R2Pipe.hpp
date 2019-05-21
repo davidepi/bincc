@@ -14,7 +14,9 @@ public:
 
     R2Pipe& operator=(const R2Pipe&) = delete;
     bool set_executable(const char* r2exe);
+    const char* get_executable()const;
     bool set_analyzed_file(const char* binary);
+    const char* get_analyzed_file()const;
     bool open();
     void exec(const char* command, std::string* res)const;
     bool close();
