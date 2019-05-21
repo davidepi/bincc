@@ -7,7 +7,7 @@ FILE(GLOB bcc_main_headers src/disassembler/*.hpp)
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/lib)
 
-ADD_EXECUTABLE(analyzer ${bcc_main_sources} ${bcc_main_headers})
+ADD_EXECUTABLE(analyzer src/main.cpp ${bcc_main_sources} ${bcc_main_headers})
 
 FIND_PACKAGE(GTest)
 IF(GTestFOUND)
