@@ -8,29 +8,48 @@
 
 #define FIFO_NAME "r2XXXXXX"
 #define FOLDER_TEMPLATE "/tmp/bcc_XXXXXX"
-char* R2Pipe::folder = NULL;
+char* R2Pipe::folder = nullptr;
+int R2Pipe::instances = 0;
 
-R2Pipe::R2Pipe():analyzed(NULL), process(), r2_read(NULL),
-                 r2_write(NULL)
+R2Pipe::R2Pipe():analyzed(nullptr), process(), r2_read(nullptr),
+                 r2_write(nullptr), is_open(false)
 {
+    pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
     executable = strdup("r2");
     //create folder for temporary fifo
-    if(folder == NULL)
+    pthread_spin_lock(&lock);
+    instances++;
+    if(instances == 1)
     {
+        //this is pretty slow for a spinlock, but likely will be performed just
+        //once, in every other case only a incl and a cmpl will be performed
+        //hence the reason of the spinlock instead of the mutex
         folder = (char*)malloc(sizeof(FOLDER_TEMPLATE)+1);
         strcpy(folder, FOLDER_TEMPLATE);
-        if(mkdtemp(folder) == NULL)
+        if(mkdtemp(folder) == nullptr)
         {
             perror("Could not create temp directory at `/tmp`: ");
             exit(EXIT_FAILURE);
         }
         strcat(folder, "/");
     }
+    pthread_spin_unlock(&lock);
 }
 
 R2Pipe::~R2Pipe()
 {
     free((void*)executable);
+    if(analyzed != nullptr)
+        free((void*)analyzed);
+    pthread_spin_lock(&lock);
+    instances--;
+    if(instances == 0)
+    {
+        rmdir(folder);
+        free(folder);
+        folder = nullptr;
+    }
+    pthread_spin_unlock(&lock);
 }
 
 const char* R2Pipe::get_executable() const
@@ -74,7 +93,7 @@ bool R2Pipe::set_analyzed_file(const char* binary)
     }
     else
     {
-        if(analyzed != NULL)
+        if(analyzed != nullptr)
             free((void*)analyzed);
         analyzed = strdup(binary);
         retval = true;
@@ -84,7 +103,7 @@ bool R2Pipe::set_analyzed_file(const char* binary)
 
 bool R2Pipe::open()
 {
-    if(analyzed == NULL || is_open)
+    if(analyzed == nullptr || is_open)
         return false;
     size_t buf_len = strlen(FOLDER_TEMPLATE)+strlen(FIFO_NAME)+1+1;
     r2_write = (char*)malloc(sizeof(char)*buf_len);
@@ -163,7 +182,7 @@ void R2Pipe::exec(const char* command, std::string* res) const
             else
                 stream << buf;
         }
-        if(res != NULL)
+        if(res != nullptr)
         {
             *res = stream.str();
         }
@@ -174,9 +193,9 @@ bool R2Pipe::close()
 {
     if(is_open)
     {
-        exec("q", NULL);
+        exec("q", nullptr);
     }
-    analyzed = NULL;
+    analyzed = nullptr;
     unlink(r2_write);
     unlink(r2_read);
     free(r2_write);
