@@ -7,10 +7,18 @@ before_script:
 
 stages:
   - build
+  - test
 
 x86_build:
   stage: build
   script:
     - mkdir build && cd build && cmake .. && make
+  tags:
+    - x86_64
+
+x86_test:
+  stage: test
+  script:
+    - mkdir build && cd build && cmake .. && make runTests && make test
   tags:
     - x86_64
