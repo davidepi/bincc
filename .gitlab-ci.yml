@@ -1,7 +1,7 @@
 image: rikorose/gcc-cmake:latest
 
 before_script:
-  - at-get update && apt-get -y install radare2
+  - apt-get update && apt-get -y install radare2
   - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz && tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install
 
 stages:
