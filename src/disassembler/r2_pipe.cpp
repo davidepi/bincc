@@ -5,14 +5,14 @@
 #include <cstring>
 #include <sys/stat.h>
 #include <sstream>
+#include <signal.h>
 #include "utility/settings.hpp"
 
-#define FIFO_NAME "r2XXXXXX"
+#define READ_END 0
+#define WRITE_END 1
 
-R2Pipe::R2Pipe():analyzed(nullptr), process(), r2_read(nullptr),
-                 r2_write(nullptr), is_open(false)
+R2Pipe::R2Pipe():analyzed(nullptr), is_open(false), process(0)
 {
-    ;
     executable = strdup("/usr/bin/r2");
 }
 
@@ -21,6 +21,10 @@ R2Pipe::~R2Pipe()
     free((void*)executable);
     if(analyzed != nullptr)
         free((void*)analyzed);
+    if(kill(process, 0) != -1)
+    {
+        kill(process, SIGTERM);
+    }
 }
 
 const char* R2Pipe::get_executable() const
@@ -55,78 +59,75 @@ const char* R2Pipe::get_analyzed_file() const
 bool R2Pipe::set_analyzed_file(const char* binary)
 {
     bool retval;
-    //assert existence of binary
-    if(access(binary, R_OK) == -1)
+    if(!is_open)
     {
-        fprintf(stderr, "The binary to be analyzed %s does not exist or "
-                        "has wrong permissions", binary);
-        retval = false;
+        //assert existence of binary
+        if(access(binary, R_OK) == -1)
+        {
+            fprintf(stderr, "The binary to be analyzed %s does not exist or "
+                            "has wrong permissions", binary);
+            retval = false;
+        }
+        else
+        {
+            if(analyzed != nullptr)
+                free((void*)analyzed);
+            analyzed = strdup(binary);
+            retval = true;
+        }
+        return retval;
     }
     else
-    {
-        if(analyzed != nullptr)
-            free((void*)analyzed);
-        analyzed = strdup(binary);
-        retval = true;
-    }
-    return retval;
+        return false;
 }
 
 bool R2Pipe::open()
 {
     if(analyzed == nullptr || is_open)
         return false;
-    size_t buf_len = Settings::instance().working_folder_len();
-    buf_len += strlen(FIFO_NAME)+1;
-    r2_write = (char*)malloc(sizeof(char)*buf_len);
-    r2_read = (char*)malloc(sizeof(char)*buf_len);
-    strcpy(r2_read, Settings::instance().working_folder());
-    strcat(r2_read, FIFO_NAME);
-    mktemp(r2_read);
-    strcpy(r2_write, r2_read);
-    strcat(r2_read, "r");
-    strcat(r2_write, "w");
-    if(mkfifo(r2_read, S_IRUSR | S_IWUSR) == -1)
+
+    //fork
+    if(pipe(pipe_out) == -1 || pipe(pipe_in) == -1)
     {
-        //could not create the first FIFO, dealloc
-        free(r2_write);
-        free(r2_read);
-        perror("Could not create the fifo: ");
-    }
-    else if(mkfifo(r2_write, S_IRUSR | S_IWUSR) == -1)
-    {
-        //could not create the second FIFO, dealloc and erase the first one
-        unlink(r2_read);
-        free(r2_write);
-        free(r2_read);
-        perror("Could not create the fifo: ");
+        perror("Communication channel error: ");
     }
     else
     {
-        //fork
+        //before forking check that child does not already exists (failed to
+        // exit)
+        if(process != 0 && kill(process, 0) != -1)
+        {
+            kill(process, SIGTERM);
+        }
         process = fork();
         if(process == -1)
         {
-            //fork failed, dealloc and erase FIFOs
-            unlink(r2_write);
-            unlink(r2_read);
-            free(r2_write);
-            free(r2_read);
             perror("Error while creating disassembler: ");
         }
         else if(process == 0)
         {
+            ::close(pipe_out[WRITE_END]);
+            ::close(pipe_in[READ_END]);
+
             //child process is radare
-            execl(executable, executable,
-                  "-q0", analyzed, "<", r2_read, ">", r2_write, NULL);
+            dup2(pipe_out[READ_END], STDIN_FILENO);
+            dup2(pipe_in[WRITE_END], STDOUT_FILENO);
+            dup2(pipe_in[WRITE_END], STDERR_FILENO);
+
+            ::close(pipe_in[WRITE_END]);
+            ::close(pipe_out[READ_END]);
+
+            execl(executable, executable, "-q0", analyzed, NULL);
         }
         else
         {
+
+            ::close(pipe_out[READ_END]);
+            ::close(pipe_in[WRITE_END]);
+
             //read the /0 produced by r2 upon opening
-            in = ::open(r2_write, O_RDONLY);
-            out = ::open(r2_read, O_WRONLY);
             char buf;
-            while(read(in, &buf, 1) == 1)
+            while(read(pipe_in[READ_END], &buf, 1)>0)
             {
                 if(buf == 0x0)
                 {
@@ -139,42 +140,36 @@ bool R2Pipe::open()
     return is_open;
 }
 
-void R2Pipe::exec(const char* command, std::string* res) const
+std::string R2Pipe::exec(const char* command) const
 {
     if(is_open)
     {
         std::stringstream stream;
         int len = strlen(command);
-        write(out, command, len);
-        write(out, "\n", 1);
+        write(pipe_out[WRITE_END], command, len);
+        write(pipe_out[WRITE_END], "\n", 1);
         //read answer
         char buf;
-        while((buf = read(in, &buf, 1))>0)
+        while(read(pipe_in[READ_END], &buf, 1)>0)
         {
             if(buf == 0x0)
                 break;
             else
                 stream << buf;
         }
-        if(res != nullptr)
-        {
-            *res = stream.str();
-        }
+        return stream.str();
     }
+    else
+        return std::string("");
 }
 
-bool R2Pipe::close()
+void R2Pipe::close()
 {
     if(is_open)
     {
-        exec("q", nullptr);
-        ::close(in);
-        ::close(out);
+        exec("q");
+        ::close(pipe_out[WRITE_END]);
+        ::close(pipe_in[READ_END]);
     }
     analyzed = nullptr;
-    unlink(r2_write);
-    unlink(r2_read);
-    free(r2_write);
-    free(r2_read);
-    return true;
 }

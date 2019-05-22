@@ -2,6 +2,10 @@
 #include "disassembler/r2_pipe.hpp"
 
 
+/**
+ * \brief Tests for the R2Pipe class
+ */
+
 TEST(R2Pipe, create_and_destroy)
 {
     R2Pipe r2;
@@ -36,9 +40,16 @@ TEST(R2Pipe, analyze)
     std::string res;
 
     R2Pipe r2;
-    r2.set_executable("/usr/bin/r2");
-    r2.set_analyzed_file("/bin/ls");
-//    r2.open();
-//    r2.exec("ij", &res);
-//    r2.close();
+    ASSERT_TRUE(r2.set_executable("/usr/bin/r2"));
+    ASSERT_TRUE(r2.set_analyzed_file("/bin/ls"));
+    ASSERT_TRUE(r2.open());
+    ASSERT_FALSE(r2.set_analyzed_file("/bin/touch"));
+    ASSERT_FALSE(r2.open());
+    res = r2.exec("ij");
+    r2.close();
+    EXPECT_STRNE(res.c_str(), "");
+
+    res = "";
+    res = r2.exec("ij");
+    EXPECT_STREQ(res.c_str(), "");
 }
