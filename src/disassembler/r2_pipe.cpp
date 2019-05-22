@@ -21,7 +21,8 @@ R2Pipe::~R2Pipe()
     free((void*)executable);
     if(analyzed != nullptr)
         free((void*)analyzed);
-    if(kill(process, 0) != -1)
+    //if there is a child process still alive kill it with fire
+    if(process!=0 && kill(process, 0) != -1)
     {
         kill(process, SIGTERM);
     }

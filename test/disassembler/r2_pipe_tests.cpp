@@ -26,7 +26,7 @@ TEST(R2Pipe, analyzed_file)
 TEST(R2Pipe, executable)
 {
     R2Pipe r2;
-    EXPECT_STREQ(r2.get_executable(), "r2");
+    EXPECT_STREQ(r2.get_executable(), "/usr/bin/r2");
     EXPECT_TRUE(r2.set_executable("/usr/bin/r2"));
     EXPECT_STREQ(r2.get_executable(), "/usr/bin/r2");
     EXPECT_FALSE(r2.set_executable("ouhbk"));
