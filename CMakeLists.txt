@@ -3,23 +3,31 @@ PROJECT(BCC)
 SET(CMAKE_CXX_STANDARD 11)
 
 FILE(GLOB bcc_main_sources
-     ${CMAKE_SOURCE_DIR}/src/**/*.cpp
+     ${PROJECT_SOURCE_DIR}/src/**/*.cpp
      )
 FILE(GLOB bcc_main_headers
-     ${CMAKE_SOURCE_DIR}/src/**/*.hpp
+     ${PROJECT_SOURCE_DIR}/src/**/*.hpp
      )
 FILE(GLOB bcc_test_sources
-     ${CMAKE_SOURCE_DIR}/test/**/*.cpp
+     ${PROJECT_SOURCE_DIR}/test/**/*.cpp
      )
 
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/lib)
-INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src)
+INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/lib)
+INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src)
 
 ADD_EXECUTABLE(analyzer
                ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
                ${bcc_main_sources}
                ${bcc_main_headers})
 
+#JSON LIB CONFIGURATION
+IF(NOT EXISTS ${PROJECT_SOURCE_DIR}/lib/json)
+    MESSAGE(FATAL_ERROR "The lib folder is empty. Please run `git submodule init` and `git submodule update`")
+ELSE()
+    set(JSON_BuildTests OFF CACHE INTERNAL "")
+    ADD_SUBDIRECTORY(${PROJECT_SOURCE_DIR}/lib/json)
+    TARGET_LINK_LIBRARIES(analyzer PRIVATE nlohmann_json::nlohmann_json)
+ENDIF()
 
 FIND_PACKAGE(GTest)
 IF(GTEST_FOUND)
