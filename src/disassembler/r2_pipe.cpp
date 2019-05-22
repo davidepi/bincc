@@ -1,39 +1,19 @@
-#include "R2Pipe.hpp"
+#include "r2_pipe.hpp"
 #include <unistd.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <sys/stat.h>
 #include <sstream>
+#include "utility/settings.hpp"
 
 #define FIFO_NAME "r2XXXXXX"
-#define FOLDER_TEMPLATE "/tmp/bcc_XXXXXX"
-char* R2Pipe::folder = nullptr;
-int R2Pipe::instances = 0;
 
 R2Pipe::R2Pipe():analyzed(nullptr), process(), r2_read(nullptr),
                  r2_write(nullptr), is_open(false)
 {
-    pthread_spin_init(&lock, PTHREAD_PROCESS_PRIVATE);
-    executable = strdup("r2");
-    //create folder for temporary fifo
-    pthread_spin_lock(&lock);
-    instances++;
-    if(instances == 1)
-    {
-        //this is pretty slow for a spinlock, but likely will be performed just
-        //once, in every other case only a incl and a cmpl will be performed
-        //hence the reason of the spinlock instead of the mutex
-        folder = (char*)malloc(sizeof(FOLDER_TEMPLATE)+1);
-        strcpy(folder, FOLDER_TEMPLATE);
-        if(mkdtemp(folder) == nullptr)
-        {
-            perror("Could not create temp directory at `/tmp`: ");
-            exit(EXIT_FAILURE);
-        }
-        strcat(folder, "/");
-    }
-    pthread_spin_unlock(&lock);
+    ;
+    executable = strdup("/usr/bin/r2");
 }
 
 R2Pipe::~R2Pipe()
@@ -41,15 +21,6 @@ R2Pipe::~R2Pipe()
     free((void*)executable);
     if(analyzed != nullptr)
         free((void*)analyzed);
-    pthread_spin_lock(&lock);
-    instances--;
-    if(instances == 0)
-    {
-        rmdir(folder);
-        free(folder);
-        folder = nullptr;
-    }
-    pthread_spin_unlock(&lock);
 }
 
 const char* R2Pipe::get_executable() const
@@ -105,22 +76,24 @@ bool R2Pipe::open()
 {
     if(analyzed == nullptr || is_open)
         return false;
-    size_t buf_len = strlen(FOLDER_TEMPLATE)+strlen(FIFO_NAME)+1+1;
+    size_t buf_len = Settings::instance().working_folder_len();
+    buf_len += strlen(FIFO_NAME)+1;
     r2_write = (char*)malloc(sizeof(char)*buf_len);
     r2_read = (char*)malloc(sizeof(char)*buf_len);
+    strcpy(r2_read, Settings::instance().working_folder());
     strcat(r2_read, FIFO_NAME);
     mktemp(r2_read);
     strcpy(r2_write, r2_read);
     strcat(r2_read, "r");
     strcat(r2_write, "w");
-    if(mkfifo(r2_read, S_IRUSR | S_IWUSR | O_NONBLOCK) == -1)
+    if(mkfifo(r2_read, S_IRUSR | S_IWUSR) == -1)
     {
         //could not create the first FIFO, dealloc
         free(r2_write);
         free(r2_read);
         perror("Could not create the fifo: ");
     }
-    else if(mkfifo(r2_write, S_IRUSR | S_IWUSR | O_NONBLOCK) == -1)
+    else if(mkfifo(r2_write, S_IRUSR | S_IWUSR) == -1)
     {
         //could not create the second FIFO, dealloc and erase the first one
         unlink(r2_read);
@@ -144,13 +117,14 @@ bool R2Pipe::open()
         else if(process == 0)
         {
             //child process is radare
-            execl(executable, "-q0", "<", r2_read, ">", r2_write, NULL);
+            execl(executable, executable,
+                  "-q0", analyzed, "<", r2_read, ">", r2_write, NULL);
         }
         else
         {
             //read the /0 produced by r2 upon opening
-            in = ::open(r2_write, O_RDONLY); //no error check here...
-            out = ::open(r2_read, O_WRONLY); //at this point I hope for the best
+            in = ::open(r2_write, O_RDONLY);
+            out = ::open(r2_read, O_WRONLY);
             char buf;
             while(read(in, &buf, 1) == 1)
             {
@@ -194,6 +168,8 @@ bool R2Pipe::close()
     if(is_open)
     {
         exec("q", nullptr);
+        ::close(in);
+        ::close(out);
     }
     analyzed = nullptr;
     unlink(r2_write);

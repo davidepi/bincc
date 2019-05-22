@@ -2,9 +2,15 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 PROJECT(BCC)
 SET(CMAKE_CXX_STANDARD 11)
 
-FILE(GLOB bcc_main_sources ${CMAKE_SOURCE_DIR}/src/disassembler/*.cpp)
-FILE(GLOB bcc_main_headers ${CMAKE_SOURCE_DIR}/src/disassembler/*.hpp)
-FILE(GLOB bcc_test_sources ${CMAKE_SOURCE_DIR}/test/disassembler/*.cpp)
+FILE(GLOB bcc_main_sources
+     ${CMAKE_SOURCE_DIR}/src/**/*.cpp
+     )
+FILE(GLOB bcc_main_headers
+     ${CMAKE_SOURCE_DIR}/src/**/*.hpp
+     )
+FILE(GLOB bcc_test_sources
+     ${CMAKE_SOURCE_DIR}/test/**/*.cpp
+     )
 
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/lib)
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/src)

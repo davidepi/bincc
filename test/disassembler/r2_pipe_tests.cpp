@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "disassembler/R2Pipe.hpp"
+#include "disassembler/r2_pipe.hpp"
 
 
 TEST(R2Pipe, create_and_destroy)
@@ -29,4 +29,16 @@ TEST(R2Pipe, executable)
     EXPECT_STREQ(r2.get_executable(), "/usr/bin/r2");
     EXPECT_TRUE(r2.set_executable("/usr/bin/radare2"));
     EXPECT_STREQ(r2.get_executable(), "/usr/bin/radare2");
+}
+
+TEST(R2Pipe, analyze)
+{
+    std::string res;
+
+    R2Pipe r2;
+    r2.set_executable("/usr/bin/r2");
+    r2.set_analyzed_file("/bin/ls");
+//    r2.open();
+//    r2.exec("ij", &res);
+//    r2.close();
 }

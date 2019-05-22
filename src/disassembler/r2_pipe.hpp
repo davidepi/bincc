@@ -1,5 +1,5 @@
-#ifndef __R2PIPE_HPP__
-#define __R2PIPE_HPP__
+#ifndef __R2_PIPE_HPP__
+#define __R2_PIPE_HPP__
 
 
 #include <fcntl.h>
@@ -47,13 +47,6 @@ private:
     int out;
     //pid of the r2 process
     pid_t process;
-
-    //folder where the r2 pipes will be opened
-    static char* folder;
-    //instances of this class, when 0 the aforementioned folder will be deleted
-    static int instances;
-    //lock to preserve atomicity of the instances
-    pthread_spinlock_t lock;
 };
 
 
