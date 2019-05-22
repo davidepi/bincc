@@ -5,7 +5,6 @@
 /**
  * \brief Tests for the R2Pipe class
  */
-
 TEST(R2Pipe, create_and_destroy)
 {
     R2Pipe r2;

@@ -9,7 +9,7 @@ R2Info::R2Info():x86_arch(false), bits_64(false), stripped(false),
 
 }
 
-bool R2Info::fromJSON(const std::string& json_string)
+bool R2Info::from_JSON(const std::string& json_string)
 {
     bool retval;
     if(!json_string.empty())
@@ -17,11 +17,19 @@ bool R2Info::fromJSON(const std::string& json_string)
         try
         {
             Json parsed = Json::parse(json_string)["bin"];
-            x86_arch = parsed["arch"].get<std::string>() == "x86";
-            big_endian = parsed["endian"].get<std::string>() == "big";
-            canary = parsed["canary"].get<bool>() == true;
-            stripped = parsed["stripped"].get<bool>() == true;
-            bits_64 = parsed["bits"].get<int>() == 64;
+            //first save to tmp vars
+            bool arch = parsed["arch"].get<std::string>() == "x86";
+            bool endian = parsed["endian"].get<std::string>() == "big";
+            bool can = parsed["canary"].get<bool>() == true;
+            bool strip = parsed["stripped"].get<bool>() == true;
+            bool bits = parsed["bits"].get<int>() == 64;
+
+            //at this point if no exceptions, copy to the actual values
+            x86_arch = arch;
+            big_endian = endian;
+            canary = can;
+            stripped = strip;
+            bits_64 = bits;
             retval = true;
         }
         catch(Json::exception& e)

@@ -5,7 +5,7 @@
 #include "r2_response.hpp"
 
 /**
- * Class storing information about an executable file.
+ * \brief Class storing information about an executable file.
  *
  * The information is expected to be retrieved as the output of an R2Pipe
  * class by issuing the command `ij`
@@ -36,25 +36,24 @@ public:
      * \return true if the string was valid and this class has been
      * populated, false otherwise
      */
-    bool fromJSON(const std::string& json_string) override;
+    bool from_JSON(const std::string& json_string) override;
 
     /**
-     * Getter for the architecture
+     * \brief Getter for the architecture
      *
      * \return true if the architecture is x86 or AMD64, false otherwise
      */
     bool is_x86() const;
 
     /**
-     * Getter for the endianness
+     * \brief Getter for the endianness
      *
      * \return true if the executable is big endian, false otherwise
      */
     bool is_bigendian() const;
 
-
     /**
-     * Getter for the buffer overflow protections
+     * \brief Getter for the buffer overflow protections
      *
      * \return true if the executable uses any form of canaries, a.k.a. stack
      * protections, false otherwise
@@ -70,7 +69,7 @@ public:
     bool is_stripped() const;
 
     /**
-     * Getter for 64 bits executables
+     * \brief Getter for 64 bits executables
      *
      * \return true if the executable is 64 bit, false otherwise
      */

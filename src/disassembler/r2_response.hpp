@@ -4,10 +4,22 @@
 
 #include <string>
 
+/**
+ * \brief Interface for classes obtained by a radare2 response.
+ * Every command issued to radare2 terminating with the letter `j` returns a
+ * JSON. This class is an interface providing a method useful to reconstruct
+ * a particular JSON returned from radare2 in this application.
+ */
 class R2Response
 {
 public:
-    virtual bool fromJSON(const std::string& json_string) = 0;
+
+    /**
+     * Initialize the class by using a JSON returned from radare2
+     *
+     * \param[in] jsonString the JSON string obtained from radare2 program
+     */
+    virtual bool from_JSON(const std::string& json_string) = 0;
 };
 
 
