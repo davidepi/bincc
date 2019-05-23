@@ -23,7 +23,7 @@
  * <li>Process killing with the close() method</li>
  * </ol>
  *
- * \author davidepi \<davidepi@ist.osaka-u.ac.jp\>
+ * \author davidepi &lt;davidepi&#64;ist.osaka-u.ac.jp&gt;
  */
 class R2Pipe
 {

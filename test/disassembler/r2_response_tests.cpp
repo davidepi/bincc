@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "disassembler/r2_stmt.hpp"
 #include "disassembler/r2_func.hpp"
 #include "disassembler/r2_info.hpp"
 
@@ -115,4 +116,44 @@ TEST(R2Res, Func)
     EXPECT_STREQ("fcn.00000030", func.get_name().c_str());
     EXPECT_EQ(func.get_offset(), 0x30);
     EXPECT_EQ(func.get_type(), FunctionT::FCN);
+}
+
+TEST(R2Res, stmt)
+{
+    std::string json;
+    R2Stmt stmt;
+    EXPECT_EQ(stmt.get_offset(), 0x0);
+    EXPECT_STREQ(stmt.get_opcode().c_str(), "");
+    EXPECT_STREQ(stmt.get_esil().c_str(), "");
+    EXPECT_EQ(stmt.get_target(), 0x0);
+
+    //untargeted operation
+    json = "{\"offset\":83072,\"esil\":\"rbx,8,rsp,-=,rsp,=[8]\",\"refptr\":fal"
+           "se,\"fcn_addr\":83072,\"fcn_last\":83153,\"size\":1,\"opcode\":\"pu"
+           "sh rbx\",\"disasm\":\"push rbx\",\"bytes\":\"53\",\"family\":\"cpu"
+           "\",\"type\":\"upush\",\"type_num\":12,\"type2_num\":0}";
+    ASSERT_TRUE(stmt.from_JSON(json));
+    EXPECT_EQ(stmt.get_offset(), 0x14480);
+    EXPECT_STREQ(stmt.get_opcode().c_str(), "push rbx");
+    EXPECT_STREQ(stmt.get_esil().c_str(), "rbx,8,rsp,-=,rsp,=[8]");
+    EXPECT_EQ(stmt.get_target(), 0x0);
+
+    //targeted operation
+    json = "{\"offset\":83076,\"esil\":\"rip,8,rsp,-=,rsp,=[],15992,rip,=\",\"r"
+           "efptr\":false,\"fcn_addr\":83072,\"fcn_last\":83149,\"size\":5,\"op"
+           "code\":\"call 0x3e78\",\"disasm\":\"call sub.malloc_232_e78\",\"byt"
+           "es\":\"e8eff9feff\",\"family\":\"cpu\",\"type\":\"call\",\"type_num"
+           "\":3,\"type2_num\":0,\"jump\":15992,\"fail\":83081}";
+    ASSERT_TRUE(stmt.from_JSON(json));
+    EXPECT_EQ(stmt.get_offset(), 0x14484);
+    EXPECT_STREQ(stmt.get_opcode().c_str(), "call sub.malloc_232_e78");
+    EXPECT_STREQ(stmt.get_esil().c_str(), "rip,8,rsp,-=,rsp,=[],15992,rip,=");
+    EXPECT_EQ(stmt.get_target(), 0x3E78);
+
+    json = "{}";
+    ASSERT_FALSE(stmt.from_JSON(json));
+    EXPECT_EQ(stmt.get_offset(), 0x14484);
+    EXPECT_STREQ(stmt.get_opcode().c_str(), "call sub.malloc_232_e78");
+    EXPECT_STREQ(stmt.get_esil().c_str(), "rip,8,rsp,-=,rsp,=[],15992,rip,=");
+    EXPECT_EQ(stmt.get_target(), 0x3E78);
 }

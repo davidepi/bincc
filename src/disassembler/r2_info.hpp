@@ -10,7 +10,7 @@
  * The information is expected to be retrieved as the output of an R2Pipe
  * class by issuing the command `ij`
  *
- * \author davidepi \<davidepi@ist.osaka-u.ac.jp\>
+ * \author davidepi &lt;davidepi&#64;ist.osaka-u.ac.jp&gt;
  */
 class R2Info : public R2Response
 {

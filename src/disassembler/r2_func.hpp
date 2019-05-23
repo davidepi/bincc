@@ -3,6 +3,8 @@
 
 
 #include "r2_response.hpp"
+#include "r2_stmt.hpp"
+#include <vector>
 
 /**
  * \brief Type of functions
@@ -10,7 +12,7 @@
  * These types are used by the R2Func class, based on the function types
  * returned by radare2
  *
- * \author davidepi \<davidepi@ist.osaka-u.ac.jp\>
+ * \author davidepi &lt;davidepi&#64;ist.osaka-u.ac.jp&gt;
  */
 enum FunctionT
 {
@@ -32,7 +34,7 @@ enum FunctionT
  * each object contains information about functions. Each one of those objects
  * can be used to create one instance of this class.
  *
- * \author davidepi \<davidepi@ist.osaka-u.ac.jp\>
+ * \author davidepi &lt;davidepi@ist.osaka-u.ac.jp&gt;
  */
 class R2Func : public R2Response
 {
@@ -88,6 +90,20 @@ public:
      */
     FunctionT get_type() const;
 
+    /**
+     * \brief Add an instruction to the body of this function
+     *
+     * \param[in] stmt The instruction that will be added
+     */
+    void add_instruction(const R2Stmt& stmt);
+
+    /**
+     * \brief Getter for the body of this function
+     *
+     * \return a vector containing the instructions of this function
+     */
+    const std::vector<R2Stmt>& get_body() const;
+
 private:
     //offset of the function in the binary
     int offset;
@@ -97,6 +113,9 @@ private:
 
     //type of the function
     FunctionT type;
+
+    //body of the function
+    std::vector<R2Stmt> body;
 };
 
 

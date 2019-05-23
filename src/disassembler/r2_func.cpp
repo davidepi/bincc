@@ -76,3 +76,13 @@ FunctionT R2Func::get_type() const
 {
     return type;
 }
+
+void R2Func::add_instruction(const R2Stmt& stmt)
+{
+    body.push_back(stmt);
+}
+
+const std::vector<R2Stmt>& R2Func::get_body() const
+{
+    return body;
+}
