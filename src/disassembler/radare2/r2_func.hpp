@@ -1,7 +1,6 @@
 #ifndef __R2_FUNC_HPP__
 #define __R2_FUNC_HPP__
 
-
 #include "r2_response.hpp"
 #include "r2_stmt.hpp"
 #include <vector>
@@ -16,14 +15,14 @@
  */
 enum FunctionT
 {
-    ///Normal function
-            FCN,
-    ///System call
-            SYM,
-    ///dafuq is this
-            LOC,
-    ///no idea also for this one
-            INT
+    /// Normal function
+    FCN,
+    /// System call
+    SYM,
+    /// dafuq is this
+    LOC,
+    /// no idea also for this one
+    INT
 };
 
 /**
@@ -34,7 +33,7 @@ enum FunctionT
  * each object contains information about functions. Each one of those objects
  * can be used to create one instance of this class.
  *
- * \author davidepi &lt;davidepi@ist.osaka-u.ac.jp&gt;
+ * \author davidepi &lt;davidepi&#64;ist.osaka-u.ac.jp&gt;
  */
 class R2Func : public R2Response
 {
@@ -105,18 +104,17 @@ public:
     const std::vector<R2Stmt>& get_body() const;
 
 private:
-    //offset of the function in the binary
+    // offset of the function in the binary
     int offset;
 
-    //name of the function (or generated name)
+    // name of the function (or generated name)
     std::string name;
 
-    //type of the function
+    // type of the function
     FunctionT type;
 
-    //body of the function
+    // body of the function
     std::vector<R2Stmt> body;
 };
-
 
 #endif

@@ -1,7 +1,6 @@
 #ifndef __R2_RESPONSE_HPP__
 #define __R2_RESPONSE_HPP__
 
-
 #include <string>
 
 /**
@@ -16,7 +15,6 @@
 class R2Response
 {
 public:
-
     /**
      * Initialize the class by using a JSON returned from radare2
      *
@@ -24,6 +22,5 @@ public:
      */
     virtual bool from_JSON(const std::string& json_string) = 0;
 };
-
 
 #endif

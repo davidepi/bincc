@@ -3,10 +3,10 @@
 
 using Json = nlohmann::json;
 
-R2Info::R2Info():x86_arch(false), bits_64(false), stripped(false),
-                 canary(false), big_endian(false)
+R2Info::R2Info()
+    : arch(UNKNOWN), bits_64(false), stripped(false), canary(false),
+      big_endian(false)
 {
-
 }
 
 bool R2Info::from_JSON(const std::string& json_string)
@@ -17,15 +17,22 @@ bool R2Info::from_JSON(const std::string& json_string)
         try
         {
             Json parsed = Json::parse(json_string)["bin"];
-            //first save to tmp vars
-            bool arch = parsed["arch"].get<std::string>() == "x86";
+            // first save to tmp vars
+            std::string strarch = parsed["arch"].get<std::string>();
             bool endian = parsed["endian"].get<std::string>() == "big";
-            bool can = parsed["canary"].get<bool>() == true;
-            bool strip = parsed["stripped"].get<bool>() == true;
+            bool can = parsed["canary"].get<bool>();
+            bool strip = parsed["stripped"].get<bool>();
             bool bits = parsed["bits"].get<int>() == 64;
 
-            //at this point if no exceptions, copy to the actual values
-            x86_arch = arch;
+            // at this point if no exceptions, copy to the actual values
+            if(strarch == "x86")
+            {
+                arch = Architecture::X86;
+            }
+            else
+            {
+                arch = Architecture::UNKNOWN;
+            }
             big_endian = endian;
             canary = can;
             stripped = strip;
@@ -45,9 +52,9 @@ bool R2Info::from_JSON(const std::string& json_string)
     return retval;
 }
 
-bool R2Info::is_x86() const
+Architecture R2Info::get_arch() const
 {
-    return x86_arch;
+    return arch;
 }
 
 bool R2Info::is_bigendian() const
@@ -69,4 +76,3 @@ bool R2Info::is_64bit() const
 {
     return bits_64;
 }
-

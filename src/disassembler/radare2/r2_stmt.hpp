@@ -1,7 +1,6 @@
 #ifndef __R2_STMT_HPP__
 #define __R2_STMT_HPP__
 
-
 #include "r2_response.hpp"
 
 /**
@@ -12,12 +11,11 @@
  * each object contains information about a statement of the function.
  * Each one of those objects can be used to create one instance of this class.
  *
- * \author davidepi &lt;davidepi@ist.osaka-u.ac.jp&gt;
+ * \author davidepi &lt;davidepi&#64;ist.osaka-u.ac.jp&gt;
  */
 class R2Stmt : public R2Response
 {
 public:
-
     /**
      * \brief Default constructor
      *
@@ -29,7 +27,6 @@ public:
      * \brief Default destructor
      */
     ~R2Stmt() = default;
-
 
     bool from_JSON(const std::string& json_string) override;
 
@@ -62,19 +59,17 @@ public:
     const std::string& get_opcode() const;
 
 private:
-
-    //offset of the instruction in the code
+    // offset of the instruction in the code
     int offset;
 
-    //target of the jump (0x0 if not a jump)
+    // target of the jump (0x0 if not a jump)
     int target;
 
-    //representation of the instruction in esil
+    // representation of the instruction in esil
     std::string esil;
 
-    //representation of the instruction with architecture specific code
+    // representation of the instruction with architecture specific code
     std::string opcode;
 };
-
 
 #endif

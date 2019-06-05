@@ -1,6 +1,5 @@
+#include "disassembler/radare2/r2_pipe.hpp"
 #include <gtest/gtest.h>
-#include "disassembler/r2_pipe.hpp"
-
 
 /**
  * \brief Tests for the R2Pipe class

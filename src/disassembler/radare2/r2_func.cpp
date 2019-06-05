@@ -11,7 +11,7 @@ bool R2Func::from_JSON(const std::string& json_string)
         try
         {
             Json parsed = Json::parse(json_string);
-            //first save to tmp vars
+            // first save to tmp vars
             int tmp_off = parsed["offset"].get<int>();
             std::string tmp_name = parsed["name"].get<std::string>();
             std::string type_str = parsed["type"].get<std::string>();
@@ -38,7 +38,7 @@ bool R2Func::from_JSON(const std::string& json_string)
                 return false;
             }
 
-            //at this point if no exceptions, copy to the actual values
+            // at this point if no exceptions, copy to the actual values
             offset = tmp_off;
             name = tmp_name;
             type = tmp_type;
@@ -57,10 +57,7 @@ bool R2Func::from_JSON(const std::string& json_string)
     return retval;
 }
 
-R2Func::R2Func():name(""), type(FCN), offset(0)
-{
-
-}
+R2Func::R2Func() : name(""), type(FCN), offset(0) {}
 
 int R2Func::get_offset() const
 {

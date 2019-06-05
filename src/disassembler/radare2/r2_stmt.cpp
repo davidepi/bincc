@@ -4,10 +4,7 @@
 
 using Json = nlohmann::json;
 
-R2Stmt::R2Stmt():target(0x0), offset(0x0)
-{
-
-}
+R2Stmt::R2Stmt() : target(0x0), offset(0x0) {}
 
 bool R2Stmt::from_JSON(const std::string& json_string)
 {
@@ -21,8 +18,8 @@ bool R2Stmt::from_JSON(const std::string& json_string)
             {
                 retval = false;
             }
-            else if(strcmp(parsed["type"].get<std::string>().c_str(), "invalid")
-                    == 0)
+            else if(strcmp(parsed["type"].get<std::string>().c_str(),
+                           "invalid") == 0)
             {
                 opcode = "invalid";
                 esil = opcode;

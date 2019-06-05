@@ -28,7 +28,6 @@
 class R2Pipe
 {
 public:
-
     /**
      * \brief Default constructor
      */
@@ -126,25 +125,23 @@ public:
     void close();
 
 private:
-
-    //true if the r2 process is active
+    // true if the r2 process is active
     bool is_open;
 
-    //r2 executable
+    // r2 executable
     const char* executable;
 
-    //analyzed file
+    // analyzed file
     const char* analyzed;
 
-    //pipe file descriptor, this=>r2
+    // pipe file descriptor, this=>r2
     int pipe_out[2];
 
-    //pipe file descriptor, r2=>this
+    // pipe file descriptor, r2=>this
     int pipe_in[2];
 
-    //pid of the r2 process
+    // pid of the r2 process
     pid_t process;
 };
-
 
 #endif

@@ -1,8 +1,7 @@
+#include "disassembler/radare2/r2_func.hpp"
+#include "disassembler/radare2/r2_info.hpp"
+#include "disassembler/radare2/r2_stmt.hpp"
 #include <gtest/gtest.h>
-#include "disassembler/r2_stmt.hpp"
-#include "disassembler/r2_func.hpp"
-#include "disassembler/r2_info.hpp"
-
 
 /**
  * \brief Tests for the classes implementing R2Response
@@ -12,7 +11,7 @@ TEST(R2Res, Info)
     R2Info info;
     EXPECT_FALSE(info.has_canaries());
     EXPECT_FALSE(info.is_64bit());
-    EXPECT_FALSE(info.is_x86());
+    EXPECT_EQ(info.get_arch(), UNKNOWN);
     EXPECT_FALSE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
@@ -38,19 +37,19 @@ TEST(R2Res, Info)
     ASSERT_TRUE(info.from_JSON(json));
     EXPECT_TRUE(info.has_canaries());
     EXPECT_TRUE(info.is_64bit());
-    EXPECT_TRUE(info.is_x86());
+    EXPECT_EQ(info.get_arch(), X86);
     EXPECT_TRUE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
-    //should remain the same
+    // should remain the same
     ASSERT_FALSE(info.from_JSON(""));
     EXPECT_TRUE(info.has_canaries());
     EXPECT_TRUE(info.is_64bit());
-    EXPECT_TRUE(info.is_x86());
+    EXPECT_EQ(info.get_arch(), X86);
     EXPECT_TRUE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
-    //opposite values of before
+    // opposite values of before
     std::string jsn2 = "{\"core\":{\"type\":\"DYN (Shared object file)\","
                        "\"file\":\"/bin/ls\",\"fd\":3,\"size\":133792,\""
                        "humansz\":\"130.7K\",\"iorw\":false,\"mode\":\"-r-x\","
@@ -69,14 +68,14 @@ TEST(R2Res, Info)
     ASSERT_TRUE(info.from_JSON(jsn2));
     EXPECT_FALSE(info.has_canaries());
     EXPECT_FALSE(info.is_64bit());
-    EXPECT_FALSE(info.is_x86());
+    EXPECT_EQ(info.get_arch(), UNKNOWN);
     EXPECT_FALSE(info.is_stripped());
     EXPECT_TRUE(info.is_bigendian());
 }
 
 TEST(R2Res, Func)
 {
-    //default
+    // default
     R2Func func;
     std::string json;
     EXPECT_STREQ("", func.get_name().c_str());
@@ -87,7 +86,7 @@ TEST(R2Res, Func)
     EXPECT_EQ(func.get_offset(), 0x0);
     EXPECT_EQ(func.get_type(), FunctionT::FCN);
 
-    //SYM
+    // SYM
     json = "{\"offset\":90988,\"name\":\"sym._fini\",\"size\":9,\"realsz\":9,\""
            "cc\":1,\"cost\":5,\"nbbs\":1,\"edges\":0,\"ebbs\":1,\"calltype\":\""
            "amd64\",\"type\":\"sym\",\"diff\":\"NEW\",\"difftype\":\"new\",\"in"
@@ -97,7 +96,7 @@ TEST(R2Res, Func)
     EXPECT_EQ(func.get_offset(), 0x1636C);
     EXPECT_EQ(func.get_type(), FunctionT::SYM);
 
-    //FCN
+    // FCN
     json = "{\"offset\":48,\"name\":\"fcn.00000030\",\"size\":16,\"realsz\":16,"
            "\"cc\":1,\"cost\":7,\"nbbs\":1,\"edges\":0,\"ebbs\":1,\"calltype\":"
            "\"amd64\",\"type\":\"fcn\",\"diff\":\"NEW\",\"difftype\":\"new\",\""
@@ -107,7 +106,7 @@ TEST(R2Res, Func)
     EXPECT_EQ(func.get_offset(), 0x30);
     EXPECT_EQ(func.get_type(), FunctionT::FCN);
 
-    //none of the above
+    // none of the above
     json = "{\"offset\":48,\"name\":\"fcn.00000030\",\"size\":16,\"realsz\":16,"
            "\"cc\":1,\"cost\":7,\"nbbs\":1,\"edges\":0,\"ebbs\":1,\"calltype\":"
            "\"amd64\",\"type\":\"sub\",\"diff\":\"NEW\",\"difftype\":\"new\",\""
@@ -127,7 +126,7 @@ TEST(R2Res, stmt)
     EXPECT_STREQ(stmt.get_esil().c_str(), "");
     EXPECT_EQ(stmt.get_target(), 0x0);
 
-    //untargeted operation
+    // untargeted operation
     json = "{\"offset\":83072,\"esil\":\"rbx,8,rsp,-=,rsp,=[8]\",\"refptr\":fal"
            "se,\"fcn_addr\":83072,\"fcn_last\":83153,\"size\":1,\"opcode\":\"pu"
            "sh rbx\",\"disasm\":\"push rbx\",\"bytes\":\"53\",\"family\":\"cpu"
@@ -138,7 +137,7 @@ TEST(R2Res, stmt)
     EXPECT_STREQ(stmt.get_esil().c_str(), "rbx,8,rsp,-=,rsp,=[8]");
     EXPECT_EQ(stmt.get_target(), 0x0);
 
-    //targeted operation
+    // targeted operation
     json = "{\"offset\":83076,\"esil\":\"rip,8,rsp,-=,rsp,=[],15992,rip,=\",\"r"
            "efptr\":false,\"fcn_addr\":83072,\"fcn_last\":83149,\"size\":5,\"op"
            "code\":\"call 0x3e78\",\"disasm\":\"call sub.malloc_232_e78\",\"byt"

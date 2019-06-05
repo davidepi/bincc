@@ -1,8 +1,8 @@
 #ifndef __R2_INFO_HPP__
 #define __R2_INFO_HPP__
 
-
 #include "r2_response.hpp"
+#include "disassembler/architecture.hpp"
 
 /**
  * \brief Class storing information about an executable file.
@@ -41,9 +41,9 @@ public:
     /**
      * \brief Getter for the architecture
      *
-     * \return true if the architecture is x86 or AMD64, false otherwise
+     * \return an enum specifying the architecture
      */
-    bool is_x86() const;
+    Architecture get_arch() const;
 
     /**
      * \brief Getter for the endianness
@@ -76,21 +76,20 @@ public:
     bool is_64bit() const;
 
 private:
-    //true if the architecture string is "x86"
-    bool x86_arch;
+    // true if the architecture string is "x86"
+    Architecture arch;
 
-    //true if big endian
+    // true if big endian
     bool big_endian;
 
-    //true if it has stack protections
+    // true if it has stack protections
     bool canary;
 
-    //true if it is stripped
+    // true if it is stripped
     bool stripped;
 
-    //true if it is 64 bits
+    // true if it is 64 bits
     bool bits_64;
 };
-
 
 #endif
