@@ -11,7 +11,7 @@ TEST(R2Res, Info)
     R2Info info;
     EXPECT_FALSE(info.has_canaries());
     EXPECT_FALSE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), UNKNOWN);
+    EXPECT_EQ(info.get_arch(), Architecture::UNKNOWN);
     EXPECT_FALSE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
@@ -37,7 +37,7 @@ TEST(R2Res, Info)
     ASSERT_TRUE(info.from_JSON(json));
     EXPECT_TRUE(info.has_canaries());
     EXPECT_TRUE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), X86);
+    EXPECT_EQ(info.get_arch(), Architecture::X86);
     EXPECT_TRUE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
@@ -45,7 +45,7 @@ TEST(R2Res, Info)
     ASSERT_FALSE(info.from_JSON(""));
     EXPECT_TRUE(info.has_canaries());
     EXPECT_TRUE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), X86);
+    EXPECT_EQ(info.get_arch(), Architecture::X86);
     EXPECT_TRUE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
@@ -68,7 +68,7 @@ TEST(R2Res, Info)
     ASSERT_TRUE(info.from_JSON(jsn2));
     EXPECT_FALSE(info.has_canaries());
     EXPECT_FALSE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), UNKNOWN);
+    EXPECT_EQ(info.get_arch(), Architecture::UNKNOWN);
     EXPECT_FALSE(info.is_stripped());
     EXPECT_TRUE(info.is_bigendian());
 }

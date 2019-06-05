@@ -35,13 +35,20 @@ public:
      * Performs the actual analysis using the radare2 disassembler and populates
      * the necessary fields of the superclass
      */
-    void analyze() override;
+    void analyse() override;
 
 private:
     /**
      * \brief Utility class used to interface with radare2
      */
     R2Pipe r2;
+
+    /**
+     * \brief Variable keeping track of the health of the radare2 process
+     *
+     * This will be false if the open or the exec fails
+     */
+    bool health;
 };
 
 #endif

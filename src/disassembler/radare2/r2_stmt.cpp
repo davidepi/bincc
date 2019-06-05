@@ -4,7 +4,7 @@
 
 using Json = nlohmann::json;
 
-R2Stmt::R2Stmt() : target(0x0), offset(0x0) {}
+R2Stmt::R2Stmt() : offset(0x0), target(0x0) {}
 
 bool R2Stmt::from_JSON(const std::string& json_string)
 {

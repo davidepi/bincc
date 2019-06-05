@@ -4,8 +4,8 @@
 using Json = nlohmann::json;
 
 R2Info::R2Info()
-    : arch(UNKNOWN), bits_64(false), stripped(false), canary(false),
-      big_endian(false)
+    : arch(UNKNOWN), big_endian(false), canary(false), stripped(false),
+      bits_64(false)
 {
 }
 

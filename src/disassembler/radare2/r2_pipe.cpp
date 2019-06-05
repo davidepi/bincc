@@ -11,7 +11,7 @@
 #define READ_END 0
 #define WRITE_END 1
 
-R2Pipe::R2Pipe() : analyzed(nullptr), is_open(false), process(0)
+R2Pipe::R2Pipe() : is_open(false), analyzed(nullptr), process(0)
 {
     executable = strdup("/usr/bin/r2");
 }
@@ -20,7 +20,9 @@ R2Pipe::~R2Pipe()
 {
     free((void*)executable);
     if(analyzed != nullptr)
+    {
         free((void*)analyzed);
+    }
     // if there is a child process still alive kill it with fire
     if(process != 0 && kill(process, 0) != -1)
     {
@@ -41,7 +43,7 @@ bool R2Pipe::set_executable(const char* r2exe)
     {
         fprintf(stderr,
                 "The radare2 executable %s does not exist or has "
-                "wrong permissions",
+                "wrong permissions\n",
                 r2exe);
         retval = false;
     }
@@ -76,20 +78,24 @@ bool R2Pipe::set_analyzed_file(const char* binary)
         else
         {
             if(analyzed != nullptr)
+            {
                 free((void*)analyzed);
+            }
             analyzed = strdup(binary);
             retval = true;
         }
         return retval;
     }
-    else
-        return false;
+
+    return false;
 }
 
 bool R2Pipe::open()
 {
     if(analyzed == nullptr || is_open)
+    {
         return false;
+    }
 
     // fork
     if(pipe(pipe_out) == -1 || pipe(pipe_in) == -1)
@@ -157,14 +163,15 @@ std::string R2Pipe::exec(const char* command) const
         while(read(pipe_in[READ_END], &buf, 1) > 0)
         {
             if(buf == 0x0)
+            {
                 break;
-            else
-                stream << buf;
+            }
+
+            stream << buf;
         }
         return stream.str();
     }
-    else
-        return std::string("");
+    return std::string("");
 }
 
 void R2Pipe::close()

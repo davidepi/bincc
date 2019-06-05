@@ -13,24 +13,23 @@ TEST(R2Pipe, analyzed_file)
 {
     R2Pipe r2;
     EXPECT_EQ(r2.get_analyzed_file(), nullptr);
-    EXPECT_TRUE(r2.set_analyzed_file("/bin/ls"));
-    EXPECT_STREQ(r2.get_analyzed_file(), "/bin/ls");
+    EXPECT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/ls_unstripped"));
+    EXPECT_STREQ(r2.get_analyzed_file(), TESTS_DIR "resources/ls_unstripped");
     EXPECT_FALSE(r2.set_analyzed_file("ju,khugljkb"));
-    EXPECT_STREQ(r2.get_analyzed_file(), "/bin/ls");
-    EXPECT_TRUE(r2.set_analyzed_file("/bin/touch"));
-    EXPECT_STREQ(r2.get_analyzed_file(), "/bin/touch");
+    EXPECT_STREQ(r2.get_analyzed_file(), TESTS_DIR "resources/ls_unstripped");
+    EXPECT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/touch_unstripped"));
+    EXPECT_STREQ(r2.get_analyzed_file(),
+                 TESTS_DIR "resources/touch_unstripped");
 }
 
 TEST(R2Pipe, executable)
 {
     R2Pipe r2;
-    EXPECT_STREQ(r2.get_executable(), "/usr/bin/r2");
-    EXPECT_TRUE(r2.set_executable("/usr/bin/r2"));
-    EXPECT_STREQ(r2.get_executable(), "/usr/bin/r2");
+    EXPECT_STREQ(r2.get_executable(), RADARE2_PATH);
+    EXPECT_TRUE(r2.set_executable(RADARE2_PATH));
+    EXPECT_STREQ(r2.get_executable(), RADARE2_PATH);
     EXPECT_FALSE(r2.set_executable("ouhbk"));
-    EXPECT_STREQ(r2.get_executable(), "/usr/bin/r2");
-    EXPECT_TRUE(r2.set_executable("/usr/bin/radare2"));
-    EXPECT_STREQ(r2.get_executable(), "/usr/bin/radare2");
+    EXPECT_STREQ(r2.get_executable(), RADARE2_PATH);
 }
 
 TEST(R2Pipe, analyze)
@@ -38,10 +37,10 @@ TEST(R2Pipe, analyze)
     std::string res;
 
     R2Pipe r2;
-    ASSERT_TRUE(r2.set_executable("/usr/bin/r2"));
-    ASSERT_TRUE(r2.set_analyzed_file("/bin/ls"));
+    ASSERT_TRUE(r2.set_executable(RADARE2_PATH));
+    ASSERT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/ls_unstripped"));
     ASSERT_TRUE(r2.open());
-    ASSERT_FALSE(r2.set_analyzed_file("/bin/touch"));
+    ASSERT_FALSE(r2.set_analyzed_file(TESTS_DIR "resources/touch_unstripped"));
     ASSERT_FALSE(r2.open());
     res = r2.exec("ij");
     r2.close();

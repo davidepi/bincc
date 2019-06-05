@@ -57,7 +57,7 @@ bool R2Func::from_JSON(const std::string& json_string)
     return retval;
 }
 
-R2Func::R2Func() : name(""), type(FCN), offset(0) {}
+R2Func::R2Func() : offset(0), name(""), type(FCN) {}
 
 int R2Func::get_offset() const
 {

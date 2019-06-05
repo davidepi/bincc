@@ -3,47 +3,41 @@
 //
 
 #include "r2_disassembler.hpp"
+#include "r2_func.hpp"
+#include <iostream>
+#include <nlohmann/json.hpp>
+
+using Json = nlohmann::json;
 
 DisassemblerR2::DisassemblerR2(const char* binary) : Disassembler(binary)
 {
-    bool res = r2.set_analyzed_file(binary);
+    health = r2.set_analyzed_file(binary);
     r2.set_executable(RADARE2_PATH);
-    if(!res)
-    {
-        fprintf(stderr, "Could not perform disassembly.\n");
-        exit(EXIT_FAILURE);
-    }
 }
 
-void DisassemblerR2::analyze()
+void DisassemblerR2::analyse()
 {
-    bool res = r2.open();
-    if(res)
+    health &= r2.open();
+    if(health)
     {
         std::string json;
+
+        //info
         R2Info info;
         info.from_JSON(r2.exec("ij"));
         exec_arch = info.get_arch();
+
+        //function names
+        r2.exec("aaaa");
+        json = r2.exec("aflj");
+
+        Json parsed = Json::parse(json);
+        for(const Json& func_header : parsed)
+        {
+            R2Func function;
+            function.from_JSON(func_header.dump());
+            function_names.insert(function.get_name());
+        }
         r2.close();
     }
 }
-
-// DisassemblerR2::DisassemblerR2(const char* executable, const char* binary)
-//    : analysis_done(false)
-//{
-//    bool res = r2.set_executable(executable);
-//    res &= r2.set_analyzed_file(binary);
-//    res &= r2.open();
-//    if(!res)
-//    {
-//        fprintf(stderr, "Could not perform disassembly.\n");
-//        exit(EXIT_FAILURE);
-//    }
-//}
-//
-// R2Info DisassemblerR2::executable_info() const
-//{
-//    R2Info retval;
-//    retval.from_JSON(r2.exec("ij"));
-//    return retval;
-//}

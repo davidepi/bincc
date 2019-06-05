@@ -2,6 +2,8 @@
 #define __DISASSEMBLER_HPP__
 
 #include "architecture.hpp"
+#include <set>
+#include <string>
 
 /**
  * \brief Interface providing disassembler utilities
@@ -13,8 +15,8 @@
  * result.
  *
  * Every instance of this class is specific to one single binary file that must
- * be analysed. In order to have multiple binary files analysed at the same
- * time, multiple instances must be created.
+ * be analysed. It is possible to change the analysed binary with the set_binary
+ * method, but this requires calling analyze() again.
  *
  * \author davidepi &lt;davidepi&#64;ist.osaka-u.ac.jp&gt;
  */
@@ -28,6 +30,16 @@ public:
     explicit Disassembler(const char* binary);
 
     /**
+     * \brief Sets the file that will be initialized
+     *
+     * \note This method will destroy previously performed analyses and requires
+     * another call to analyse()
+     *
+     * \param[in] binary The binary file that will be disassembled
+     */
+    void set_binary(const char* binary);
+
+    /**
      * \brief Default destructor
      */
     virtual ~Disassembler() = default;
@@ -39,7 +51,7 @@ public:
      * analysis and disassembly specifically for each disassembler, and will
      * populate the various protected fields (except for the \p binary one)
      */
-    virtual void analyze() = 0;
+    virtual void analyse() = 0;
 
     /**
      * \brief Returns the architecture of the analysed file.
@@ -54,11 +66,13 @@ public:
      */
     Architecture get_arch() const;
 
+    std::set<std::string> get_function_names() const;
+
 protected:
     /**
-     * \brief The binary that is being analysed. Always initialized
+     * \brief The binary that is being analysed
      */
-    const char* binary;
+    std::string binary;
 
     /**
      * \brief Architecture of the analysed binary
@@ -66,6 +80,13 @@ protected:
      * Architecture::UNKNOWN if the analysis has not been performed
      */
     Architecture exec_arch;
+
+    /**
+     * \brief List of functions of the analysed binary
+     *
+     * Empty set if the analysis has not been performed
+     */
+    std::set<std::string> function_names;
 };
 
 #endif

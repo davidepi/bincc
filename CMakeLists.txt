@@ -1,5 +1,5 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
-PROJECT(BCC)
+PROJECT(BCC VERSION 1.0 LANGUAGES CXX)
 SET(CMAKE_CXX_STANDARD 11)
 
 #MAIN SOURCES
@@ -23,6 +23,25 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src)
 ADD_EXECUTABLE(analyzer
                ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
                ${bcc_main_sources})
+
+#COMPILER FLAGS
+SET(DEBUG_FLAGS
+    -Wall
+    -Wpedantic
+    -Wsuggest-attribute=pure
+    -Wsuggest-attribute=const
+    -Wsuggest-attribute=noreturn
+    -Werror
+    -Wfatal-errors
+    )
+SET(RELEASE_FLAGS
+    -w
+    -O3
+    -flto
+    )
+
+TARGET_COMPILE_OPTIONS(analyzer PUBLIC $<$<CONFIG:Debug>:${DEBUG_FLAGS}>)
+TARGET_COMPILE_OPTIONS(analyzer PUBLIC $<$<CONFIG:Release>:${RELEASE_FLAGS}>)
 
 #FIND DISASSEMBLERS AND POPULATE THE DISASM LIST
 LIST(APPEND DISASM "")
@@ -60,7 +79,8 @@ IF(GTEST_FOUND)
                    ${PROJECT_SOURCE_DIR}/test/main_test.cpp
                    ${bcc_main_sources}
                    ${bcc_test_sources})
-    TARGET_COMPILE_DEFINITIONS(runTests PUBLIC TESTS_DIR="${PROJECT_SOURCE_DIR}/test/")
+    TARGET_COMPILE_DEFINITIONS(runTests PUBLIC
+                               TESTS_DIR="${PROJECT_SOURCE_DIR}/test/")
     TARGET_COMPILE_DEFINITIONS(runTests PUBLIC ${DISASM})
     LIST(APPEND TEST_REQUIRED_LIBS ${GTEST_BOTH_LIBRARIES})
     LIST(APPEND TEST_REQUIRED_LIBS ${CMAKE_THREAD_LIBS_INIT})
