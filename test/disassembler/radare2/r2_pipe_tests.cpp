@@ -13,13 +13,13 @@ TEST(R2Pipe, analyzed_file)
 {
     R2Pipe r2;
     EXPECT_EQ(r2.get_analyzed_file(), nullptr);
-    EXPECT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/ls_unstripped"));
-    EXPECT_STREQ(r2.get_analyzed_file(), TESTS_DIR "resources/ls_unstripped");
+    EXPECT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/ls_unstripped_x86"));
+    EXPECT_STREQ(r2.get_analyzed_file(), TESTS_DIR "resources/ls_unstripped_x86");
     EXPECT_FALSE(r2.set_analyzed_file("ju,khugljkb"));
-    EXPECT_STREQ(r2.get_analyzed_file(), TESTS_DIR "resources/ls_unstripped");
-    EXPECT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/touch_unstripped"));
+    EXPECT_STREQ(r2.get_analyzed_file(), TESTS_DIR "resources/ls_unstripped_x86");
+    EXPECT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/touch_unstripped_x86"));
     EXPECT_STREQ(r2.get_analyzed_file(),
-                 TESTS_DIR "resources/touch_unstripped");
+                 TESTS_DIR "resources/touch_unstripped_x86");
 }
 
 TEST(R2Pipe, executable)
@@ -38,9 +38,9 @@ TEST(R2Pipe, analyze)
 
     R2Pipe r2;
     ASSERT_TRUE(r2.set_executable(RADARE2_PATH));
-    ASSERT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/ls_unstripped"));
+    ASSERT_TRUE(r2.set_analyzed_file(TESTS_DIR "resources/ls_unstripped_x86"));
     ASSERT_TRUE(r2.open());
-    ASSERT_FALSE(r2.set_analyzed_file(TESTS_DIR "resources/touch_unstripped"));
+    ASSERT_FALSE(r2.set_analyzed_file(TESTS_DIR "resources/touch_unstripped_x86"));
     ASSERT_FALSE(r2.open());
     res = r2.exec("ij");
     r2.close();

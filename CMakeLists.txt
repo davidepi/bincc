@@ -1,9 +1,10 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.10 FATAL_ERROR)
 PROJECT(BCC VERSION 1.0 LANGUAGES CXX)
 SET(CMAKE_CXX_STANDARD 11)
+SET(CMAKE_VERBOSE_MAKEFILE ON)
 
 #MAIN SOURCES
-SET(bcc_main_sources
+SET(BCC_MAIN_SOURCES
     ${PROJECT_SOURCE_DIR}/src/disassembler/disassembler.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/radare2/r2_disassembler.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/radare2/r2_func.cpp
@@ -12,7 +13,7 @@ SET(bcc_main_sources
     ${PROJECT_SOURCE_DIR}/src/disassembler/radare2/r2_stmt.cpp
     )
 #TEST SOURCES
-SET(bcc_test_sources
+SET(BCC_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/test/disassembler/radare2/r2_disassembler_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/disassembler/radare2/r2_pipe_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/disassembler/radare2/r2_response_tests.cpp
@@ -22,7 +23,7 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src)
 
 ADD_EXECUTABLE(analyzer
                ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp
-               ${bcc_main_sources})
+               ${BCC_MAIN_SOURCES})
 
 #COMPILER FLAGS
 SET(DEBUG_FLAGS
@@ -77,8 +78,8 @@ IF(GTEST_FOUND)
     INCLUDE_DIRECTORIES(${GTEST_INCLUDE_DIRS})
     ADD_EXECUTABLE(runTests EXCLUDE_FROM_ALL
                    ${PROJECT_SOURCE_DIR}/test/main_test.cpp
-                   ${bcc_main_sources}
-                   ${bcc_test_sources})
+                   ${BCC_MAIN_SOURCES}
+                   ${BCC_TEST_SOURCES})
     TARGET_COMPILE_DEFINITIONS(runTests PUBLIC
                                TESTS_DIR="${PROJECT_SOURCE_DIR}/test/")
     TARGET_COMPILE_DEFINITIONS(runTests PUBLIC ${DISASM})

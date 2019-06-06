@@ -89,20 +89,6 @@ public:
      */
     FunctionT get_type() const;
 
-    /**
-     * \brief Add an instruction to the body of this function
-     *
-     * \param[in] stmt The instruction that will be added
-     */
-    void add_instruction(const R2Stmt& stmt);
-
-    /**
-     * \brief Getter for the body of this function
-     *
-     * \return a vector containing the instructions of this function
-     */
-    const std::vector<R2Stmt>& get_body() const;
-
 private:
     // offset of the function in the binary
     int offset;
@@ -112,9 +98,6 @@ private:
 
     // type of the function
     FunctionT type;
-
-    // body of the function
-    std::vector<R2Stmt> body;
 };
 
 #endif

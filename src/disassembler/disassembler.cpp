@@ -26,3 +26,16 @@ void Disassembler::set_binary(const char* bin_path)
     function_names.clear();
     Disassembler::binary = bin_path;
 }
+
+std::vector<std::string>
+Disassembler::get_function_body(const std::string& name) const
+{
+    std::unordered_map<std::string, std::vector<std::string>>::const_iterator
+        got = function_bodies.find(name);
+
+    if(got != function_bodies.end())
+    {
+        return got->second;
+    }
+    return std::vector<std::string>();
+}

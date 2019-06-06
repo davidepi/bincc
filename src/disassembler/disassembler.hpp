@@ -4,6 +4,8 @@
 #include "architecture.hpp"
 #include <set>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 /**
  * \brief Interface providing disassembler utilities
@@ -66,7 +68,28 @@ public:
      */
     Architecture get_arch() const;
 
+    /**
+     * \brief Returns the function names of the analyzed executable
+     *
+     * Most of the names will be generated, and if possible, will not contain
+     * syscalls. However, this is not guaranteed, as it depends from the various
+     * implementations of the analyse() function.
+     *
+     * \return A set containig the function names
+     */
     std::set<std::string> get_function_names() const;
+
+    /**
+     * \brief Returns the body of a function
+     *
+     * The body will be returned as a list of string, where each string
+     * correspond to a statement in assembly
+     *
+     * \param[in] name The name of the function for which the body will be
+     * retrieved
+     * \return The body of the function
+     */
+    std::vector<std::string> get_function_body(const std::string& name) const;
 
 protected:
     /**
@@ -87,6 +110,14 @@ protected:
      * Empty set if the analysis has not been performed
      */
     std::set<std::string> function_names;
+
+    /**
+     * \brief Hash map containing the function bodies
+     *
+     * This map will contain pairs <function name, array of stmts> used to
+     * define a function body
+     */
+    std::unordered_map<std::string, std::vector<std::string>> function_bodies;
 };
 
 #endif
