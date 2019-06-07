@@ -1,7 +1,3 @@
-//
-// Created by davide on 6/5/19.
-//
-
 #include "r2_disassembler.hpp"
 #include "disassembler/function.hpp"
 #include "r2_json_parser.hpp"

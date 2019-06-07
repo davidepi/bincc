@@ -1,4 +1,3 @@
-
 #include "r2_json_parser.hpp"
 #include <nlohmann/json.hpp>
 

@@ -1,7 +1,3 @@
-//
-// Created by davide on 6/5/19.
-//
-
 #ifndef __R2_DISASSEMBLER_HPP__
 #define __R2_DISASSEMBLER_HPP__
 
