@@ -20,15 +20,5 @@ int main(int argc, const char* argv[])
     }
     Disassembler* disasm = new DisassemblerR2(argv[1]);
     disasm->analyse();
-    std::set<std::string> functions = disasm->get_function_names();
-    for(const std::string& name : functions)
-    {
-        std::cout << name << "\n";
-        std::vector<std::string> stmts = disasm->get_function_body(name);
-        for(const std::string& stmt : stmts)
-        {
-            std::cout << "    " << stmt << "\n";
-        }
-        std::cout << std::endl;
-    }
+    std::cout << *disasm << std::endl;
 }

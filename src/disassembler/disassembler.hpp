@@ -2,6 +2,8 @@
 #define __DISASSEMBLER_HPP__
 
 #include "architecture.hpp"
+#include "function.hpp"
+#include "statement.hpp"
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -77,7 +79,7 @@ public:
      *
      * \return A set containig the function names
      */
-    std::set<std::string> get_function_names() const;
+    std::set<Function> get_function_names() const;
 
     /**
      * \brief Returns the body of a function
@@ -89,7 +91,7 @@ public:
      * retrieved
      * \return The body of the function
      */
-    std::vector<std::string> get_function_body(const std::string& name) const;
+    std::vector<Statement> get_function_body(const std::string& name) const;
 
 protected:
     /**
@@ -109,7 +111,7 @@ protected:
      *
      * Empty set if the analysis has not been performed
      */
-    std::set<std::string> function_names;
+    std::set<Function> function_names;
 
     /**
      * \brief Hash map containing the function bodies
@@ -117,7 +119,10 @@ protected:
      * This map will contain pairs <function name, array of stmts> used to
      * define a function body
      */
-    std::unordered_map<std::string, std::vector<std::string>> function_bodies;
+    std::unordered_map<std::string, std::vector<Statement>> function_bodies;
+
+    friend std::ostream& operator<<(std::ostream& stream,
+                                    const Disassembler& disasm);
 };
 
 #endif

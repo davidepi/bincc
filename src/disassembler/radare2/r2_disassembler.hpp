@@ -6,7 +6,7 @@
 #define __R2_DISASSEMBLER_HPP__
 
 #include "disassembler/disassembler.hpp"
-#include "r2_info.hpp"
+#include "disassembler/info.hpp"
 #include "r2_pipe.hpp"
 
 /**

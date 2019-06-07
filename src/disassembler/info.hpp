@@ -1,42 +1,37 @@
-#ifndef __R2_INFO_HPP__
-#define __R2_INFO_HPP__
+#ifndef __INFO_HPP__
+#define __INFO_HPP__
 
-#include "r2_response.hpp"
 #include "disassembler/architecture.hpp"
 
 /**
  * \brief Class storing information about an executable file.
  *
- * The information is expected to be retrieved as the output of an R2Pipe
- * class by issuing the command `ij`
- *
  * \author davidepi &lt;davidepi&#64;ist.osaka-u.ac.jp&gt;
  */
-class R2Info : public R2Response
+class Info
 {
 public:
     /**
      * \brief Default constructor, initializes every information to false
+     *
+     * The Architecture will be initialized to UNKNOWN
      */
-    R2Info();
+    Info();
+
+    /**
+     * \brief Parametrized constructor
+     * \param[in] arch The architecture of the executable
+     * \param[in] be true if big endian
+     * \param[in] has_canary true if canaries are present
+     * \param[in] stripped true if the executable is stripped
+     * \param[in] b64 true if the executable is 64-bit
+     */
+    Info(Architecture arch, bool be, bool has_canary, bool stripped, bool b64);
 
     /**
      * \brief Default destructor
      */
-    ~R2Info() = default;
-
-    /**
-     * \brief Parse the string retrieved by the radare2 process
-     *
-     * This method populates this class by parsing the string retrieved by
-     * issuing the `ij` command to r2. Attempting to parse any other JSON or
-     * strings will fail
-     *
-     * \param[in] json_string The JSON string that will be parsed
-     * \return true if the string was valid and this class has been
-     * populated, false otherwise
-     */
-    bool from_JSON(const std::string& json_string) override;
+    ~Info() = default;
 
     /**
      * \brief Getter for the architecture
@@ -76,7 +71,7 @@ public:
     bool is_64bit() const;
 
 private:
-    // true if the architecture string is "x86"
+    // architecture of the executable
     Architecture arch;
 
     // true if big endian

@@ -20,7 +20,12 @@ enum Architecture
     /**
      * \brief Intel x86 or AMD64 architecture
      */
-    X86
+    X86,
+
+    /**
+     * \brief armhf and aarch64 architectures
+     */
+     ARM
 };
 
 #endif
