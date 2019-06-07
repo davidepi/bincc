@@ -121,6 +121,15 @@ protected:
      */
     std::unordered_map<std::string, std::vector<Statement>> function_bodies;
 
+    /**
+     * \brief Stream operator override
+     *
+     * Prints the functions disassembled from the binary, with every statement
+     *
+     * \param[in] stream The current stream
+     * \param[in] disasm An instance of this class
+     * \return The current stream
+     */
     friend std::ostream& operator<<(std::ostream& stream,
                                     const Disassembler& disasm);
 };

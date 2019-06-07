@@ -1,5 +1,4 @@
 #include "r2_pipe.hpp"
-#include "utility/settings.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

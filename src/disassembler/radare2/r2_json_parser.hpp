@@ -58,6 +58,7 @@ namespace R2JsonParser
      * \return the populated Statement class, a default one if any error occured
      */
     Statement parse_statement(const std::string& json_string);
+
 } // namespace R2JsonParser
 
 #endif

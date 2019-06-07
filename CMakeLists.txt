@@ -7,11 +7,13 @@ SET(CMAKE_VERBOSE_MAKEFILE ON)
 SET(BCC_MAIN_SOURCES
     ${PROJECT_SOURCE_DIR}/src/disassembler/disassembler.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/radare2/r2_disassembler.cpp
-    src/disassembler/function.cpp
-    src/disassembler/info.cpp
+    ${PROJECT_SOURCE_DIR}/src/disassembler/function.cpp
+    ${PROJECT_SOURCE_DIR}/src/disassembler/info.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/radare2/r2_pipe.cpp
-    src/disassembler/statement.cpp
-    src/disassembler/radare2/r2_json_parser.cpp src/disassembler/radare2/r2_json_parser.hpp)
+    ${PROJECT_SOURCE_DIR}/src/disassembler/statement.cpp
+    ${PROJECT_SOURCE_DIR}/src/disassembler/radare2/r2_json_parser.cpp
+    ${PROJECT_SOURCE_DIR}/src/disassembler/radare2/r2_json_parser.hpp
+    )
 #TEST SOURCES
 SET(BCC_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/test/disassembler/radare2/r2_disassembler_tests.cpp
