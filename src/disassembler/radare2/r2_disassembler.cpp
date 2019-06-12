@@ -1,7 +1,6 @@
 #include "r2_disassembler.hpp"
 #include "disassembler/function.hpp"
 #include "r2_json_parser.hpp"
-#include <iostream>
 #include <nlohmann/json.hpp>
 
 using Json = nlohmann::json;
@@ -65,7 +64,6 @@ void DisassemblerR2::analyse()
                 std::make_pair(function.get_name(), std::move(stmts)));
             function_names.insert(std::move(function));
         }
-
         r2.close();
     }
 }

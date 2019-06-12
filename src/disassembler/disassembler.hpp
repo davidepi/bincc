@@ -53,7 +53,13 @@ public:
      *
      * This method must be implemented by subclasses that will call the binary
      * analysis and disassembly specifically for each disassembler, and will
-     * populate the various protected fields (except for the \p binary one)
+     * populate the following fields:
+     * <ul><li> Disassembler::exec_arch the architecture of the executable </li>
+     * <li> Disassembler::function_names a Function class representing the name
+     * and the offset of every function starting point </li> <li>
+     * Disassembler::function_bodies for each function, an array of  Statement
+     * class representing every opcode of the function. These should be in Intel
+     * syntax, but this is not enforced.</li></ul>
      */
     virtual void analyse() = 0;
 
@@ -82,16 +88,26 @@ public:
     std::set<Function> get_function_names() const;
 
     /**
-     * \brief Returns the body of a function
+     * \brief Returns a function in form of a string
      *
-     * The body will be returned as a list of string, where each string
-     * correspond to a statement in assembly
+     * This function returns a single function in form of a string. The string
+     * is formatted as following:
+     * <ul><li>First line is the name of the function</li>
+     * <li>Every other line is composed by
+     * <ol><li> Offset in hexadecimal </li>
+     * <li> Space </li>
+     * <li> String representing the opcode and the various deps </li>
+     * <li> Line Feed </li></ol></li>
      *
-     * \param[in] name The name of the function for which the body will be
-     * retrieved
-     * \return The body of the function
+     * The assembly syntax is not enforced and depends on the implementation of
+     * the analyse() function.
+     *
+     * \param[in] name The name of the function that will be converted as string
+     * \return The function represented as string. The first line will be the
+     * function name. If the function has not been disassembled, empty line is
+     * returned
      */
-    std::vector<Statement> get_function_body(const std::string& name) const;
+    std::string get_function_as_string(const std::string& name) const;
 
 protected:
     /**

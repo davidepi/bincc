@@ -4,7 +4,7 @@
 
 #include "disassembler.hpp"
 #include <cstring>
-#include <iostream>
+#include <sstream>
 
 Disassembler::Disassembler(const char* bin_path) : exec_arch(UNKNOWN)
 {
@@ -29,18 +29,28 @@ void Disassembler::set_binary(const char* bin_path)
     Disassembler::binary = bin_path;
 }
 
-std::vector<Statement>
-Disassembler::get_function_body(const std::string& name) const
+std::string Disassembler::get_function_as_string(const std::string& name) const
 {
+    std::stringstream sstr;
     std::unordered_map<std::string, std::vector<Statement>>::const_iterator
         got = function_bodies.find(name);
 
     if(got != function_bodies.end())
     {
-        return got->second;
+        sstr << name;
+        const std::vector<Statement> stmts = got->second;
+        for(const Statement& stmt : stmts)
+        {
+            sstr << stmt.get_offset() << " " << stmt.get_opcode() << '\n';
+        }
     }
-    return std::vector<Statement>();
+    else
+    {
+        sstr << "";
+    }
+    return sstr.str();
 }
+
 std::ostream& operator<<(std::ostream& stream, const Disassembler& disasm)
 {
     // std::endl also flushes the stream

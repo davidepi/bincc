@@ -1,5 +1,3 @@
-#include <utility>
-
 #include "function.hpp"
 
 Function::Function() : offset(0), name("")
@@ -20,7 +18,7 @@ Function::Function(uint64_t offset, std::string name)
 {
 }
 
-bool Function::operator<(const Function& second)const
+bool Function::operator<(const Function& second) const
 {
     return offset < second.offset;
 }

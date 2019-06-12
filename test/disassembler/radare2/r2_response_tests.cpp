@@ -7,7 +7,7 @@
 /**
  * \brief Tests for the classes implementing R2Response
  */
-TEST(R2Res, Info)
+TEST(R2Parser, Info)
 {
     std::string json = "{\"core\":{\"type\":\"DYN (Shared object file)\","
                        "\"file\":\"/bin/ls\",\"fd\":3,\"size\":133792,\""
@@ -77,7 +77,7 @@ TEST(R2Res, Info)
     EXPECT_TRUE(info.is_bigendian());
 }
 
-TEST(R2Res, Func)
+TEST(R2Parser, Func)
 {
     // default
     Function func;
@@ -101,7 +101,7 @@ TEST(R2Res, Func)
     EXPECT_EQ(func.get_offset(), 0x1636C);
 }
 
-TEST(R2Res, stmt)
+TEST(R2Parser, stmt)
 {
     Statement stmt;
     std::string json;
