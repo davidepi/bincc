@@ -12,8 +12,6 @@ class AnalysisX86 : public Analysis
 public:
     using Analysis::Analysis;
     ~AnalysisX86() override = default;
-
-private:
     JumpType is_jump(const std::string& mnemonic) override;
 };
 

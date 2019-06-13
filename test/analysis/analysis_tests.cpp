@@ -1,4 +1,4 @@
-#include "analysis/analysis.hpp"
+#include "analysis/analysis_x86.hpp"
 #include <gtest/gtest.h>
 //
 // Created by davide on 6/13/19.
@@ -7,7 +7,7 @@ TEST(Analysis, Analysis_constructor_empty_string)
 {
     // empty string
     std::string func;
-    Analysis anal(func);
+    AnalysisX86 anal(func);
     Statement ins = anal[0];
     EXPECT_EQ(ins.get_offset(), 0x0);
     EXPECT_STREQ(ins.get_command().c_str(), "");
@@ -15,7 +15,7 @@ TEST(Analysis, Analysis_constructor_empty_string)
 
 TEST(Analysis, Analysis_constructor_null_vector)
 {
-    Analysis anal(nullptr);
+    AnalysisX86 anal(nullptr);
     Statement ins = anal[0];
     EXPECT_EQ(ins.get_offset(), 0x0);
     EXPECT_STREQ(ins.get_command().c_str(), "");
@@ -33,7 +33,7 @@ TEST(Analysis, Analysis_constructor_string)
                        "0x61d ret\n"
                        "0x620 mov eax, 6\n"
                        "0x625 ret\n";
-    Analysis anal(func);
+    AnalysisX86 anal(func);
     // first ins
     Statement ins = anal[0];
     EXPECT_EQ(ins.get_offset(), 0x610);
@@ -65,7 +65,7 @@ TEST(Analysis, Analysis_constructor_vector)
     stmts.emplace_back(0x620, "mov eax, 6");
     stmts.emplace_back(0x625, "ret");
 
-    Analysis anal(&stmts);
+    AnalysisX86 anal(&stmts);
     // first ins
     Statement ins = anal[0];
     EXPECT_EQ(ins.get_offset(), 0x610);

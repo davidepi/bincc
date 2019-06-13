@@ -32,3 +32,12 @@ TEST(Statement, multi_args)
     EXPECT_STREQ(stmt.get_mnemonic().c_str(), "mov");
     EXPECT_STREQ(stmt.get_args().c_str(), "r9d, dword [rsp + r10 + 0x20]");
 }
+
+TEST(Statement, to_lowercase)
+{
+    Statement stmt(0x5667, "CMP RAX, r8");
+    EXPECT_EQ(stmt.get_offset(), 0x5667);
+    EXPECT_STREQ(stmt.get_command().c_str(), "cmp rax, r8");
+    EXPECT_STREQ(stmt.get_mnemonic().c_str(), "cmp");
+    EXPECT_STREQ(stmt.get_args().c_str(), "rax, r8");
+}

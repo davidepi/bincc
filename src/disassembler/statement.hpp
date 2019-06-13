@@ -21,8 +21,10 @@ public:
 
     /**
      * \brief Parametrized constructor
-     * \param[in] offset The offset where the instruction can be found
-     * \param[in] opcode A string representing the opcode (Intel syntax)
+     * \param[in] offset The offset where the instruction can be found. Case
+     * insensitive
+     * \param[in] opcode A string representing the opcode (Intel
+     * syntax)
      */
     Statement(uint64_t offset, std::string opcode);
 
@@ -39,21 +41,27 @@ public:
     int get_offset() const;
 
     /**
-     * \brief Getter for the entire command composed by opcode and args
+     * \brief Getter for the entire command composed by opcode and args.
+     *
+     * The command will ALWAYS be lowercase
      *
      * \return the entire command composing the instruction (i.e. xor eax, eax)
      */
     std::string get_command() const;
 
     /**
-     * \brief Getter for the opcode
+     * \brief Getter for the mnemonic
      *
-     * \return the opcode represented as string (i.e. xor)
+     * The mnemonic will ALWAYS be lowercase
+     *
+     * \return the mnemonic represented as string (i.e. xor)
      */
     std::string get_mnemonic() const;
 
     /**
      * \brief Getter for the arguments
+     *
+     * The registers will ALWAYS be represented lowercase
      *
      * \return the arguments of the instruction (i.e. eax, eax)
      */

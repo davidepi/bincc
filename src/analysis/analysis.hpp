@@ -11,6 +11,27 @@
 #include <vector>
 
 /**
+ * \brief Describe if a jump is conditional or not
+ */
+enum JumpType
+{
+    /**
+     * \brief Not a jump at all
+     */
+    NONE = 0,
+
+    /**
+     * \brief Conditional jump
+     */
+    CONDITIONAL = 1,
+
+    /**
+     * \brief Unconditional jump
+     */
+    UNCONDITIONAL = 2
+};
+
+/**
  * \brief Class used to perform the analysis of the disassembled code
  *
  * TODO: write desc
@@ -42,18 +63,25 @@ public:
      * form</li> <li> A single space </li><li>The instruction represented as
      * string</li></ol></li></ul>
      *
+     * The string will be automatically converted to lowercase
+     *
      * \param[in] str A string representing a single function, formatted as
      * described in the doc
      */
     Analysis(const std::string& str);
 
     /**
+     * \brief Default destructor
+     */
+    virtual ~Analysis() = default;
+
+    /**
      * \brief Access the n-th instruction
      *
-     * If the instruction does not exists (out of bounds), an Instruction
-     * containing an Opcode::INVALID will be returned.
+     * If the instruction does not exists (out of bounds), an empty Statement
+     * will be returned
      *
-     * \note This funcion expect an index, and not an offset as parameter! So
+     * \note This function expect an index, and not an offset as parameter! So
      * the first instruction can be found with the value 0, not with its offset
      * in the program
      *
@@ -62,8 +90,19 @@ public:
      */
     Statement operator[](int value) const;
 
-protected:
+    /**
+     * \brief Returns true if the mnemonic is a jump
+     *
+     * \param[in] mnemonic A mnemonic in form of a string
+     * \return the type of jump represented by this mnemonic
+     */
+    virtual JumpType is_jump(const std::string& mnemonic) = 0;
+
+private:
+    // linear;y stored instructions
     std::vector<Statement> stmt_list;
+
+    // sparsely stored instructions, indexed by offset
     std::unordered_map<uint64_t, const Statement*> stmt_sparse;
 };
 

@@ -1,4 +1,5 @@
 #include "statement.hpp"
+#include <algorithm>
 
 Statement::Statement() : offset(0x0), args_at(0)
 {
@@ -31,6 +32,9 @@ std::string Statement::get_args() const
 Statement::Statement(uint64_t offset, std::string opcode)
     : offset(offset), instruction(std::move(opcode))
 {
+    // everything lowercase. I'm sorry, little one
+    std::transform(instruction.begin(), instruction.end(), instruction.begin(),
+                   ::tolower);
     args_at = instruction.find_first_of(' ');
     if(args_at == std::string::npos)
     {
