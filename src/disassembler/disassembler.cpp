@@ -41,7 +41,7 @@ std::string Disassembler::get_function_as_string(const std::string& name) const
         const std::vector<Statement> stmts = got->second;
         for(const Statement& stmt : stmts)
         {
-            sstr << stmt.get_offset() << " " << stmt.get_opcode() << '\n';
+            sstr << stmt.get_offset() << " " << stmt.get_mnemonic() << '\n';
         }
     }
     else
@@ -49,6 +49,19 @@ std::string Disassembler::get_function_as_string(const std::string& name) const
         sstr << "";
     }
     return sstr.str();
+}
+
+const std::vector<Statement>*
+Disassembler::get_function_body(const std::string& name) const
+{
+    std::unordered_map<std::string, std::vector<Statement>>::const_iterator
+        got = function_bodies.find(name);
+
+    if(got != function_bodies.end())
+    {
+        return &(got->second);
+    }
+    return nullptr;
 }
 
 std::ostream& operator<<(std::ostream& stream, const Disassembler& disasm)
@@ -71,7 +84,7 @@ std::ostream& operator<<(std::ostream& stream, const Disassembler& disasm)
             {
                 stream << "|0x" << std::hex << std::uppercase
                        << stmt.get_offset() << std::nouppercase << tab
-                       << stmt.get_opcode() << endline;
+                       << stmt.get_mnemonic() << endline;
             }
         }
         stream << ';' << endline << endline;

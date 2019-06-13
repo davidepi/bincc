@@ -10,9 +10,12 @@ SET(BCC_MAIN_SOURCES
     ${PROJECT_SOURCE_DIR}/src/disassembler/function.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/info.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/statement.cpp
+    ${PROJECT_SOURCE_DIR}/src/analysis/analysis.cpp
     )
 #TEST SOURCES
 SET(BCC_TEST_SOURCES
+    ${PROJECT_SOURCE_DIR}/test/disassembler/statement_tests.cpp
+    ${PROJECT_SOURCE_DIR}/test/analysis/analysis_tests.cpp
     )
 
 LIST(APPEND ALL_REQUIRED_INCLUDES ${PROJECT_SOURCE_DIR}/src)

@@ -88,6 +88,19 @@ public:
     std::set<Function> get_function_names() const;
 
     /**
+     * \brief Returns the body of a function
+     *
+     * The body will be returned as a list of string, where each string
+     * correspond to a statement in assembly
+     *
+     * \param[in] name The name of the function for which the body will be
+     * retrieved
+     * \return A pointer to the body of the function
+     */
+    const std::vector<Statement>*
+    get_function_body(const std::string& name) const;
+
+    /**
      * \brief Returns a function in form of a string
      *
      * This function returns a single function in form of a string. The string

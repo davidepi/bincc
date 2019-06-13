@@ -39,18 +39,36 @@ public:
     int get_offset() const;
 
     /**
+     * \brief Getter for the entire command composed by opcode and args
+     *
+     * \return the entire command composing the instruction (i.e. xor eax, eax)
+     */
+    std::string get_command() const;
+
+    /**
      * \brief Getter for the opcode
      *
-     * \return the opcode represented as string (i.e. xor eax, eax)
+     * \return the opcode represented as string (i.e. xor)
      */
-    const std::string& get_opcode() const;
+    std::string get_mnemonic() const;
+
+    /**
+     * \brief Getter for the arguments
+     *
+     * \return the arguments of the instruction (i.e. eax, eax)
+     */
+    std::string get_args() const;
 
 private:
     // offset of the instruction in the code
     uint64_t offset;
 
     // representation of the instruction with architecture specific code
-    std::string opcode;
+    std::string instruction;
+
+    // index where the arguments of the instruction start (in the instruction
+    // string)
+    int args_at;
 };
 
 #endif

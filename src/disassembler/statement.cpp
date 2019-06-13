@@ -1,12 +1,6 @@
-#include <utility>
-
-#include "function.hpp"
 #include "statement.hpp"
-#include <nlohmann/json.hpp>
 
-using Json = nlohmann::json;
-
-Statement::Statement() : offset(0x0)
+Statement::Statement() : offset(0x0), args_at(0)
 {
 }
 
@@ -14,12 +8,32 @@ int Statement::get_offset() const
 {
     return offset;
 }
-
-const std::string& Statement::get_opcode() const
+std::string Statement::get_command() const
 {
-    return opcode;
+    return instruction;
 }
-Statement::Statement(uint64_t offset, std::string opcode)
-    : offset(offset), opcode(std::move(opcode))
+
+std::string Statement::get_mnemonic() const
 {
+    return instruction.substr(0, args_at);
+}
+
+std::string Statement::get_args() const
+{
+    if(args_at >= instruction.length())
+    {
+        return std::string();
+    }
+
+    return instruction.substr(args_at + 1, std::string::npos);
+}
+
+Statement::Statement(uint64_t offset, std::string opcode)
+    : offset(offset), instruction(std::move(opcode))
+{
+    args_at = instruction.find_first_of(' ');
+    if(args_at == std::string::npos)
+    {
+        args_at = instruction.length();
+    }
 }

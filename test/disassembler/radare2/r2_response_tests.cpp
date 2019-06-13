@@ -111,21 +111,21 @@ TEST(R2Parser, stmt)
            "\",\"type\":\"upush\",\"type_num\":12,\"type2_num\":0}";
 
     EXPECT_EQ(stmt.get_offset(), 0x0);
-    EXPECT_STREQ(stmt.get_opcode().c_str(), "");
+    EXPECT_STREQ(stmt.get_command().c_str(), "");
 
     stmt = R2JsonParser::parse_statement("totally random");
     EXPECT_EQ(stmt.get_offset(), 0x0);
-    EXPECT_STREQ(stmt.get_opcode().c_str(), "");
+    EXPECT_STREQ(stmt.get_command().c_str(), "");
 
     stmt = R2JsonParser::parse_statement("");
     EXPECT_EQ(stmt.get_offset(), 0x0);
-    EXPECT_STREQ(stmt.get_opcode().c_str(), "");
+    EXPECT_STREQ(stmt.get_command().c_str(), "");
 
     stmt = R2JsonParser::parse_statement("{}");
     EXPECT_EQ(stmt.get_offset(), 0x0);
-    EXPECT_STREQ(stmt.get_opcode().c_str(), "");
+    EXPECT_STREQ(stmt.get_command().c_str(), "");
 
     stmt = R2JsonParser::parse_statement(json);
     EXPECT_EQ(stmt.get_offset(), 0x14480);
-    EXPECT_STREQ(stmt.get_opcode().c_str(), "push rbx");
+    EXPECT_STREQ(stmt.get_command().c_str(), "push rbx");
 }
