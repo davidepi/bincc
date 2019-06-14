@@ -19,8 +19,7 @@ void DisassemblerR2::analyse()
         std::string json;
 
         // info
-        Info info = R2JsonParser::parse_info(r2.exec("ij"));
-        exec_arch = info.get_arch();
+        exec_arch = R2JsonParser::parse_architecture(r2.exec("ij"));
 
         // function names
         r2.exec("aaaa");

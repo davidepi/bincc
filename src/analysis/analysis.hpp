@@ -5,31 +5,13 @@
 #ifndef __ANALYSIS_HPP__
 #define __ANALYSIS_HPP__
 
+#include "architectures/architecture.hpp"
+#include "basic_block.hpp"
 #include "disassembler/statement.hpp"
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-/**
- * \brief Describe if a jump is conditional or not
- */
-enum JumpType
-{
-    /**
-     * \brief Not a jump at all
-     */
-    NONE = 0,
-
-    /**
-     * \brief Conditional jump
-     */
-    CONDITIONAL = 1,
-
-    /**
-     * \brief Unconditional jump
-     */
-    UNCONDITIONAL = 2
-};
 
 /**
  * \brief Class used to perform the analysis of the disassembled code
@@ -47,8 +29,12 @@ public:
      *
      * \param[in] stmts A vector of Statement, likely obtained from the
      * Disassembler class
+     * \param[in] arch A pointer to the Architecture class representing the
+     * binary architecture. This pointer is not inherited but will be used
+     * during the class lifecycle
      */
-    Analysis(const std::vector<Statement>* stmts);
+    Analysis(const std::vector<Statement>* stmts,
+             std::shared_ptr<Architecture> arch);
 
     /**
      * \brief Constructor given a string representing a function
@@ -67,8 +53,11 @@ public:
      *
      * \param[in] str A string representing a single function, formatted as
      * described in the doc
+     * \param[in] arch A pointer to the Architecture class representing the
+     * binary architecture. This pointer is not inherited but will be used
+     * during the class lifecycle
      */
-    Analysis(const std::string& str);
+    Analysis(const std::string& str, std::shared_ptr<Architecture> arch);
 
     /**
      * \brief Default destructor
@@ -91,19 +80,26 @@ public:
     Statement operator[](int value) const;
 
     /**
-     * \brief Returns true if the mnemonic is a jump
-     *
-     * \param[in] mnemonic A mnemonic in form of a string
-     * \return the type of jump represented by this mnemonic
+     * \brief Return the control flow graph for this function
+     * \return the control flow graph of the function
      */
-    virtual JumpType is_jump(const std::string& mnemonic) = 0;
+    const BasicBlock* get_cfg() const;
 
 private:
+    // build a control flow graph in O(nlogn) time-complexity
+    void build_cfg();
+
     // linear;y stored instructions
     std::vector<Statement> stmt_list;
 
     // sparsely stored instructions, indexed by offset
     std::unordered_map<uint64_t, const Statement*> stmt_sparse;
+
+    // class used to gather architecture specific information
+    std::shared_ptr<Architecture> architecture;
+
+    // control flow graph of the function
+    BasicBlock* cfg;
 };
 
 #endif //__ANALYSIS_HPP__

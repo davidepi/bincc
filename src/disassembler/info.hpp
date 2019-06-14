@@ -1,7 +1,8 @@
 #ifndef __INFO_HPP__
 #define __INFO_HPP__
 
-#include "disassembler/architecture.hpp"
+#include "architectures/architecture.hpp"
+#include <memory>
 
 /**
  * \brief Class storing information about an executable file.
@@ -20,25 +21,18 @@ public:
 
     /**
      * \brief Parametrized constructor
-     * \param[in] arch The architecture of the executable
      * \param[in] be true if big endian
      * \param[in] has_canary true if canaries are present
      * \param[in] stripped true if the executable is stripped
      * \param[in] b64 true if the executable is 64-bit
      */
-    Info(Architecture arch, bool be, bool has_canary, bool stripped, bool b64);
+    Info(bool be, bool has_canary, bool stripped, bool b64);
 
     /**
      * \brief Default destructor
      */
     ~Info() = default;
 
-    /**
-     * \brief Getter for the architecture
-     *
-     * \return an enum specifying the architecture
-     */
-    Architecture get_arch() const;
 
     /**
      * \brief Getter for the endianness
@@ -71,8 +65,6 @@ public:
     bool is_64bit() const;
 
 private:
-    // architecture of the executable
-    Architecture arch;
 
     // true if big endian
     bool big_endian;

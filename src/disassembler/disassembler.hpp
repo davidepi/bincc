@@ -1,9 +1,10 @@
 #ifndef __DISASSEMBLER_HPP__
 #define __DISASSEMBLER_HPP__
 
-#include "architecture.hpp"
+#include "architectures/architecture.hpp"
 #include "function.hpp"
 #include "statement.hpp"
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -74,7 +75,7 @@ public:
      *
      * \return An enum representing the architecture family of the analysed file
      */
-    Architecture get_arch() const;
+    std::shared_ptr<Architecture> get_arch() const;
 
     /**
      * \brief Returns the function names of the analyzed executable
@@ -133,7 +134,7 @@ protected:
      *
      * Architecture::UNKNOWN if the analysis has not been performed
      */
-    Architecture exec_arch;
+    std::shared_ptr<Architecture> exec_arch;
 
     /**
      * \brief List of functions of the analysed binary

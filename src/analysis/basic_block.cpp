@@ -39,3 +39,8 @@ void BasicBlock::set_id(int number)
 {
     BasicBlock::id = number;
 }
+
+void BasicBlock::set_conditional(const BasicBlock* conditional_blk)
+{
+    BasicBlock::conditional = conditional_blk;
+}

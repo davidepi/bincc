@@ -10,8 +10,8 @@ SET(BCC_MAIN_SOURCES
     ${PROJECT_SOURCE_DIR}/src/disassembler/function.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/info.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/statement.cpp
+    ${PROJECT_SOURCE_DIR}/src/architectures/architecture_x86.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/analysis.cpp
-    ${PROJECT_SOURCE_DIR}/src/analysis/analysis_x86.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/basic_block.cpp
     )
 #TEST SOURCES
@@ -19,7 +19,7 @@ SET(BCC_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/test/disassembler/statement_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/analysis/analysis_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/analysis/basic_block_tests.cpp
-    ${PROJECT_SOURCE_DIR}/test/analysis/analysis_x86_tests.cpp
+    ${PROJECT_SOURCE_DIR}/test/analysis/architecture_tests.cpp
     )
 
 LIST(APPEND ALL_REQUIRED_INCLUDES ${PROJECT_SOURCE_DIR}/src)

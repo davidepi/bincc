@@ -1,4 +1,5 @@
 #include "r2_json_parser.hpp"
+#include "architectures/architecture_x86.hpp"
 #include <nlohmann/json.hpp>
 
 using Json = nlohmann::json;
@@ -44,20 +45,7 @@ Info R2JsonParser::parse_info(const std::string& json_string)
             bool bits = parsed["bits"].get<int>() == 64;
 
             // at this point if no exceptions, copy to the actual values
-            Architecture arch;
-            if(strarch == "x86")
-            {
-                arch = Architecture::X86;
-            }
-            else if(strarch == "arm")
-            {
-                arch = Architecture::ARM;
-            }
-            else
-            {
-                arch = Architecture::UNKNOWN;
-            }
-            return Info(arch, endian, can, strip, bits);
+            return Info(endian, can, strip, bits);
         }
         catch(Json::exception& e)
         {
@@ -106,4 +94,38 @@ Statement R2JsonParser::parse_statement(const std::string& json_string)
     {
         return Statement();
     }
+}
+
+std::shared_ptr<Architecture>
+R2JsonParser::parse_architecture(const std::string& json_string)
+{
+    std::shared_ptr<Architecture> arch;
+    if(!json_string.empty())
+    {
+        try
+        {
+            Json parsed = Json::parse(json_string)["bin"];
+            // first save to tmp vars
+            std::string strarch = parsed["arch"].get<std::string>();
+
+            if(strarch == "x86")
+            {
+                arch = std::shared_ptr<Architecture>{new ArchitectureX86()};
+            }
+            else
+            {
+                arch = std::shared_ptr<Architecture>{new ArchitectureUNK()};
+            }
+        }
+        catch(Json::exception& e)
+        {
+            fprintf(stderr, "%s\n", e.what());
+            arch = std::shared_ptr<Architecture>{new ArchitectureUNK()};
+        }
+    }
+    else
+    {
+        arch = std::shared_ptr<Architecture>{new ArchitectureUNK()};
+    }
+    return arch;
 }

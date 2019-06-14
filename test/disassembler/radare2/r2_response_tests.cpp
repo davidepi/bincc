@@ -45,34 +45,29 @@ TEST(R2Parser, Info)
     Info info;
     EXPECT_FALSE(info.has_canaries());
     EXPECT_FALSE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), Architecture::UNKNOWN);
     EXPECT_FALSE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
     info = R2JsonParser::parse_info("totally random");
     EXPECT_FALSE(info.has_canaries());
     EXPECT_FALSE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), Architecture::UNKNOWN);
     EXPECT_FALSE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
     EXPECT_FALSE(info.has_canaries());
     EXPECT_FALSE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), Architecture::UNKNOWN);
     EXPECT_FALSE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
     info = R2JsonParser::parse_info(json);
     EXPECT_TRUE(info.has_canaries());
     EXPECT_TRUE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), Architecture::X86);
     EXPECT_TRUE(info.is_stripped());
     EXPECT_FALSE(info.is_bigendian());
 
     info = R2JsonParser::parse_info(jsn2);
     EXPECT_FALSE(info.has_canaries());
     EXPECT_FALSE(info.is_64bit());
-    EXPECT_EQ(info.get_arch(), Architecture::ARM);
     EXPECT_FALSE(info.is_stripped());
     EXPECT_TRUE(info.is_bigendian());
 }
@@ -128,4 +123,28 @@ TEST(R2Parser, stmt)
     stmt = R2JsonParser::parse_statement(json);
     EXPECT_EQ(stmt.get_offset(), 0x14480);
     EXPECT_STREQ(stmt.get_command().c_str(), "push rbx");
+}
+
+TEST(R2Parser, arch)
+{
+    std::string json = "{\"core\":{\"type\":\"DYN (Shared object file)\","
+                       "\"file\":\"/bin/ls\",\"fd\":3,\"size\":133792,\""
+                       "humansz\":\"130.7K\",\"iorw\":false,\"mode\":\"-r-x\","
+                       "\"obsz\":0,\"block\":256,\"format\":\"elf64\"},\"bin\":"
+                       "{\"arch\":\"x86\",\"binsz\":131997,\"bintype\":\"elf\","
+                       "\"bits\":64,\"canary\":true,\"class\":\"ELF64\",\"compi"
+                       "led\":\"\",\"crypto\":false,\"dbg_file\":\"\",\"endia"
+                       "n\":\"little\",\"havecode\":true,\"guid\":\"\",\"intrp"
+                       "\":\"/lib64/ld-linux-x86-64.so.2\",\"lang\":\"c\",\""
+                       "linenum\":false,\"lsyms\":false,\"machine\":\"AMD x86-"
+                       "64 architecture\",\"maxopsz\":16,\"minopsz\":1,\"nx\":t"
+                       "rue,\"os\":\"linux\",\"pcalign\":0,\"pic\":true,\"relo"
+                       "cs\":false,\"relro\":\"full\",\"rpath\":\"NONE\",\"stat"
+                       "ic\":false,\"stripped\":true,\"subsys\":\"linux\",\"va"
+                       "\":true,\"checksums\":{}}}";
+    std::shared_ptr<Architecture> arch;
+    arch = R2JsonParser::parse_architecture("totally random");
+    EXPECT_EQ(arch->get_name().c_str(), "unknown");
+    arch = R2JsonParser::parse_architecture("json");
+    EXPECT_EQ(arch->get_name().c_str(), "x86");
 }

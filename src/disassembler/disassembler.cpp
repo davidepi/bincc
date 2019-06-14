@@ -6,12 +6,13 @@
 #include <cstring>
 #include <sstream>
 
-Disassembler::Disassembler(const char* bin_path) : exec_arch(UNKNOWN)
+Disassembler::Disassembler(const char* bin_path)
+    : exec_arch(new ArchitectureUNK())
 {
     Disassembler::binary = bin_path;
 }
 
-Architecture Disassembler::get_arch() const
+std::shared_ptr<Architecture> Disassembler::get_arch() const
 {
     return exec_arch;
 }
@@ -23,7 +24,7 @@ std::set<Function> Disassembler::get_function_names() const
 
 void Disassembler::set_binary(const char* bin_path)
 {
-    exec_arch = UNKNOWN;
+    exec_arch = nullptr;
     function_names.clear();
     function_bodies.clear();
     Disassembler::binary = bin_path;

@@ -4,6 +4,7 @@
 #include "disassembler/function.hpp"
 #include "disassembler/info.hpp"
 #include "disassembler/statement.hpp"
+#include <memory>
 #include <string>
 
 /**
@@ -58,6 +59,20 @@ namespace R2JsonParser
      * \return the populated Statement class, a default one if any error occured
      */
     Statement parse_statement(const std::string& json_string);
+
+    /**
+     * \brief Parse the string retrieved by the `ij` radare2 command
+     *
+     * This method gathers the architecture by parsing the string retrieved by
+     * issuing the `ij` command to r2. Attempting to parse any other JSON or
+     * strings will fail
+     *
+     * \param[in] json_string The JSON string that will be parsed
+     * \return the architecture of the executable, ArchitectureUNK if any error
+     * occured
+     */
+    std::shared_ptr<Architecture>
+    parse_architecture(const std::string& json_string);
 
 } // namespace R2JsonParser
 

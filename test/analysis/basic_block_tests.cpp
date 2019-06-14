@@ -29,11 +29,12 @@ TEST(BasicBlock, next_block)
 
     b0.set_next(&b1);
     b1.set_next(&b2, &b0);
+    b2.set_conditional(&b0);
 
     EXPECT_EQ(b0.get_next(), &b1);
     EXPECT_EQ(b0.get_conditional(), nullptr);
     EXPECT_EQ(b1.get_next(), &b2);
     EXPECT_EQ(b1.get_conditional(), &b0);
     EXPECT_EQ(b2.get_next(), nullptr);
-    EXPECT_EQ(b2.get_conditional(), nullptr);
+    EXPECT_EQ(b2.get_conditional(), &b0);
 }

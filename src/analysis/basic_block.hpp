@@ -79,11 +79,19 @@ public:
     /**
      * \brief Setter for the next block, with conditional jumps
      * \param[in] next_blk The next block that will be executed if no
-     * conditional jumps are taken \param[in] conditional_blk The next block
+     * conditional jumps are taken
+     * \param[in] conditional_blk The next block
      * that will be executed if a conditional jump is taken
      */
     void set_next(const BasicBlock* next_blk,
                   const BasicBlock* conditional_blk);
+
+    /**
+     * \brief Setter for the conditional block only
+     * \param[in] conditional_blk The next block that will be executed if a
+     * conditional jump is taken
+     */
+    void set_conditional(const BasicBlock* conditional_blk);
 
 private:
     int id{0};

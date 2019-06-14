@@ -3,21 +3,13 @@
 
 using Json = nlohmann::json;
 
-Info::Info()
-    : arch(UNKNOWN), big_endian(false), canary(false), stripped(false),
-      bits_64(false)
+Info::Info() : big_endian(false), canary(false), stripped(false), bits_64(false)
 {
 }
 
-Info::Info(Architecture arch, bool be, bool has_canary, bool stripped, bool b64)
-    : arch(arch), big_endian(be), canary(has_canary), stripped(stripped),
-      bits_64(b64)
+Info::Info(bool be, bool has_canary, bool stripped, bool b64)
+    : big_endian(be), canary(has_canary), stripped(stripped), bits_64(b64)
 {
-}
-
-Architecture Info::get_arch() const
-{
-    return arch;
 }
 
 bool Info::is_bigendian() const
