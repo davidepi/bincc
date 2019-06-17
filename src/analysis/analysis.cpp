@@ -69,11 +69,21 @@ void Analysis::build_cfg()
     // last block of the cfg for the function
     std::set<uint64_t> dead_end;
 
-    targets.insert(stmt_list[0].get_offset()); // entry point
-
     // find all the jumps and the blocks pointing nowhere
+
+    // If the previous instruction was a conditional jump, the next one is the
+    // target if the condition is not true. However, for variable-lenght opcode
+    // architectures such as X86 it is harder to look forward than to lookback,
+    // hence the reason of this boolean.
+    // The initial value if true to target the starting block.
+    bool previous_was_jump = true;
     for(const Statement& stmt : stmt_list)
     {
+        if(previous_was_jump)
+        {
+            targets.insert(stmt.get_offset());
+            previous_was_jump = false;
+        }
         const std::string mnemonic = stmt.get_mnemonic();
         JumpType jmp = architecture->is_jump(mnemonic);
         if(jmp == JumpType::CONDITIONAL)
@@ -81,6 +91,7 @@ void Analysis::build_cfg()
             uint64_t target = std::stoll(stmt.get_args(), nullptr, 16);
             targets.insert(target);
             conditional_src.insert({{stmt.get_offset(), target}});
+            previous_was_jump = true;
         }
         else if(jmp == JumpType::UNCONDITIONAL)
         {
@@ -98,14 +109,17 @@ void Analysis::build_cfg()
     }
 
     // create the cfg and concatenate every block
-    cfg = new BasicBlock[targets.size()];
-    for(int i = 0; i < targets.size() - 1; i++)
+    uint64_t bb_no = targets.size();
+    cfg = new BasicBlock[bb_no];
+    for(int i = 0; i < bb_no - 1; i++)
     {
+        cfg[i].set_id(i);
         cfg[i].set_next(&(cfg[i + 1]));
     }
+    cfg[bb_no - 1].set_id(bb_no - 1);
 
     // maps every target to the block number. Otherwise I need to perform this
-    // operation inside a loop and the complexity grows
+    // operation multiple times inside a loop and the complexity grows
     std::unordered_map<uint64_t, int> blocks_id;
     int index = 0;
     for(uint64_t block_beginning : targets)
@@ -113,15 +127,29 @@ void Analysis::build_cfg()
         blocks_id.insert({{block_beginning, index++}});
     }
 
+    // TODO: The three loops here just perform the same thing and call a
+    //       different function at the end. Maybe use functional programming?
+
     // set the conditional jumps target
     for(std::pair<uint64_t, uint64_t> jmp_src : conditional_src)
     {
+        // resolve the current block by finding the next id in the set higher
+        // than the current offset, and decreasing the id by 1
+        uint64_t next_beginning;
+        std::unordered_map<uint64_t, int>::const_iterator next_block;
+
         // resolve current block
-        uint64_t next_beginning = *targets.upper_bound(jmp_src.first);
-        int current_id = (blocks_id.find(next_beginning)->second)--;
+        next_beginning = *targets.upper_bound(jmp_src.first);
+        next_block = blocks_id.find(next_beginning);
+        int current_id = next_block != blocks_id.end() ?
+                             (blocks_id.find(next_beginning)->second) - 1 :
+                             targets.size() - 1;
         // resolve target block
         next_beginning = *targets.upper_bound(jmp_src.second);
-        int target_id = (blocks_id.find(next_beginning)->second)--;
+        next_block = blocks_id.find(next_beginning);
+        int target_id = next_block != blocks_id.end() ?
+                            (blocks_id.find(next_beginning)->second) - 1 :
+                            targets.size() - 1;
         // set the pointer
         cfg[current_id].set_conditional(&(cfg[target_id]));
     }
@@ -129,12 +157,23 @@ void Analysis::build_cfg()
     // set the conditional jumps target
     for(std::pair<uint64_t, uint64_t> jmp_src : unconditional_src)
     {
+        // same procedure as the previous loop
+        uint64_t next_beginning;
+        std::unordered_map<uint64_t, int>::const_iterator next_block;
+
         // resolve current block
-        uint64_t next_beginning = *targets.upper_bound(jmp_src.first);
-        int current_id = (blocks_id.find(next_beginning)->second)--;
+        next_beginning = *targets.upper_bound(jmp_src.first);
+        next_block = blocks_id.find(next_beginning);
+        int current_id = next_block != blocks_id.end() ?
+                             (blocks_id.find(next_beginning)->second) - 1 :
+                             targets.size() - 1;
+
         // resolve target block
         next_beginning = *targets.upper_bound(jmp_src.second);
-        int target_id = (blocks_id.find(next_beginning)->second)--;
+        next_block = blocks_id.find(next_beginning);
+        int target_id = next_block != blocks_id.end() ?
+                            (blocks_id.find(next_beginning)->second) - 1 :
+                            targets.size() - 1;
         // set the pointer
         cfg[current_id].set_next(&(cfg[target_id]));
     }
@@ -143,8 +182,16 @@ void Analysis::build_cfg()
     for(uint64_t ret : dead_end)
     {
         // resolve current block
-        uint64_t next_beginning = *targets.upper_bound(ret);
-        int current_id = (blocks_id.find(next_beginning)->second)--;
+        uint64_t next_beginning;
+        std::unordered_map<uint64_t, int>::const_iterator next_block;
+
+        // resolve current block
+        next_beginning = *targets.upper_bound(ret);
+        next_block = blocks_id.find(next_beginning);
+        int current_id = next_block != blocks_id.end() ?
+                             (blocks_id.find(next_beginning)->second) - 1 :
+                             targets.size() - 1;
+
         // mark the block as endblock
         cfg[current_id].set_next(nullptr);
     }

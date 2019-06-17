@@ -59,7 +59,7 @@ TEST(Analysis, Analysis_constructor_vector)
     // array
     std::vector<Statement> stmts;
     stmts.emplace_back(0x610, "test edi, edi");
-    stmts.emplace_back(0x620, "je 0x620");
+    stmts.emplace_back(0x612, "je 0x620");
     stmts.emplace_back(0x614, "test esi, esi");
     stmts.emplace_back(0x616, "mov eax, 5");
     stmts.emplace_back(0x61b, "je 0x620");
@@ -86,11 +86,11 @@ TEST(Analysis, Analysis_constructor_vector)
     EXPECT_STREQ(ins.get_command().c_str(), "");
 }
 
-TEST(Analysis, cfg)
+TEST(Analysis, cfg_conditional)
 {
     std::vector<Statement> stmts;
     stmts.emplace_back(0x610, "test edi, edi");
-    stmts.emplace_back(0x620, "je 0x620");
+    stmts.emplace_back(0x612, "je 0x620");
     stmts.emplace_back(0x614, "test esi, esi");
     stmts.emplace_back(0x616, "mov eax, 5");
     stmts.emplace_back(0x61b, "je 0x620");
@@ -130,5 +130,55 @@ TEST(Analysis, cfg)
     next = cfg->get_next();
     cond = cfg->get_conditional();
     EXPECT_EQ(next, nullptr);
+    EXPECT_EQ(cond, nullptr);
+}
+
+TEST(Analysis, cfg_unconditional)
+{
+    std::vector<Statement> stmts;
+    stmts.emplace_back(0x61E, "push rbp");
+    stmts.emplace_back(0x61F, "mov rbp, rsp");
+    stmts.emplace_back(0x622, "mov dword [var_4h], edi");
+    stmts.emplace_back(0x625, "mov dword [var_8h], esi");
+    stmts.emplace_back(0x628, "cmp dword [var_4h], 5");
+    stmts.emplace_back(0x62C, "jne 0x633");
+    stmts.emplace_back(0x62E, "mov eax, dword [var_8h]");
+    stmts.emplace_back(0x631, "jmp 0x638");
+    stmts.emplace_back(0x633, "mov eax, 6");
+    stmts.emplace_back(0x638, "pop rbp");
+    stmts.emplace_back(0x639, "ret");
+
+    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* next;
+    const BasicBlock* cond;
+
+    // check if cfg is correct
+    EXPECT_EQ(cfg->get_id(), 0); // 0
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    ASSERT_NE(next, nullptr);
+    ASSERT_NE(cond, nullptr);
+    EXPECT_EQ(next->get_id(), 1);
+    EXPECT_EQ(cond->get_id(), 2);
+
+    cfg = next; // 1
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    ASSERT_NE(next, nullptr);
+    EXPECT_EQ(next->get_id(), 3);
+    EXPECT_EQ(cond, nullptr);
+
+    cfg = next; // 3
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    EXPECT_EQ(next, nullptr);
+    EXPECT_EQ(cond, nullptr);
+
+    cfg = anal.get_cfg()->get_conditional(); // 2
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    ASSERT_NE(next, nullptr);
+    EXPECT_EQ(next->get_id(), 3);
     EXPECT_EQ(cond, nullptr);
 }
