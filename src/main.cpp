@@ -1,6 +1,8 @@
+#include "analysis/analysis.hpp"
 #include "disassembler/radare2/r2_disassembler.hpp"
+#include "multithreading/synchronized_queue.hpp"
 #include "unistd.h"
-#include <iostream>
+#include <thread>
 
 static void fatal(const char* message)
 {
@@ -10,15 +12,38 @@ static void fatal(const char* message)
 
 int main(int argc, const char* argv[])
 {
-    if(argc != 2)
+    if(argc < 2)
     {
-        fatal("Usage: ./analyze <path_to_binary>");
+        fatal("Usage: ./analyze binary0 [binary1 ...]");
     }
-    if(access(argv[1], R_OK) == -1)
+
+    unsigned int core_no = std::thread::hardware_concurrency();
+    fprintf(stdout, "Cores: %d\n", core_no);
+
+    SynchronizedQueue<Disassembler*> disasm_jobs;
+
+    for(int i = 1; i < argc; i++)
     {
-        fatal("Input file does not exists or is not readable");
+        if(access(argv[i], R_OK) == -1)
+        {
+            fatal("Input file does not exists or is not readable");
+        }
+        disasm_jobs.push(new DisassemblerR2(argv[i]));
     }
-    Disassembler* disasm = new DisassemblerR2(argv[1]);
-    disasm->analyse();
-    std::cout << *disasm << std::endl;
+
+    // TODO: use real multithreading
+    while(!disasm_jobs.empty())
+    {
+        Disassembler* disasm = disasm_jobs.front();
+        disasm->analyse();
+        std::set<Function> names = disasm->get_function_names();
+        for(const Function& func : names)
+        {
+            std::string output = func.get_name() + ".dot";
+            Analysis anal(disasm->get_function_body(func.get_name()),
+                          disasm->get_arch());
+            const BasicBlock* cfg = anal.get_cfg();
+            print_cfg(cfg, output.c_str());
+        }
+    }
 }

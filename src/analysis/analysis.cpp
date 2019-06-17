@@ -8,9 +8,9 @@
 #include <set>
 #include <sstream>
 
-Statement Analysis::operator[](int value) const
+Statement Analysis::operator[](unsigned int value) const
 {
-    if(value >= 0 && value < stmt_list.size())
+    if(value < stmt_list.size())
     {
         return stmt_list.at(value);
     }
@@ -21,6 +21,11 @@ Analysis::Analysis(const std::vector<Statement>* stmts,
                    std::shared_ptr<Architecture> arch)
     : architecture(std::move(arch))
 {
+    if(architecture->get_name() == "unknown")
+    {
+        fprintf(stderr, "%s\n",
+                "Unknown architecture, analysis won't be performed");
+    }
     if(stmts != nullptr)
     {
         stmt_list = *stmts;
@@ -35,6 +40,11 @@ Analysis::Analysis(const std::vector<Statement>* stmts,
 Analysis::Analysis(const std::string& str, std::shared_ptr<Architecture> arch)
     : architecture(std::move(arch))
 {
+    if(architecture->get_name() == "unknown")
+    {
+        fprintf(stderr, "%s\n",
+                "Unknown architecture, analysis won't be performed");
+    }
     std::istringstream iss(str);
     std::string line;
     std::getline(iss, line); // skip first line
@@ -109,7 +119,7 @@ void Analysis::build_cfg()
     }
 
     // create the cfg and concatenate every block
-    uint64_t bb_no = targets.size();
+    int bb_no = targets.size();
     cfg = new BasicBlock[bb_no];
     for(int i = 0; i < bb_no - 1; i++)
     {
@@ -195,4 +205,9 @@ void Analysis::build_cfg()
         // mark the block as endblock
         cfg[current_id].set_next(nullptr);
     }
+}
+
+Analysis::~Analysis()
+{
+    delete[] cfg;
 }

@@ -76,7 +76,7 @@ private:
 
     // index where the arguments of the instruction start (in the instruction
     // string)
-    int args_at;
+    unsigned int args_at;
 };
 
 #endif

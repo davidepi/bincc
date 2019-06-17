@@ -99,4 +99,11 @@ private:
     const BasicBlock* conditional{nullptr};
 };
 
+/**
+ * \brief Print the control flow graph in form of .dot file
+ * \param[in] bb The root node of the control flow graph
+ * \param[in] filename The file where the file will be written.
+ */
+void print_cfg(const BasicBlock* bb, const char* filename);
+
 #endif

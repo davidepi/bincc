@@ -62,7 +62,9 @@ public:
     /**
      * \brief Default destructor
      */
-    virtual ~Analysis() = default;
+    virtual ~Analysis();
+
+    //TODO: deal with rule of the 3
 
     /**
      * \brief Access the n-th instruction
@@ -77,7 +79,7 @@ public:
      * \param[in] value The index of the instruction. Not the offset!
      * \return The instruction found at the given index
      */
-    Statement operator[](int value) const;
+    Statement operator[](unsigned int value) const;
 
     /**
      * \brief Return the control flow graph for this function
