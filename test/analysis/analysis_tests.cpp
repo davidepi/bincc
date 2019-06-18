@@ -182,3 +182,32 @@ TEST(Analysis, cfg_unconditional)
     EXPECT_EQ(next->get_id(), 3);
     EXPECT_EQ(cond, nullptr);
 }
+
+TEST(Analysis, cfg_indirect)
+{
+    // this is crafted so offsets are completely random
+    std::vector<Statement> stmts;
+    stmts.emplace_back(0x610, "test edi, edi");
+    stmts.emplace_back(0x611, "jne qword [var_4h]");
+    stmts.emplace_back(0x612, "jmp dword [var_8h]");
+    stmts.emplace_back(0x613, "ret");
+
+    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* next;
+    const BasicBlock* cond;
+
+    // check if cfg is correct
+    EXPECT_EQ(cfg->get_id(), 0); // 0
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    ASSERT_NE(next, nullptr);
+    EXPECT_EQ(next->get_id(), 1);
+    EXPECT_EQ(cond, nullptr);
+
+    cfg = next; // 1
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    EXPECT_EQ(next, nullptr);
+    EXPECT_EQ(cond, nullptr);
+}

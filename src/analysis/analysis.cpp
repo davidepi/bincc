@@ -1,5 +1,3 @@
-#include <utility>
-
 //
 // Created by davide on 6/12/19.
 //
@@ -68,6 +66,24 @@ const BasicBlock* Analysis::get_cfg() const
     return &(cfg[0]);
 }
 
+static unsigned int
+resolve_block_id(uint64_t offset,
+                 const std::unordered_map<uint64_t, int>& blocks_map,
+                 const std::set<uint64_t>& targets)
+{
+    // resolve the current block by finding the next id in the set higher
+    // than the current offset, and decreasing the id by 1
+    uint64_t next_beginning;
+    std::unordered_map<uint64_t, int>::const_iterator next_block;
+
+    // resolve current block
+    next_beginning = *targets.upper_bound(offset);
+    next_block = blocks_map.find(next_beginning);
+    return next_block != blocks_map.end() ?
+               (blocks_map.find(next_beginning)->second) - 1 :
+               targets.size() - 1;
+}
+
 void Analysis::build_cfg()
 {
     // contains all the targets of the jumps
@@ -98,16 +114,37 @@ void Analysis::build_cfg()
         JumpType jmp = architecture->is_jump(mnemonic);
         if(jmp == JumpType::CONDITIONAL)
         {
-            uint64_t target = std::stoll(stmt.get_args(), nullptr, 16);
-            targets.insert(target);
-            conditional_src.insert({{stmt.get_offset(), target}});
+            try
+            {
+                uint64_t target = std::stoll(stmt.get_args(), nullptr, 0);
+                targets.insert(target);
+                conditional_src.insert({{stmt.get_offset(), target}});
+            }
+            catch(const std::invalid_argument& ia)
+            {
+                fprintf(stderr, "Ignoring indirect jump: %s\n",
+                        stmt.get_command().c_str());
+            }
             previous_was_jump = true;
         }
         else if(jmp == JumpType::UNCONDITIONAL)
         {
-            uint64_t target = std::stoll(stmt.get_args(), nullptr, 16);
-            targets.insert(target);
-            unconditional_src.insert({{stmt.get_offset(), target}});
+            try
+            {
+                uint64_t target = std::stoll(stmt.get_args(), nullptr, 0);
+                targets.insert(target);
+                unconditional_src.insert({{stmt.get_offset(), target}});
+            }
+            catch(const std::invalid_argument& ia)
+            {
+                // a jump conditional to un unknown address means that I have to
+                // replace the default target (next block) with null (instead of
+                // the jump target)
+                dead_end.insert(stmt.get_offset());
+                fprintf(stderr, "Ignoring indirect jump: %s\n",
+                        stmt.get_command().c_str());
+            }
+            previous_was_jump = true;
         }
         else
         {
@@ -137,73 +174,31 @@ void Analysis::build_cfg()
         blocks_id.insert({{block_beginning, index++}});
     }
 
-    // TODO: The three loops here just perform the same thing and call a
-    //       different function at the end. Maybe use functional programming?
-
     // set the conditional jumps target
     for(std::pair<uint64_t, uint64_t> jmp_src : conditional_src)
     {
-        // resolve the current block by finding the next id in the set higher
-        // than the current offset, and decreasing the id by 1
-        uint64_t next_beginning;
-        std::unordered_map<uint64_t, int>::const_iterator next_block;
-
-        // resolve current block
-        next_beginning = *targets.upper_bound(jmp_src.first);
-        next_block = blocks_id.find(next_beginning);
-        int current_id = next_block != blocks_id.end() ?
-                             (blocks_id.find(next_beginning)->second) - 1 :
-                             targets.size() - 1;
-        // resolve target block
-        next_beginning = *targets.upper_bound(jmp_src.second);
-        next_block = blocks_id.find(next_beginning);
-        int target_id = next_block != blocks_id.end() ?
-                            (blocks_id.find(next_beginning)->second) - 1 :
-                            targets.size() - 1;
+        int src_id = resolve_block_id(jmp_src.first, blocks_id, targets);
+        int target_id = resolve_block_id(jmp_src.second, blocks_id, targets);
         // set the pointer
-        cfg[current_id].set_conditional(&(cfg[target_id]));
+        cfg[src_id].set_conditional(&(cfg[target_id]));
     }
 
     // set the conditional jumps target
     for(std::pair<uint64_t, uint64_t> jmp_src : unconditional_src)
     {
-        // same procedure as the previous loop
-        uint64_t next_beginning;
-        std::unordered_map<uint64_t, int>::const_iterator next_block;
-
-        // resolve current block
-        next_beginning = *targets.upper_bound(jmp_src.first);
-        next_block = blocks_id.find(next_beginning);
-        int current_id = next_block != blocks_id.end() ?
-                             (blocks_id.find(next_beginning)->second) - 1 :
-                             targets.size() - 1;
-
-        // resolve target block
-        next_beginning = *targets.upper_bound(jmp_src.second);
-        next_block = blocks_id.find(next_beginning);
-        int target_id = next_block != blocks_id.end() ?
-                            (blocks_id.find(next_beginning)->second) - 1 :
-                            targets.size() - 1;
+        int src_id = resolve_block_id(jmp_src.first, blocks_id, targets);
+        int target_id = resolve_block_id(jmp_src.second, blocks_id, targets);
         // set the pointer
-        cfg[current_id].set_next(&(cfg[target_id]));
+        cfg[src_id].set_next(&(cfg[target_id]));
     }
 
     // set the blocks pointing nowhere. Otherwise they point to the next block
     for(uint64_t ret : dead_end)
     {
-        // resolve current block
-        uint64_t next_beginning;
-        std::unordered_map<uint64_t, int>::const_iterator next_block;
-
-        // resolve current block
-        next_beginning = *targets.upper_bound(ret);
-        next_block = blocks_id.find(next_beginning);
-        int current_id = next_block != blocks_id.end() ?
-                             (blocks_id.find(next_beginning)->second) - 1 :
-                             targets.size() - 1;
+        int src_id = resolve_block_id(ret, blocks_id, targets);
 
         // mark the block as endblock
-        cfg[current_id].set_next(nullptr);
+        cfg[src_id].set_next(nullptr);
     }
 }
 
