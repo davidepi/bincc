@@ -5,6 +5,7 @@
 #include "basic_block.hpp"
 #include <cstdio>
 #include <stack>
+#include <set>
 
 BasicBlock::BasicBlock(int number)
     : id(number), next(nullptr), conditional(nullptr)
@@ -59,8 +60,10 @@ void print_cfg(const BasicBlock* bb, const char* filename)
     fprintf(fout, "%s\n", "digraph {");
 
     // print iteratively
+    std::set<int> visited;
     std::stack<const BasicBlock*> nodes;
     nodes.push(bb);
+    visited.insert(bb->get_id());
     do
     {
         const BasicBlock* current;
@@ -73,12 +76,20 @@ void print_cfg(const BasicBlock* bb, const char* filename)
         if(next != nullptr)
         {
             fprintf(fout, "%d -> %d\n", current->get_id(), next->get_id());
-            nodes.push(next);
+            if(visited.find(next->get_id())==visited.end())
+            {
+                nodes.push(next);
+                visited.insert(next->get_id());
+            }
         }
         if(cond != nullptr)
         {
             fprintf(fout, "%d -> %d\n", current->get_id(), cond->get_id());
-            nodes.push(cond);
+            if(visited.find(cond->get_id())==visited.end())
+            {
+                nodes.push(cond);
+                visited.insert(cond->get_id());
+            }
         }
     } while(!nodes.empty());
 
