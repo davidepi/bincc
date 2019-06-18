@@ -2,6 +2,7 @@
 // Created by davide on 6/13/19.
 //
 #include "architectures/architecture_x86.hpp"
+#include "architectures/architecture_arm.hpp"
 #include <gtest/gtest.h>
 
 
@@ -138,4 +139,68 @@ TEST(Architecture, X86_get_name)
     ArchitectureX86 arch;
 
     EXPECT_STREQ(arch.get_name().c_str(), "x86");
+}
+
+TEST(Architecture, ARM_is_jump)
+{
+    ArchitectureARM arch;
+
+    std::string mne;
+    mne = "beq";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bne";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bcs";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bhs";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bcc";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "blo";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bmi";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bpl";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bvs";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bvc";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bhi";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bls";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bge";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bgt";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "blt";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "ble";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "b";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::UNCONDITIONAL);
+    mne = "bl";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::NONE);
+    mne = "bxle";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::CONDITIONAL);
+    mne = "bx";
+    EXPECT_EQ(arch.is_jump(mne), JumpType::NONE);
+}
+
+TEST(Architecture, ARM_is_return)
+{
+    ArchitectureARM arch;
+
+    std::string mne = "bx";
+    EXPECT_TRUE(arch.is_return(mne));
+    mne = "ret";
+    EXPECT_FALSE(arch.is_return(mne));
+}
+
+TEST(Architecture, ARM_get_name)
+{
+    ArchitectureARM arch;
+
+    EXPECT_STREQ(arch.get_name().c_str(), "arm");
 }

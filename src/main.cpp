@@ -40,6 +40,11 @@ int main(int argc, const char* argv[])
         for(const Function& func : names)
         {
             std::string output = func.get_name() + ".dot";
+            if(func.get_name()=="sym.quicksort")
+            {
+                int i = 0;
+                i++;
+            }
             Analysis anal(disasm->get_function_body(func.get_name()),
                           disasm->get_arch());
             const BasicBlock* cfg = anal.get_cfg();

@@ -11,6 +11,7 @@ SET(BCC_MAIN_SOURCES
     ${PROJECT_SOURCE_DIR}/src/disassembler/info.cpp
     ${PROJECT_SOURCE_DIR}/src/disassembler/statement.cpp
     ${PROJECT_SOURCE_DIR}/src/architectures/architecture_x86.cpp
+    ${PROJECT_SOURCE_DIR}/src/architectures/architecture_arm.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/analysis.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/basic_block.cpp
     )

@@ -151,6 +151,7 @@ void Analysis::build_cfg()
             if(architecture->is_return(mnemonic))
             {
                 dead_end.insert(stmt.get_offset());
+                previous_was_jump = true;
             }
         }
     }

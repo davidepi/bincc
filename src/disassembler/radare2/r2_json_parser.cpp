@@ -1,4 +1,5 @@
 #include "r2_json_parser.hpp"
+#include "architectures/architecture_arm.hpp"
 #include "architectures/architecture_x86.hpp"
 #include <nlohmann/json.hpp>
 
@@ -111,6 +112,10 @@ R2JsonParser::parse_architecture(const std::string& json_string)
             if(strarch == "x86")
             {
                 arch = std::shared_ptr<Architecture>{new ArchitectureX86()};
+            }
+            else if(strarch == "arm")
+            {
+                arch = std::shared_ptr<Architecture>{new ArchitectureARM()};
             }
             else
             {
