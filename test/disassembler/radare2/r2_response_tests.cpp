@@ -144,7 +144,7 @@ TEST(R2Parser, arch)
                        "\":true,\"checksums\":{}}}";
     std::shared_ptr<Architecture> arch;
     arch = R2JsonParser::parse_architecture("totally random");
-    EXPECT_EQ(arch->get_name().c_str(), "unknown");
-    arch = R2JsonParser::parse_architecture("json");
-    EXPECT_EQ(arch->get_name().c_str(), "x86");
+    EXPECT_STREQ(arch->get_name().c_str(), "unknown");
+    arch = R2JsonParser::parse_architecture(json);
+    EXPECT_STREQ(arch->get_name().c_str(), "x86");
 }

@@ -5,14 +5,14 @@
 TEST(Disassembler, R2_arch)
 {
     DisassemblerR2 disasm_x86(TESTS_DIR "resources/ls_unstripped_x86");
-    EXPECT_EQ(disasm_x86.get_arch()->get_name().c_str(), "unknown");
+    EXPECT_STREQ(disasm_x86.get_arch()->get_name().c_str(), "unknown");
     disasm_x86.analyse();
-    EXPECT_EQ(disasm_x86.get_arch()->get_name().c_str(), "x86");
+    EXPECT_STREQ(disasm_x86.get_arch()->get_name().c_str(), "x86");
 
     DisassemblerR2 disasm_arm(TESTS_DIR "resources/ls_unstripped_arm");
-    EXPECT_EQ(disasm_x86.get_arch()->get_name().c_str(), "unknown");
+    EXPECT_STREQ(disasm_arm.get_arch()->get_name().c_str(), "unknown");
     disasm_arm.analyse();
-    EXPECT_EQ(disasm_x86.get_arch()->get_name().c_str(), "arm");
+    EXPECT_STREQ(disasm_arm.get_arch()->get_name().c_str(), "arm");
 }
 
 TEST(Disassembler, R2_functions)
