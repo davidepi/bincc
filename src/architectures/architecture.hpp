@@ -20,14 +20,27 @@ enum JumpType
     /**
      * \brief Conditional jump
      */
-    CONDITIONAL = 1,
+    JUMP_CONDITIONAL = 1,
 
     /**
      * \brief Unconditional jump
      */
-    UNCONDITIONAL = 2
+    JUMP_UNCONDITIONAL = 2,
+
+    /**
+     * \brief Unconditional return
+     */
+    RET_UNCONDITIONAL = 3,
+
+    /**
+     * \brief Conditional return (for some architectures like ARM)
+     */
+    RET_CONDITIONAL = 4
 };
 
+/**
+ * \brief Class describing architecture-specific features
+ */
 class Architecture
 {
 public:
@@ -40,19 +53,23 @@ public:
     /**
      * \brief Returns the type of jump of the mnemonic
      *
+     * \note A return is considered a jump, and should be addressed by this
+     * method
+     *
      * \param[in] mnemonic A mnemonic in form of a string
      * \return the type of jump represented by this mnemonic
      */
     virtual JumpType is_jump(const std::string& mnemonic) = 0;
-
-    /**
-     * \brief Returns true if the mnemonic is used to return from a function
-     * \param[in] mnemonic
-     * \return
-     */
-    virtual bool is_return(const std::string& mnemonic) = 0;
 };
 
+/**
+ * \brief Base class implementing architecture.
+ *
+ * This class is used to provide an "unsupported architecture" format.
+ * Everything will return false or unknown and the analysis will probably fail
+ * or produce unusable results. This is a fallback for unrecognized
+ * architectures.
+ */
 class ArchitectureUNK : public Architecture
 {
 public:
@@ -60,13 +77,10 @@ public:
     {
         return "unknown";
     }
+
     JumpType is_jump(const std::string&) override
     {
         return NONE;
-    };
-    bool is_return(const std::string&) override
-    {
-        return false;
     };
 };
 

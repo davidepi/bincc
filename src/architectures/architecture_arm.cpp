@@ -35,28 +35,27 @@ JumpType ArchitectureARM::is_jump(const std::string& mnemonic)
     {
         if(mne != mnemonic)
         {
-            retval = JumpType::CONDITIONAL;
+            retval = JumpType::JUMP_CONDITIONAL;
         }
         else
         {
-            retval = JumpType::UNCONDITIONAL;
+            retval = JumpType::JUMP_UNCONDITIONAL;
         }
     }
-    else if(mne == "bx" && mne != mnemonic)
+    else if(mne == "bx")
     {
-        retval = JumpType::CONDITIONAL;
+        if(mne != mnemonic)
+        {
+            retval = JumpType::RET_CONDITIONAL;
+        }
+        else
+        {
+            retval = JumpType::RET_UNCONDITIONAL;
+        }
     }
     else
     {
         retval = JumpType::NONE;
     }
     return retval;
-}
-
-bool ArchitectureARM::is_return(const std::string& mnemonic)
-{
-    // TODO: bxle is not added because it exploits the structure of the
-    //       build_cfg function. However this is obviously unmaintainable and
-    //       will become a nightmare in the future, so fix it
-    return mnemonic == "bx";
 }

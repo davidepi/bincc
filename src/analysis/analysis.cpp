@@ -66,6 +66,10 @@ const BasicBlock* Analysis::get_cfg() const
     return &(cfg[0]);
 }
 
+/**
+ * Resolve the block ID given a particular offset. This function is coupled with
+ * build_cfg()
+ */
 static unsigned int
 resolve_block_id(uint64_t offset,
                  const std::unordered_map<uint64_t, int>& blocks_map,
@@ -93,7 +97,9 @@ void Analysis::build_cfg()
     // contains a pair <src,dest> for unconditional jumps
     std::unordered_map<uint64_t, uint64_t> unconditional_src;
     // last block of the cfg for the function
-    std::set<uint64_t> dead_end;
+    std::set<uint64_t> dead_end_uncond;
+    // last block of the cfg for the function
+    std::set<uint64_t> dead_end_cond;
 
     // find all the jumps and the blocks pointing nowhere
 
@@ -112,47 +118,58 @@ void Analysis::build_cfg()
         }
         const std::string mnemonic = stmt.get_mnemonic();
         JumpType jmp = architecture->is_jump(mnemonic);
-        if(jmp == JumpType::CONDITIONAL)
+        switch(jmp)
         {
-            try
+            case JUMP_CONDITIONAL:
             {
-                uint64_t target = std::stoll(stmt.get_args(), nullptr, 0);
-                targets.insert(target);
-                conditional_src.insert({{stmt.get_offset(), target}});
-            }
-            catch(const std::invalid_argument& ia)
-            {
-                fprintf(stderr, "Ignoring indirect jump: %s\n",
-                        stmt.get_command().c_str());
-            }
-            previous_was_jump = true;
-        }
-        else if(jmp == JumpType::UNCONDITIONAL)
-        {
-            try
-            {
-                uint64_t target = std::stoll(stmt.get_args(), nullptr, 0);
-                targets.insert(target);
-                unconditional_src.insert({{stmt.get_offset(), target}});
-            }
-            catch(const std::invalid_argument& ia)
-            {
-                // a jump conditional to un unknown address means that I have to
-                // replace the default target (next block) with null (instead of
-                // the jump target)
-                dead_end.insert(stmt.get_offset());
-                fprintf(stderr, "Ignoring indirect jump: %s\n",
-                        stmt.get_command().c_str());
-            }
-            previous_was_jump = true;
-        }
-        else
-        {
-            if(architecture->is_return(mnemonic))
-            {
-                dead_end.insert(stmt.get_offset());
+                try
+                {
+                    uint64_t target = std::stoll(stmt.get_args(), nullptr, 0);
+                    targets.insert(target);
+                    conditional_src.insert({{stmt.get_offset(), target}});
+                }
+                catch(const std::invalid_argument& ia)
+                {
+                    fprintf(stderr, "Ignoring indirect jump: %s\n",
+                            stmt.get_command().c_str());
+                }
                 previous_was_jump = true;
+                break;
             }
+            case JUMP_UNCONDITIONAL:
+            {
+                try
+                {
+                    uint64_t target = std::stoll(stmt.get_args(), nullptr, 0);
+                    targets.insert(target);
+                    unconditional_src.insert({{stmt.get_offset(), target}});
+                }
+                catch(const std::invalid_argument& ia)
+                {
+                    // a jump conditional to un unknown address means that I
+                    // have to replace the default target (next block) with null
+                    // (instead of the jump target)
+                    dead_end_uncond.insert(stmt.get_offset());
+                    fprintf(stderr, "Ignoring indirect jump: %s\n",
+                            stmt.get_command().c_str());
+                }
+                previous_was_jump = true;
+                break;
+            }
+            case RET_CONDITIONAL:
+            {
+                dead_end_cond.insert(stmt.get_offset());
+                previous_was_jump = true;
+                break;
+            }
+            case RET_UNCONDITIONAL:
+            {
+                dead_end_uncond.insert(stmt.get_offset());
+                previous_was_jump = true;
+                break;
+            }
+            case NONE:
+                break;
         }
     }
 
@@ -194,12 +211,22 @@ void Analysis::build_cfg()
     }
 
     // set the blocks pointing nowhere. Otherwise they point to the next block
-    for(uint64_t ret : dead_end)
+    for(uint64_t ret : dead_end_uncond)
     {
         int src_id = resolve_block_id(ret, blocks_id, targets);
 
         // mark the block as endblock
         cfg[src_id].set_next(nullptr);
+    }
+
+    // set the blocks pointing nowhere. Probably useless but it is here for
+    // consistency
+    for(uint64_t ret : dead_end_cond)
+    {
+        int src_id = resolve_block_id(ret, blocks_id, targets);
+
+        // mark the block as endblock
+        cfg[src_id].set_conditional(nullptr);
     }
 }
 
