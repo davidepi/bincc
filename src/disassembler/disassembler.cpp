@@ -98,3 +98,8 @@ std::ostream& operator<<(std::ostream& stream, const Disassembler& disasm)
     stream << "----";
     return stream;
 }
+
+std::string Disassembler::get_binary_name() const
+{
+    return binary;
+}

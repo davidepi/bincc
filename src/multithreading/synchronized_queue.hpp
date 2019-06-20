@@ -60,7 +60,7 @@ public:
      */
     T front()
     {
-        T retval;
+        T retval{0};
         spin.lock();
         if(!container.empty())
         {

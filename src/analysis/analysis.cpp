@@ -100,6 +100,9 @@ void Analysis::build_cfg()
     std::set<uint64_t> dead_end_uncond;
     // last block of the cfg for the function
     std::set<uint64_t> dead_end_cond;
+    uint64_t bounds[2];
+    bounds[0] = stmt_list.at(0).get_offset();
+    bounds[1] = stmt_list.at(stmt_list.size() - 1).get_offset();
 
     // find all the jumps and the blocks pointing nowhere
 
@@ -124,9 +127,19 @@ void Analysis::build_cfg()
             {
                 try
                 {
-                    uint64_t target = std::stoll(stmt.get_args(), nullptr, 0);
-                    targets.insert(target);
-                    conditional_src.insert({{stmt.get_offset(), target}});
+                    uint64_t target = std::stoull(stmt.get_args(), nullptr, 0);
+                    // check if target inside function
+                    if(target > bounds[0] && target < bounds[1])
+                    {
+                        targets.insert(target);
+                        conditional_src.insert({{stmt.get_offset(), target}});
+                    }
+                    // if out of function treat them as unconditional jump to
+                    // the next block
+                    else
+                    {
+                        targets.insert(target);
+                    }
                 }
                 catch(const std::invalid_argument& ia)
                 {
@@ -140,9 +153,23 @@ void Analysis::build_cfg()
             {
                 try
                 {
-                    uint64_t target = std::stoll(stmt.get_args(), nullptr, 0);
-                    targets.insert(target);
-                    unconditional_src.insert({{stmt.get_offset(), target}});
+                    uint64_t target = std::stoull(stmt.get_args(), nullptr, 0);
+                    // check if target inside function
+                    if(target > bounds[0] && target < bounds[1])
+                    {
+                        targets.insert(target);
+                        unconditional_src.insert({{stmt.get_offset(), target}});
+                    }
+                    else
+                    {
+                        // at this point the jump is like the return. Probably a
+                        // disassembly error
+                        dead_end_uncond.insert(stmt.get_offset());
+                        fprintf(stderr,
+                                "Unconditional jump outside the function: %s. "
+                                "Are you sure the disassembly is correct?\n",
+                                stmt.get_command().c_str());
+                    }
                 }
                 catch(const std::invalid_argument& ia)
                 {

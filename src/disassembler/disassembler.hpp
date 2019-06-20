@@ -123,6 +123,12 @@ public:
      */
     std::string get_function_as_string(const std::string& name) const;
 
+    /**
+     * \brief Getter for the binary name
+     * \return The name of the binary being analyzed
+     */
+    std::string get_binary_name() const;
+
 protected:
     /**
      * \brief The binary that is being analysed

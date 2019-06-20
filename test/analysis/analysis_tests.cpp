@@ -211,3 +211,84 @@ TEST(Analysis, cfg_indirect)
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
+
+TEST(Analysis, cfg_long_conditional_jmp)
+{
+    // this is crafted so offsets are completely random
+    std::vector<Statement> stmts;
+    stmts.emplace_back(0x610, "test edi, edi");
+    stmts.emplace_back(0x611, "jo 0xFFFFFFFFFFFFFFFC");
+    stmts.emplace_back(0x612, "jno 0x600");
+    stmts.emplace_back(0x615, "ret");
+
+    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* next;
+    const BasicBlock* cond;
+
+    // check if cfg is correct
+    EXPECT_EQ(cfg->get_id(), 0); // 0
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    ASSERT_NE(next, nullptr);
+    EXPECT_EQ(next->get_id(), 1);
+    EXPECT_EQ(cond, nullptr);
+
+    cfg = next; // 1
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    ASSERT_NE(next, nullptr);
+    EXPECT_EQ(next->get_id(), 2);
+    EXPECT_EQ(cond, nullptr);
+
+    cfg = next; // 2
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    ASSERT_NE(next, nullptr);
+    EXPECT_EQ(next->get_id(), 3);
+    EXPECT_EQ(cond, nullptr);
+
+    cfg = next; // 3
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    EXPECT_EQ(next, nullptr);
+    EXPECT_EQ(cond, nullptr);
+}
+
+TEST(Analysis, cfg_long_unconditional_jump)
+{
+    // this is crafted so offsets are completely random
+    std::vector<Statement> stmts;
+    stmts.emplace_back(0x610, "test edi, edi");
+    stmts.emplace_back(0x611, "je 0x613");
+    stmts.emplace_back(0x612, "jmp 0xFFFFFFFFFFFFFFFC");
+    stmts.emplace_back(0x613, "jmp 0x600");
+    stmts.emplace_back(0x614, "jmp 0x615");
+    stmts.emplace_back(0x615, "ret");
+
+    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* next;
+    const BasicBlock* cond;
+
+    // check if cfg is correct
+    EXPECT_EQ(cfg->get_id(), 0); // 0
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    ASSERT_NE(next, nullptr);
+    ASSERT_NE(cond, nullptr);
+    EXPECT_EQ(next->get_id(), 1);
+    EXPECT_EQ(cond->get_id(), 2);
+
+    cfg = next; // 1
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    EXPECT_EQ(next, nullptr);
+    EXPECT_EQ(cond, nullptr);
+
+    cfg = anal.get_cfg()->get_conditional(); // 2
+    next = cfg->get_next();
+    cond = cfg->get_conditional();
+    EXPECT_EQ(next, nullptr);
+    EXPECT_EQ(cond, nullptr);
+}
