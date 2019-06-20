@@ -99,7 +99,7 @@ TEST(Analysis, cfg_conditional)
     stmts.emplace_back(0x625, "ret");
 
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
-    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* cfg = anal.get_cfg()->root();
     const BasicBlock* next;
     const BasicBlock* cond;
 
@@ -149,7 +149,7 @@ TEST(Analysis, cfg_unconditional)
     stmts.emplace_back(0x639, "ret");
 
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
-    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* cfg = anal.get_cfg()->root();
     const BasicBlock* next;
     const BasicBlock* cond;
 
@@ -175,7 +175,7 @@ TEST(Analysis, cfg_unconditional)
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
-    cfg = anal.get_cfg()->get_conditional(); // 2
+    cfg = anal.get_cfg()->root()->get_conditional(); // 2
     next = cfg->get_next();
     cond = cfg->get_conditional();
     ASSERT_NE(next, nullptr);
@@ -193,7 +193,7 @@ TEST(Analysis, cfg_indirect)
     stmts.emplace_back(0x613, "ret");
 
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
-    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* cfg = anal.get_cfg()->root();
     const BasicBlock* next;
     const BasicBlock* cond;
 
@@ -222,7 +222,7 @@ TEST(Analysis, cfg_long_conditional_jmp)
     stmts.emplace_back(0x615, "ret");
 
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
-    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* cfg = anal.get_cfg()->root();
     const BasicBlock* next;
     const BasicBlock* cond;
 
@@ -267,7 +267,7 @@ TEST(Analysis, cfg_long_unconditional_jump)
     stmts.emplace_back(0x615, "ret");
 
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
-    const BasicBlock* cfg = anal.get_cfg();
+    const BasicBlock* cfg = anal.get_cfg()->root();
     const BasicBlock* next;
     const BasicBlock* cond;
 
@@ -286,7 +286,7 @@ TEST(Analysis, cfg_long_unconditional_jump)
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
-    cfg = anal.get_cfg()->get_conditional(); // 2
+    cfg = anal.get_cfg()->root()->get_conditional(); // 2
     next = cfg->get_next();
     cond = cfg->get_conditional();
     EXPECT_EQ(next, nullptr);

@@ -7,6 +7,7 @@
 
 #include "architectures/architecture.hpp"
 #include "basic_block.hpp"
+#include "cfg.hpp"
 #include "disassembler/statement.hpp"
 #include <memory>
 #include <string>
@@ -62,9 +63,7 @@ public:
     /**
      * \brief Default destructor
      */
-    virtual ~Analysis();
-
-    //TODO: deal with rule of the 3
+    virtual ~Analysis() = default;
 
     /**
      * \brief Access the n-th instruction
@@ -85,7 +84,7 @@ public:
      * \brief Return the control flow graph for this function
      * \return the control flow graph of the function
      */
-    const BasicBlock* get_cfg() const;
+    const std::shared_ptr<ControlFlowGraph> get_cfg() const;
 
 private:
     // build a control flow graph in O(nlogn) time-complexity
@@ -101,7 +100,7 @@ private:
     std::shared_ptr<Architecture> architecture;
 
     // control flow graph of the function
-    BasicBlock* cfg;
+    std::shared_ptr<ControlFlowGraph> cfg;
 };
 
 #endif //__ANALYSIS_HPP__

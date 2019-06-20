@@ -1,3 +1,5 @@
+#include <memory>
+
 //
 // Created by davide on 6/12/19.
 //
@@ -32,7 +34,10 @@ Analysis::Analysis(const std::vector<Statement>* stmts,
             stmt_sparse.insert({{stmt.get_offset(), &stmt}});
         }
     }
-    build_cfg();
+    if(!stmt_list.empty())
+    {
+        build_cfg();
+    }
 }
 
 Analysis::Analysis(const std::string& str, std::shared_ptr<Architecture> arch)
@@ -58,12 +63,15 @@ Analysis::Analysis(const std::string& str, std::shared_ptr<Architecture> arch)
     {
         stmt_sparse.insert({{stmt.get_offset(), &stmt}});
     }
-    build_cfg();
+    if(!stmt_list.empty())
+    {
+        build_cfg();
+    }
 }
 
-const BasicBlock* Analysis::get_cfg() const
+const std::shared_ptr<ControlFlowGraph> Analysis::get_cfg() const
 {
-    return &(cfg[0]);
+    return cfg;
 }
 
 /**
@@ -202,13 +210,7 @@ void Analysis::build_cfg()
 
     // create the cfg and concatenate every block
     int bb_no = targets.size();
-    cfg = new BasicBlock[bb_no];
-    for(int i = 0; i < bb_no - 1; i++)
-    {
-        cfg[i].set_id(i);
-        cfg[i].set_next(&(cfg[i + 1]));
-    }
-    cfg[bb_no - 1].set_id(bb_no - 1);
+    cfg = std::make_shared<ControlFlowGraph>(bb_no);
 
     // maps every target to the block number. Otherwise I need to perform this
     // operation multiple times inside a loop and the complexity grows
@@ -224,26 +226,22 @@ void Analysis::build_cfg()
     {
         int src_id = resolve_block_id(jmp_src.first, blocks_id, targets);
         int target_id = resolve_block_id(jmp_src.second, blocks_id, targets);
-        // set the pointer
-        cfg[src_id].set_conditional(&(cfg[target_id]));
+        cfg->set_conditional(src_id, target_id);
     }
 
-    // set the conditional jumps target
+    // set the unconditional jumps target
     for(std::pair<uint64_t, uint64_t> jmp_src : unconditional_src)
     {
         int src_id = resolve_block_id(jmp_src.first, blocks_id, targets);
         int target_id = resolve_block_id(jmp_src.second, blocks_id, targets);
-        // set the pointer
-        cfg[src_id].set_next(&(cfg[target_id]));
+        cfg->set_next(src_id, target_id);
     }
 
     // set the blocks pointing nowhere. Otherwise they point to the next block
     for(uint64_t ret : dead_end_uncond)
     {
         int src_id = resolve_block_id(ret, blocks_id, targets);
-
-        // mark the block as endblock
-        cfg[src_id].set_next(nullptr);
+        cfg->set_next_null(src_id);
     }
 
     // set the blocks pointing nowhere. Probably useless but it is here for
@@ -251,13 +249,6 @@ void Analysis::build_cfg()
     for(uint64_t ret : dead_end_cond)
     {
         int src_id = resolve_block_id(ret, blocks_id, targets);
-
-        // mark the block as endblock
-        cfg[src_id].set_conditional(nullptr);
+        cfg->set_conditional_null(src_id);
     }
-}
-
-Analysis::~Analysis()
-{
-    delete[] cfg;
 }
