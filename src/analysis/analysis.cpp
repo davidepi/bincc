@@ -151,8 +151,7 @@ void Analysis::build_cfg()
                 }
                 catch(const std::invalid_argument& ia)
                 {
-                    fprintf(stderr, "Ignoring indirect jump: %s\n",
-                            stmt.get_command().c_str());
+                    // indirect jump
                 }
                 previous_was_jump = true;
                 break;
@@ -173,10 +172,6 @@ void Analysis::build_cfg()
                         // at this point the jump is like the return. Probably a
                         // disassembly error
                         dead_end_uncond.insert(stmt.get_offset());
-                        fprintf(stderr,
-                                "Unconditional jump outside the function: %s. "
-                                "Are you sure the disassembly is correct?\n",
-                                stmt.get_command().c_str());
                     }
                 }
                 catch(const std::invalid_argument& ia)
@@ -185,8 +180,6 @@ void Analysis::build_cfg()
                     // have to replace the default target (next block) with null
                     // (instead of the jump target)
                     dead_end_uncond.insert(stmt.get_offset());
-                    fprintf(stderr, "Ignoring indirect jump: %s\n",
-                            stmt.get_command().c_str());
                 }
                 previous_was_jump = true;
                 break;

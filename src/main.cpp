@@ -65,12 +65,12 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
         {
             disasm->analyse();
             std::set<Function> names = disasm->get_function_names();
+            std::string binary_no_folder = disasm->get_binary_name();
             // TODO: the job is disasm-bounded for now. When the analysis will
             //       take more time, consider making a new thread that wait on a
             //       condition variable and performs the various analyses
             for(const Function& func : names)
             {
-                std::string binary_no_folder = disasm->get_binary_name();
                 binary_no_folder = binary_no_folder.substr(
                     binary_no_folder.find_last_of('/') + 1);
                 std::string output =

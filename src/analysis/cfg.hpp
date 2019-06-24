@@ -6,6 +6,7 @@
 #define __CFG_HPP__
 
 #include "basic_block.hpp"
+#include <queue>
 #include <string>
 
 /**
@@ -32,12 +33,20 @@ public:
      *
      * \param[in] size number of blocks of the CFG
      */
-    ControlFlowGraph(int size);
+    ControlFlowGraph(unsigned int size);
 
     /**
      * \brief Default destructor
      */
     ~ControlFlowGraph();
+
+    /**
+     * \brief Finalize the computation of the CFG
+     *
+     * This method is used to perform things such as compute a single exit for
+     * the CFG
+     */
+    void finalize();
 
     /**
      * \brief Sets an unconditional jump for this block
@@ -120,6 +129,12 @@ public:
      */
     friend std::ostream& operator<<(std::ostream& stream,
                                     const ControlFlowGraph& cfg);
+
+    /**
+     * \brief Performs a depth-first post order visit
+     * \return A queue containing the blocks in postorder, depth first
+     */
+    std::queue<const BasicBlock*> dfst() const;
 
     ControlFlowGraph(ControlFlowGraph&) = delete;
     ControlFlowGraph& operator=(ControlFlowGraph&) = delete;

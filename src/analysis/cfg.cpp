@@ -7,15 +7,18 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
-#include <set>
 #include <sstream>
 #include <stack>
+#include <unordered_set>
 
-ControlFlowGraph::ControlFlowGraph(int size) : nodes(size), edges(0)
+ControlFlowGraph::ControlFlowGraph(unsigned int size) : nodes(size), edges(0)
 {
-    blocks = new BasicBlock[size];
+    // an extra block is allocated, in case a single exit point is needed:
+    // otherwise it will be a mess to update every pointer.
+    blocks = (BasicBlock*)malloc(sizeof(BasicBlock) * (nodes + 1));
     for(unsigned int i = 0; i < size - 1; i++)
     {
+        blocks[i] = BasicBlock(); // call constructo
         blocks[i].set_id(i);
         blocks[i].set_next(&(blocks[i + 1]));
         edges++;
@@ -28,7 +31,7 @@ ControlFlowGraph::ControlFlowGraph(int size) : nodes(size), edges(0)
 
 ControlFlowGraph::~ControlFlowGraph()
 {
-    delete[] blocks;
+    free(blocks);
 }
 
 std::string ControlFlowGraph::to_dot() const
@@ -105,7 +108,7 @@ unsigned int ControlFlowGraph::edges_no() const
 std::ostream& operator<<(std::ostream& stream, const ControlFlowGraph& cfg)
 {
     stream << "digraph {\n";
-    std::set<int> visited;
+    std::unordered_set<int> visited;
     std::stack<const BasicBlock*> unvisited;
     unvisited.push(cfg.root());
     visited.insert(cfg.root()->get_id());
@@ -154,5 +157,58 @@ void ControlFlowGraph::to_file(const char* filename) const
     else
     {
         std::cerr << "Could not write file" << filename << std::endl;
+    }
+}
+
+void postorder_visit(const BasicBlock* node,
+                     std::queue<const BasicBlock*>* list,
+                     std::unordered_set<int>* marked)
+{
+    marked->insert(node->get_id());
+    const BasicBlock* next = node->get_next();
+    const BasicBlock* cond = node->get_conditional();
+    if(next != nullptr && marked->find(next->get_id()) == marked->end())
+    {
+        postorder_visit(next, list, marked);
+    }
+    if(cond != nullptr && marked->find(cond->get_id()) == marked->end())
+    {
+        postorder_visit(cond, list, marked);
+    }
+    list->push(node);
+}
+
+std::queue<const BasicBlock*> ControlFlowGraph::dfst() const
+{
+    std::queue<const BasicBlock*> retval;
+    std::unordered_set<int> visited;
+    postorder_visit(root(), &retval, &visited);
+    return retval;
+}
+
+void ControlFlowGraph::finalize()
+{
+    // check for single exit
+    std::unordered_set<int> exit_nodes;
+    for(unsigned int i = 0; i < nodes; i++)
+    {
+        if(blocks[i].get_next() == nullptr &&
+           blocks[i].get_conditional() == nullptr)
+        {
+            exit_nodes.insert(i);
+        }
+    }
+
+    if(exit_nodes.size() > 1)
+    {
+        // this extra node is already allocated in the constructor just in case
+        nodes++;
+        blocks[nodes - 1].set_id(nodes - 1);
+        blocks[nodes - 1].set_next(nullptr);
+        blocks[nodes - 1].set_conditional(nullptr);
+        for(int id : exit_nodes)
+        {
+            set_next(id, nodes - 1);
+        }
     }
 }
