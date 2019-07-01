@@ -65,9 +65,9 @@ public:
      * the execution continues if the condition is satisfied
      *
      * \return  The next basic block that will be executed in the code if the
-     * condition is satified. nullptr if no conditional jump exists
+     * condition is satisfied. nullptr if no conditional jump exists
      */
-    const BasicBlock* get_conditional() const;
+    const BasicBlock* get_cond() const;
 
     /**
      * \brief Setter for the next block, without conditional jumps
@@ -81,19 +81,16 @@ public:
      * \param[in] conditional_blk The next block that will be executed if a
      * conditional jump is taken
      */
-    void set_conditional(const BasicBlock* conditional_blk);
+    void set_cond(const BasicBlock* conditional_blk);
 
 private:
+    // id of the BB
     int id{0};
+    // block following the current one (unconditional jump or unsatisfied
+    // conditional one)
     const BasicBlock* next{nullptr};
-    const BasicBlock* conditional{nullptr};
+    // target of the conditional jump if the condition is satisfied
+    const BasicBlock* cond{nullptr};
 };
-
-/**
- * \brief Print the control flow graph in form of .dot file
- * \param[in] bb The root node of the control flow graph
- * \param[in] filename The file where the file will be written.
- */
-void print_cfg(const BasicBlock* bb, const char* filename);
 
 #endif

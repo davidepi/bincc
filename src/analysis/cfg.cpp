@@ -22,11 +22,11 @@ ControlFlowGraph::ControlFlowGraph(unsigned int size) : nodes(size), edges(0)
         blocks[i].set_id(i);
         blocks[i].set_next(&(blocks[i + 1]));
         edges++;
-        blocks[i].set_conditional(nullptr);
+        blocks[i].set_cond(nullptr);
     }
     blocks[size - 1].set_id(size - 1);
     blocks[size - 1].set_next(nullptr);
-    blocks[size - 1].set_conditional(nullptr);
+    blocks[size - 1].set_cond(nullptr);
 }
 
 ControlFlowGraph::~ControlFlowGraph()
@@ -45,10 +45,7 @@ void ControlFlowGraph::set_next(unsigned int id_src, unsigned int id_target)
 {
     if(id_src < nodes && id_target < nodes)
     {
-        if(blocks[id_src].get_next() == nullptr)
-        {
-            edges++;
-        }
+        edges += (unsigned int)(blocks[id_src].get_next() == nullptr);
         blocks[id_src].set_next(&(blocks[id_target]));
     }
 }
@@ -57,10 +54,7 @@ void ControlFlowGraph::set_next_null(unsigned int id_src)
 {
     if(id_src < nodes)
     {
-        if(blocks[id_src].get_next() != nullptr)
-        {
-            edges--;
-        }
+        edges -= (unsigned int)(blocks[id_src].get_next() != nullptr);
         blocks[id_src].set_next(nullptr);
     }
 }
@@ -70,11 +64,8 @@ void ControlFlowGraph::set_conditional(unsigned int id_src,
 {
     if(id_src < nodes && id_target < nodes)
     {
-        if(blocks[id_src].get_conditional() == nullptr)
-        {
-            edges++;
-        }
-        blocks[id_src].set_conditional(&(blocks[id_target]));
+        edges += (unsigned int)(blocks[id_src].get_cond() == nullptr);
+        blocks[id_src].set_cond(&(blocks[id_target]));
     }
 }
 
@@ -82,11 +73,8 @@ void ControlFlowGraph::set_conditional_null(unsigned int id_src)
 {
     if(id_src < nodes)
     {
-        if(blocks[id_src].get_conditional() != nullptr)
-        {
-            edges--;
-        }
-        blocks[id_src].set_conditional(nullptr);
+        edges -= (unsigned int)(blocks[id_src].get_cond() != nullptr);
+        blocks[id_src].set_cond(nullptr);
     }
 }
 
@@ -120,7 +108,7 @@ std::ostream& operator<<(std::ostream& stream, const ControlFlowGraph& cfg)
         current = unvisited.top();
         unvisited.pop();
         next = current->get_next();
-        cond = current->get_conditional();
+        cond = current->get_cond();
         if(next != nullptr)
         {
             stream << current->get_id() << "->" << next->get_id() << "\n";
@@ -166,7 +154,7 @@ void postorder_visit(const BasicBlock* node,
 {
     marked->insert(node->get_id());
     const BasicBlock* next = node->get_next();
-    const BasicBlock* cond = node->get_conditional();
+    const BasicBlock* cond = node->get_cond();
     if(next != nullptr && marked->find(next->get_id()) == marked->end())
     {
         postorder_visit(next, list, marked);
@@ -192,8 +180,7 @@ void ControlFlowGraph::finalize()
     std::unordered_set<int> exit_nodes;
     for(unsigned int i = 0; i < nodes; i++)
     {
-        if(blocks[i].get_next() == nullptr &&
-           blocks[i].get_conditional() == nullptr)
+        if(blocks[i].get_next() == nullptr && blocks[i].get_cond() == nullptr)
         {
             exit_nodes.insert(i);
         }
@@ -205,7 +192,7 @@ void ControlFlowGraph::finalize()
         nodes++;
         blocks[nodes - 1].set_id(nodes - 1);
         blocks[nodes - 1].set_next(nullptr);
-        blocks[nodes - 1].set_conditional(nullptr);
+        blocks[nodes - 1].set_cond(nullptr);
         for(int id : exit_nodes)
         {
             set_next(id, nodes - 1);

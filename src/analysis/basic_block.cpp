@@ -8,7 +8,7 @@
 #include <set>
 
 BasicBlock::BasicBlock(int number)
-    : id(number), next(nullptr), conditional(nullptr)
+    : id(number), next(nullptr), cond(nullptr)
 {
 }
 
@@ -17,9 +17,9 @@ const BasicBlock* BasicBlock::get_next() const
     return next;
 }
 
-const BasicBlock* BasicBlock::get_conditional() const
+const BasicBlock* BasicBlock::get_cond() const
 {
-    return conditional;
+    return cond;
 }
 
 void BasicBlock::set_next(const BasicBlock* next_blk)
@@ -37,7 +37,7 @@ void BasicBlock::set_id(int number)
     BasicBlock::id = number;
 }
 
-void BasicBlock::set_conditional(const BasicBlock* conditional_blk)
+void BasicBlock::set_cond(const BasicBlock* conditional_blk)
 {
-    BasicBlock::conditional = conditional_blk;
+    BasicBlock::cond = conditional_blk;
 }

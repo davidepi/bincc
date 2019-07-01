@@ -106,7 +106,7 @@ TEST(Analysis, cfg_conditional)
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 1);
@@ -114,7 +114,7 @@ TEST(Analysis, cfg_conditional)
 
     cfg = next; // 1
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 2);
@@ -122,13 +122,13 @@ TEST(Analysis, cfg_conditional)
 
     const BasicBlock* end = next; // 2
     next = end->get_next();
-    cond = end->get_conditional();
+    cond = end->get_cond();
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
-    cfg = cfg->get_conditional(); // 3
+    cfg = cfg->get_cond(); // 3
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
@@ -156,7 +156,7 @@ TEST(Analysis, cfg_unconditional)
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 1);
@@ -164,20 +164,20 @@ TEST(Analysis, cfg_unconditional)
 
     cfg = next; // 1
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 3);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 3
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
-    cfg = anal.get_cfg()->root()->get_conditional(); // 2
+    cfg = anal.get_cfg()->root()->get_cond(); // 2
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 3);
     EXPECT_EQ(cond, nullptr);
@@ -200,14 +200,14 @@ TEST(Analysis, cfg_indirect)
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 1
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
@@ -229,28 +229,28 @@ TEST(Analysis, cfg_long_conditional_jmp)
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 1
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 2);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 2
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 3);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 3
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
@@ -274,7 +274,7 @@ TEST(Analysis, cfg_long_unconditional_jump)
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 1);
@@ -282,13 +282,13 @@ TEST(Analysis, cfg_long_unconditional_jump)
 
     cfg = next; // 1
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
-    cfg = anal.get_cfg()->root()->get_conditional(); // 2
+    cfg = anal.get_cfg()->root()->get_cond(); // 2
     next = cfg->get_next();
-    cond = cfg->get_conditional();
+    cond = cfg->get_cond();
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }

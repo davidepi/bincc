@@ -1,27 +1,27 @@
 image: rikorose/gcc-cmake:latest
 
 before_script:
-  - apt-get update && apt-get -y install radare2
-  - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz &&
-    tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
+    - apt-get update && apt-get -y install radare2
+    - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz &&
+        tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
 
 variables:
-  GIT_SUBMODULE_STRATEGY: recursive
+    GIT_SUBMODULE_STRATEGY: recursive
 
 stages:
-  - build
-  - test
+    - build
+    - test
 
 x86_build:
-  stage: build
-  script:
-    - mkdir build && cd build && cmake .. && make
-  tags:
-    - x86_64
+    stage: build
+    script:
+        - mkdir build && cd build && cmake .. && make
+    tags:
+        - x86_64
 
 x86_test:
-  stage: test
-  script:
-    - mkdir build && cd build && cmake .. && make runTests && make test
-  tags:
-    - x86_64
+    stage: test
+    script:
+        - mkdir build && cd build && cmake .. && make runTests && make test
+    tags:
+        - x86_64

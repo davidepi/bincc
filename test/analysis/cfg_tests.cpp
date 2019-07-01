@@ -80,32 +80,32 @@ TEST(ControlFlowGraph, finalize)
     cfg.set_conditional(0, 2);
     const BasicBlock* bb = cfg.root();
     const BasicBlock* next = bb->get_next();
-    const BasicBlock* cond = bb->get_conditional();
+    const BasicBlock* cond = bb->get_cond();
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond->get_id(), 2);
     EXPECT_EQ(next->get_next(), nullptr);
-    EXPECT_EQ(next->get_conditional(), nullptr);
+    EXPECT_EQ(next->get_cond(), nullptr);
     EXPECT_EQ(cond->get_next(), nullptr);
-    EXPECT_EQ(cond->get_conditional(), nullptr);
+    EXPECT_EQ(cond->get_cond(), nullptr);
 
     cfg.finalize();
     bb = cfg.root();
     next = bb->get_next();
-    cond = bb->get_conditional();
+    cond = bb->get_cond();
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond->get_id(), 2);
     ASSERT_NE(next->get_next(), nullptr);
-    EXPECT_EQ(next->get_conditional(), nullptr);
+    EXPECT_EQ(next->get_cond(), nullptr);
     ASSERT_NE(cond->get_next(), nullptr);
-    EXPECT_EQ(cond->get_conditional(), nullptr);
+    EXPECT_EQ(cond->get_cond(), nullptr);
     ASSERT_EQ(next->get_next(), cond->get_next());
     const BasicBlock* exit = next->get_next();
     EXPECT_EQ(exit->get_next(), nullptr);
-    EXPECT_EQ(exit->get_conditional(), nullptr);
+    EXPECT_EQ(exit->get_cond(), nullptr);
     EXPECT_EQ(cfg.edges_no(), 4);
 }
 
