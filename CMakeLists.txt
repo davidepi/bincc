@@ -13,15 +13,14 @@ SET(BCC_MAIN_SOURCES
     ${PROJECT_SOURCE_DIR}/src/architectures/architecture_x86.cpp
     ${PROJECT_SOURCE_DIR}/src/architectures/architecture_arm.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/analysis.cpp
-    ${PROJECT_SOURCE_DIR}/src/analysis/abstract_block.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/basic_block.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/cfg.cpp
+    ${PROJECT_SOURCE_DIR}/src/analysis/cfs.cpp
     )
 #TEST SOURCES
 SET(BCC_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/test/disassembler/statement_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/analysis/analysis_tests.cpp
-    ${PROJECT_SOURCE_DIR}/test/analysis/abstract_block_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/analysis/basic_block_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/analysis/architecture_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/analysis/cfg_tests.cpp

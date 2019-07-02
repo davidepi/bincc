@@ -18,7 +18,7 @@ ControlFlowGraph::ControlFlowGraph(unsigned int size) : nodes(size), edges(0)
     blocks = (BasicBlock*)malloc(sizeof(BasicBlock) * (nodes + 1));
     for(unsigned int i = 0; i < size - 1; i++)
     {
-        blocks[i] = BasicBlock(); // call constructo
+        blocks[i] = BasicBlock(); // call constructor
         blocks[i].set_id(i);
         blocks[i].set_next(&(blocks[i + 1]));
         edges++;

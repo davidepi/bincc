@@ -5,6 +5,14 @@
 #ifndef __BASICBLOCK_HPP__
 #define __BASICBLOCK_HPP__
 
+#include <vector>
+
+enum BlockType
+{
+    BASIC = 0,
+    SELF_WHILE,
+};
+
 /**
  * \brief Basic Block representing a portion of code
  *
@@ -12,7 +20,10 @@
  * single entry point and one or two exit point, located as the last instruction
  * of the block. These blocks are used to represent the flow in a portion of
  * code, thus they will contain a pointer to the next block (and a pointer to a
- * conditional block in case a conditional jump is satisfied)
+ * conditional block in case a conditional jump is satisfied).
+ * This class includes additional logic (such as nested basic blocks and a
+ * BlockType enum) in order to reuse the class (and thus an entire CFG) also for
+ * structure recovery
  */
 class BasicBlock
 {
@@ -74,23 +85,60 @@ public:
      * \param[in] next_blk The next block that will be executed if no
      * conditional jumps are taken
      */
-    void set_next(const BasicBlock* next_blk);
+    void set_next(BasicBlock* next_blk);
 
     /**
      * \brief Setter for the conditional block only
      * \param[in] conditional_blk The next block that will be executed if a
      * conditional jump is taken
      */
-    void set_cond(const BasicBlock* conditional_blk);
+    void set_cond(BasicBlock* conditional_blk);
+
+    /**
+     * \brief Returns the type of this basic block
+     * In case of an agglomerate of blocks, returns the structure represented by
+     * this basic block
+     * \return The type of this basic block
+     */
+    BlockType get_type() const;
+
+    /**
+     * \brief Returns the number of blocks agglomerated
+     * If this block type is Basic, this number will be 0, meaning that it is
+     * just the block itself
+     * \return The number of blocks contained inside this one
+     */
+    size_t size() const;
+
+    /**
+     * \brief Returns the number of incoming edges of this block
+     * \return the number of incoming edges
+     */
+    int get_edges_in() const;
+
+    /**
+     * \brief Returns the number of outgoing edges from this block
+     * \return the number of outgoing edges
+     */
+    int get_edges_out() const;
 
 private:
     // id of the BB
     int id{0};
     // block following the current one (unconditional jump or unsatisfied
     // conditional one)
-    const BasicBlock* next{nullptr};
+    BasicBlock* next{nullptr};
     // target of the conditional jump if the condition is satisfied
-    const BasicBlock* cond{nullptr};
+    BasicBlock* cond{nullptr};
+    // number of incoming edges
+    int edges_inn{0};
+    // number of outgoing edges
+    int edges_out{0};
+    // the type of block. Despite the name, a basic block could be an
+    // agglomerate of other basic blocks representing a while for example
+    BlockType type{BASIC};
+    // the other blocks contained in this one (useful for structural analysis)
+    std::vector<BasicBlock*> blocks;
 };
 
 #endif
