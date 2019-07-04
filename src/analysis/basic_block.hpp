@@ -5,6 +5,8 @@
 #ifndef __BASICBLOCK_HPP__
 #define __BASICBLOCK_HPP__
 
+#include "abstract_block.hpp"
+
 /**
  * \brief Basic Block representing a portion of code
  *
@@ -14,7 +16,7 @@
  * code, thus they will contain a pointer to the next block (and a pointer to a
  * conditional block in case a conditional jump is satisfied)
  */
-class BasicBlock
+class BasicBlock : public AbstractBlock
 {
 public:
     /**
@@ -31,32 +33,7 @@ public:
     /**
      * \brief Default constructor
      */
-    ~BasicBlock() = default;
-
-    /**
-     * \brief Getter for the block id
-     * \return the id of the block
-     */
-    int get_id() const;
-
-    /**
-     * \brief Setter for the block id
-     * \param[in] number the id of the block
-     */
-    void set_id(int number);
-
-    /**
-     * \brief Getter for the next block
-     *
-     * Every basic block except the one representing the return of the function
-     * contains a pointer to the next one: this is the next block that will be
-     * executed or the block that will be executed if a conditional jump is
-     * unsatisfied
-     *
-     * \return The next basic block that will be executed in the code, nullptr
-     * if the function returns
-     */
-    const BasicBlock* get_next() const;
+    ~BasicBlock() override = default;
 
     /**
      * \brief Getter the conditional jump
@@ -67,30 +44,24 @@ public:
      * \return  The next basic block that will be executed in the code if the
      * condition is satisfied. nullptr if no conditional jump exists
      */
-    const BasicBlock* get_cond() const;
-
-    /**
-     * \brief Setter for the next block, without conditional jumps
-     * \param[in] next_blk The next block that will be executed if no
-     * conditional jumps are taken
-     */
-    void set_next(const BasicBlock* next_blk);
+    const AbstractBlock* get_cond() const;
 
     /**
      * \brief Setter for the conditional block only
-     * \param[in] conditional_blk The next block that will be executed if a
+     * \param[in] cnd The next block that will be executed if a
      * conditional jump is taken
      */
-    void set_cond(const BasicBlock* conditional_blk);
+    void set_cond(AbstractBlock* cnd);
+
+    /**
+     * \brief Returns the type of this block
+     * \return BlockType::BASIC
+     */
+    BlockType get_type() const override;
 
 private:
-    // id of the BB
-    int id{0};
-    // block following the current one (unconditional jump or unsatisfied
-    // conditional one)
-    const BasicBlock* next{nullptr};
     // target of the conditional jump if the condition is satisfied
-    const BasicBlock* cond{nullptr};
+    AbstractBlock* cond{nullptr};
 };
 
 #endif

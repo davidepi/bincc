@@ -107,8 +107,9 @@ std::ostream& operator<<(std::ostream& stream, const ControlFlowGraph& cfg)
         const BasicBlock* cond;
         current = unvisited.top();
         unvisited.pop();
-        next = current->get_next();
-        cond = current->get_cond();
+        // these are created by this class so will ALWAYS be of type BasicBlock
+        next = static_cast<const BasicBlock*>(current->get_next());
+        cond = static_cast<const BasicBlock*>(current->get_cond());
         if(next != nullptr)
         {
             stream << current->get_id() << "->" << next->get_id() << "\n";
@@ -153,8 +154,9 @@ void postorder_visit(const BasicBlock* node,
                      std::unordered_set<int>* marked)
 {
     marked->insert(node->get_id());
-    const BasicBlock* next = node->get_next();
-    const BasicBlock* cond = node->get_cond();
+    // these are created by this class so will ALWAYS be of type BasicBlock
+    const BasicBlock* next = static_cast<const BasicBlock*>(node->get_next());
+    const BasicBlock* cond = static_cast<const BasicBlock*>(node->get_cond());
     if(next != nullptr && marked->find(next->get_id()) == marked->end())
     {
         postorder_visit(next, list, marked);

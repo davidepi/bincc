@@ -4,36 +4,33 @@
 
 #include "basic_block.hpp"
 
-BasicBlock::BasicBlock(int number) : id(number), next(nullptr), cond(nullptr)
+BasicBlock::BasicBlock(int number) : AbstractBlock(number), cond(nullptr)
 {
 }
 
-const BasicBlock* BasicBlock::get_next() const
-{
-    return next;
-}
-
-const BasicBlock* BasicBlock::get_cond() const
+const AbstractBlock* BasicBlock::get_cond() const
 {
     return cond;
 }
 
-void BasicBlock::set_next(const BasicBlock* next_blk)
+void BasicBlock::set_cond(AbstractBlock* cnd)
 {
-    BasicBlock::next = next_blk;
+    bool a = cond != nullptr;
+    bool b = cnd != nullptr;
+    edges_out += (a ^ b) * (1 - (int(a) << 1));
+    if(a) // current target is not null
+    {
+        // decrease the in edges
+        cond->edges_inn--;
+    }
+    if(b) // next target is not null
+    {
+        cnd->edges_inn++;
+    }
+    BasicBlock::cond = cnd;
 }
 
-int BasicBlock::get_id() const
+BlockType BasicBlock::get_type() const
 {
-    return id;
-}
-
-void BasicBlock::set_id(int number)
-{
-    BasicBlock::id = number;
-}
-
-void BasicBlock::set_cond(const BasicBlock* conditional_blk)
-{
-    BasicBlock::cond = conditional_blk;
+    return BASIC;
 }

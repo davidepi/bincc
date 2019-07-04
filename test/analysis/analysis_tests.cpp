@@ -105,30 +105,30 @@ TEST(Analysis, cfg_conditional)
 
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond->get_id(), 3);
 
     cfg = next; // 1
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 2);
     EXPECT_EQ(cond->get_id(), 3);
 
     const BasicBlock* end = next; // 2
-    next = end->get_next();
-    cond = end->get_cond();
+    next = static_cast<const BasicBlock*>(end->get_next());
+    cond = static_cast<const BasicBlock*>(end->get_cond());
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
-    cfg = cfg->get_cond(); // 3
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    cfg = static_cast<const BasicBlock*>(cfg->get_cond()); // 3
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
@@ -155,29 +155,30 @@ TEST(Analysis, cfg_unconditional)
 
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond->get_id(), 2);
 
     cfg = next; // 1
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 3);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 3
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
-    cfg = anal.get_cfg()->root()->get_cond(); // 2
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    cfg =
+        static_cast<const BasicBlock*>(anal.get_cfg()->root()->get_cond()); // 2
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 3);
     EXPECT_EQ(cond, nullptr);
@@ -199,15 +200,15 @@ TEST(Analysis, cfg_indirect)
 
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 1
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
@@ -228,29 +229,29 @@ TEST(Analysis, cfg_long_conditional_jmp)
 
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 1
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 2);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 2
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     EXPECT_EQ(next->get_id(), 3);
     EXPECT_EQ(cond, nullptr);
 
     cfg = next; // 3
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
@@ -273,22 +274,23 @@ TEST(Analysis, cfg_long_unconditional_jump)
 
     // check if cfg is correct
     EXPECT_EQ(cfg->get_id(), 0); // 0
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     ASSERT_NE(next, nullptr);
     ASSERT_NE(cond, nullptr);
     EXPECT_EQ(next->get_id(), 1);
     EXPECT_EQ(cond->get_id(), 2);
 
     cfg = next; // 1
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
-    cfg = anal.get_cfg()->root()->get_cond(); // 2
-    next = cfg->get_next();
-    cond = cfg->get_cond();
+    cfg =
+        static_cast<const BasicBlock*>(anal.get_cfg()->root()->get_cond()); // 2
+    next = static_cast<const BasicBlock*>(cfg->get_next());
+    cond = static_cast<const BasicBlock*>(cfg->get_cond());
     EXPECT_EQ(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
