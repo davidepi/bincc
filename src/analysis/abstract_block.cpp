@@ -36,3 +36,17 @@ const AbstractBlock* AbstractBlock::operator[](int) const
 {
     return this;
 }
+
+unsigned char AbstractBlock::get_out_edges() const
+{
+    return (unsigned char)(next == nullptr);
+}
+
+void AbstractBlock::replace_if_match(const AbstractBlock* match,
+                                     const AbstractBlock* edge)
+{
+    if(next == match)
+    {
+        next = edge;
+    }
+}

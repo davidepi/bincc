@@ -18,6 +18,7 @@ SET(BCC_MAIN_SOURCES
     ${PROJECT_SOURCE_DIR}/src/analysis/basic_block.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/cyclic_block.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/cfg.cpp
+    ${PROJECT_SOURCE_DIR}/src/analysis/cfs.cpp
     )
 #TEST SOURCES
 SET(BCC_TEST_SOURCES
@@ -26,6 +27,7 @@ SET(BCC_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/test/analysis/blocks_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/analysis/architecture_tests.cpp
     ${PROJECT_SOURCE_DIR}/test/analysis/cfg_tests.cpp
+    ${PROJECT_SOURCE_DIR}/test/analysis/cfs_tests.cpp
     )
 
 LIST(APPEND ALL_REQUIRED_INCLUDES ${PROJECT_SOURCE_DIR}/src)

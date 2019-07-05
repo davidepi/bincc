@@ -147,9 +147,9 @@ void ControlFlowGraph::to_file(const char* filename) const
     }
 }
 
-void postorder_visit(const BasicBlock* node,
-                     std::queue<const BasicBlock*>* list,
-                     std::unordered_set<int>* marked)
+static void postorder_visit(const BasicBlock* node,
+                            std::queue<const BasicBlock*>* list,
+                            std::unordered_set<int>* marked)
 {
     marked->insert(node->get_id());
     // these are created by this class so will ALWAYS be of type BasicBlock
@@ -198,4 +198,13 @@ void ControlFlowGraph::finalize()
             set_next(id, nodes - 1);
         }
     }
+}
+
+const BasicBlock* ControlFlowGraph::get_node(unsigned int id) const
+{
+    if(id < nodes - 1)
+    {
+        return &(blocks[id]);
+    }
+    return nullptr;
 }

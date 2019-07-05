@@ -17,6 +17,46 @@ TEST(BasicBlock, id)
     EXPECT_EQ(b2.get_id(), -13);
 }
 
+TEST(BasicBlock, outgoing_edges)
+{
+    BasicBlock b0(0);
+    BasicBlock b1(1);
+    BasicBlock b2(2);
+    BasicBlock balone(3);
+    b0.set_next(&b1);
+    b1.set_cond(&b2);
+    b2.set_next(&b0);
+    b2.set_cond(&b2);
+
+    EXPECT_EQ(b0.get_out_edges(), 1);
+    EXPECT_EQ(b1.get_out_edges(), 1);
+    EXPECT_EQ(b2.get_out_edges(), 2);
+    EXPECT_EQ(balone.get_out_edges(), 0);
+}
+
+TEST(BasicBlock, replace_if_match)
+{
+    BasicBlock b0(0);
+    BasicBlock b1(1);
+    BasicBlock b2(2);
+    BasicBlock b4(4);
+
+    b0.set_next(&b1);
+    b1.set_cond(&b2);
+    b2.set_next(&b0);
+    b2.set_cond(&b1);
+
+    b0.replace_if_match(&b2, &b0);
+    EXPECT_EQ(b0.get_next(), &b1);
+    EXPECT_EQ(b0.get_cond(), nullptr);
+    b1.replace_if_match(&b2, &b0);
+    EXPECT_EQ(b1.get_next(), nullptr);
+    EXPECT_EQ(b1.get_cond(), &b0);
+    b2.replace_if_match(&b0, &b2);
+    EXPECT_EQ(b2.get_next(), &b2);
+    EXPECT_EQ(b2.get_cond(), &b1);
+}
+
 TEST(BasicBlok, type)
 {
     BasicBlock b;

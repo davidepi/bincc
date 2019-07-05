@@ -59,6 +59,22 @@ public:
      */
     BlockType get_type() const override;
 
+    /**
+     * \brief Returns the number of outgoing edges from this class
+     * \return 0, 1 or 2, depending on the number of outgoing edges
+     */
+    unsigned char get_out_edges() const override;
+
+    /**
+     * \brief Replace an edge in the block with a new one.
+     * This happens only if the class has a matching edge
+     * \param[in] match The target that will be looked for matching
+     * \param[in] edge The new edge that will be inserted instead of the
+     * matching one
+     */
+    void replace_if_match(const AbstractBlock* match,
+                          const AbstractBlock* edge) override;
+
 private:
     // target of the conditional jump if the condition is satisfied
     const AbstractBlock* cond{nullptr};

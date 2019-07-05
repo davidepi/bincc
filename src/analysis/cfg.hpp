@@ -5,6 +5,7 @@
 #ifndef __CFG_HPP__
 #define __CFG_HPP__
 
+#include "abstract_block.hpp"
 #include "basic_block.hpp"
 #include <queue>
 #include <string>
@@ -135,6 +136,13 @@ public:
      * \return A queue containing the blocks in postorder, depth first
      */
     std::queue<const BasicBlock*> dfst() const;
+
+    /**
+     * \brief Get a node given its id
+     * \param[in] id The id of the node
+     * \return the node with the given id
+     */
+    const BasicBlock* get_node(unsigned int id) const;
 
     ControlFlowGraph(ControlFlowGraph&) = delete;
     ControlFlowGraph& operator=(ControlFlowGraph&) = delete;

@@ -99,6 +99,22 @@ public:
     virtual const AbstractBlock* operator[](int index) const;
 
     /**
+     * \brief Returns the number of outgoing edges from this class
+     * \return 0 if no outgoing edges, 1 otherwise (for this implementation)
+     */
+    virtual unsigned char get_out_edges() const;
+
+    /**
+     * \brief Replace an edge in the block with a new one.
+     * This happens only if the class has a matching edge
+     * \param[in] match The target that will be looked for matching
+     * \param[in] edge The new edge that will be inserted instead of the
+     * matching one
+     */
+    virtual void replace_if_match(const AbstractBlock* match,
+                                  const AbstractBlock* edge);
+
+    /**
      * \brief Deleted copy constructor
      * Almost every inherited class will inherit other AbstractBlocks. Also it
      * is very unlikely to have the need to copy this class.

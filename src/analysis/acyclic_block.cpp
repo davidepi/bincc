@@ -14,7 +14,7 @@ SequenceBlock::SequenceBlock(int id, const AbstractBlock* fst,
                              const AbstractBlock* snd)
     : AbstractBlock(id)
 {
-    auto merge_blocks = [this](const AbstractBlock* p) {
+    auto merge_blocks = [this](const AbstractBlock* p) -> void {
         // merge all the internals of a sequence, and destroy the sequence
         if(p->get_type() == BlockType::SEQUENCE)
         {
