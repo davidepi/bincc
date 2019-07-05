@@ -19,11 +19,11 @@ enum BlockType
 };
 
 /**
- * \brief Class representing a portion of code. This class can be likely
- * composed by multiple blocks of any type (basic, loop, etc...)
- * and is used to represent high-level structures like loops or if-else
- * constructs. This kind of blocks always have one and only one successor, since
- * conditional jumps are merged into higher level structures.
+ * \brief Class representing an agglomerate of blocks of code. This class can
+ * likely be composed by multiple blocks of any type (basic, loop, etc...) and
+ * is used to represent high-level structures like loops or if-else constructs.
+ * This kind of blocks always have one and only one successor, since conditional
+ * jumps are merged into higher level structures.
  */
 class AbstractBlock
 {
@@ -74,7 +74,7 @@ public:
      * \param[in] next_blk The next block that will be executed if no
      * conditional jumps are taken
      */
-    void set_next(AbstractBlock* next_blk);
+    void set_next(const AbstractBlock* next_blk);
 
     /**
      * \brief Returns the type of this abstract block
@@ -82,21 +82,42 @@ public:
      */
     virtual BlockType get_type() const = 0;
 
-    // these two fields are modified by subclasses in different instances so
-    // must remain public
+    /**
+     * \brief Returns the number of nodes contained in this abstract block
+     * If not overriden, this method returns 0
+     * \return 0, in this implementation
+     */
+    virtual int size() const;
 
-    /** number of incoming edges */
-    int edges_inn{0};
+    /**
+     * \brief Returns the i-th element contained in this abstract block
+     * If not overriden, this method returns a pointer to the abstract block
+     * itself
+     * \param[in] index UNUSED in this implementation
+     * \return this, in this implementation
+     */
+    virtual const AbstractBlock* operator[](int index) const;
 
-    /** number of outgoing edges */
-    int edges_out{0};
+    /**
+     * \brief Deleted copy constructor
+     * Almost every inherited class will inherit other AbstractBlocks. Also it
+     * is very unlikely to have the need to copy this class.
+     */
+    AbstractBlock(const AbstractBlock&) = delete;
+
+    /**
+     * \brief Deleted copy-assignment operator
+     * Same reason of the deleted copy-constructor
+     * \return nothing
+     */
+    AbstractBlock& operator=(const AbstractBlock&) = delete;
 
 protected:
     // id of the BB
     int id{0};
     // block following the current one (unconditional jump or unsatisfied
     // conditional one)
-    AbstractBlock* next{nullptr};
+    const AbstractBlock* next{nullptr};
 };
 
 #endif //__ABSTRACT_BLOCK_HPP__

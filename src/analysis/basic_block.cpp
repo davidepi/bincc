@@ -13,20 +13,8 @@ const AbstractBlock* BasicBlock::get_cond() const
     return cond;
 }
 
-void BasicBlock::set_cond(AbstractBlock* cnd)
+void BasicBlock::set_cond(const AbstractBlock* cnd)
 {
-    bool a = cond != nullptr;
-    bool b = cnd != nullptr;
-    edges_out += (a ^ b) * (1 - (int(a) << 1));
-    if(a) // current target is not null
-    {
-        // decrease the in edges
-        cond->edges_inn--;
-    }
-    if(b) // next target is not null
-    {
-        cnd->edges_inn++;
-    }
     BasicBlock::cond = cnd;
 }
 

@@ -4,7 +4,6 @@
 
 #include "cfg.hpp"
 #include <climits>
-#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -15,10 +14,9 @@ ControlFlowGraph::ControlFlowGraph(unsigned int size) : nodes(size), edges(0)
 {
     // an extra block is allocated, in case a single exit point is needed:
     // otherwise it will be a mess to update every pointer.
-    blocks = (BasicBlock*)malloc(sizeof(BasicBlock) * (nodes + 1));
+    blocks = new BasicBlock[nodes + 1];
     for(unsigned int i = 0; i < size - 1; i++)
     {
-        blocks[i] = BasicBlock(); // call constructor
         blocks[i].set_id(i);
         blocks[i].set_next(&(blocks[i + 1]));
         edges++;
@@ -31,7 +29,7 @@ ControlFlowGraph::ControlFlowGraph(unsigned int size) : nodes(size), edges(0)
 
 ControlFlowGraph::~ControlFlowGraph()
 {
-    free(blocks);
+    delete[] blocks;
 }
 
 std::string ControlFlowGraph::to_dot() const

@@ -14,7 +14,9 @@ SET(BCC_MAIN_SOURCES
     ${PROJECT_SOURCE_DIR}/src/architectures/architecture_arm.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/analysis.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/abstract_block.cpp
+    ${PROJECT_SOURCE_DIR}/src/analysis/acyclic_block.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/basic_block.cpp
+    ${PROJECT_SOURCE_DIR}/src/analysis/cyclic_block.cpp
     ${PROJECT_SOURCE_DIR}/src/analysis/cfg.cpp
     )
 #TEST SOURCES

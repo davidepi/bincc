@@ -51,7 +51,7 @@ public:
      * \param[in] cnd The next block that will be executed if a
      * conditional jump is taken
      */
-    void set_cond(AbstractBlock* cnd);
+    void set_cond(const AbstractBlock* cnd);
 
     /**
      * \brief Returns the type of this block
@@ -61,7 +61,7 @@ public:
 
 private:
     // target of the conditional jump if the condition is satisfied
-    AbstractBlock* cond{nullptr};
+    const AbstractBlock* cond{nullptr};
 };
 
 #endif
