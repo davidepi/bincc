@@ -25,7 +25,7 @@ BlockType BasicBlock::get_type() const
 
 unsigned char BasicBlock::get_out_edges() const
 {
-    return (unsigned char)(next == nullptr) + (unsigned char)(cond == nullptr);
+    return (unsigned char)(next != nullptr) + (unsigned char)(cond != nullptr);
 }
 
 void BasicBlock::replace_if_match(const AbstractBlock* match,

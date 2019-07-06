@@ -22,7 +22,7 @@ TEST(ControlFlowStructure, sequence)
     ControlFlowStructure cfs;
     cfs.build(cfg.root(), cfg.nodes_no());
     const AbstractBlock* structured = cfs.root();
-    ASSERT_NE(structured,nullptr);
+    ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
     ASSERT_EQ(structured->size(), 5);
     const AbstractBlock* a0 = (*structured)[0];
