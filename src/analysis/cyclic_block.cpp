@@ -28,3 +28,11 @@ const AbstractBlock* SelfLoopBlock::operator[](int) const
 {
     return looping_block;
 }
+
+int SelfLoopBlock::print(std::ostream& ss) const
+{
+    int id = looping_block->get_id();
+    ss << "subgraph cluster_" << this->get_id() << "{\n"
+       << id << " -> " << id << ";\nlabel = \"Self-loop\";\n}\n";
+    return id;
+}

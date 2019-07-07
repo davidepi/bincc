@@ -4,11 +4,12 @@
 
 #include "cfs.hpp"
 #include "acyclic_block.hpp"
+#include "cyclic_block.hpp"
 #include <cassert>
-#include <sstream>
 #include <fstream>
 #include <iostream>
 #include <queue>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -113,6 +114,13 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
     int next_id = nodes;
     head = bmap.find(0)->second;
 
+    // remove self loops from predecessors, otherwise a new backlink will be
+    // added everytime when replacing the parents while resolving a self-loop
+    for(int i = 0; i < nodes; i++)
+    {
+        preds.find(i)->second.erase(i);
+    }
+
     // TODO: reorganize this lambda function
     auto is_sequence = [&preds](const AbstractBlock* cur,
                                 const AbstractBlock* next) -> bool {
@@ -120,6 +128,15 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
         {
             auto entry = preds.find(next->get_id());
             return entry->second.size() == 1;
+        }
+        return false;
+    };
+
+    auto is_self_loop = [](const AbstractBlock* cur) -> bool {
+        if(cur->get_type() == BlockType::BASIC)
+        {
+            const BasicBlock* node = static_cast<const BasicBlock*>(cur);
+            return node->get_cond() == node || node->get_next() == node;
         }
         return false;
     };
@@ -136,31 +153,52 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
             AbstractBlock* node = bmap.find(list.front())->second;
             list.pop();
             const AbstractBlock* next = node->get_next();
+            AbstractBlock* tmp;
+            if(is_self_loop(node))
+            {
+                tmp = new SelfLoopBlock(next_id,
+                                        static_cast<const BasicBlock*>(node));
+                tmp->set_next(next);
+            }
             // resolve sequence:
             // this -> 1 exit
             // next -> 1 entry
-            if(is_sequence(node, next))
+            else if(is_sequence(node, next))
             {
-                modified = true;
-                AbstractBlock* tmp = new SequenceBlock(next_id, node, next);
-                bmap.insert({{next_id, tmp}});
-                // change edges of graph (remap predecessor to address new block
-                // instead of the old basic block)
-                auto entry = preds.find(node->get_id());
-                for(int parent_index : entry->second)
-                {
-                    AbstractBlock* parent = bmap.find(parent_index)->second;
-                    parent->replace_if_match(node, tmp);
-                }
-                preds.insert({{next_id, entry->second}});
-                next_id++;
-                // account for replacement of root
-                if(node == head)
-                {
-                    head = tmp;
-                }
-                break;
+                tmp = new SequenceBlock(next_id, node, next);
+                next = next->get_next(); // the previous "next" has been merged
+                tmp->set_next(next);
             }
+            else
+            {
+                continue;
+            }
+            modified = true;
+            bmap.insert({{next_id, tmp}});
+            // change edges of graph (remap predecessor to address new block
+            // instead of the old basic block)
+            auto entry = preds.find(node->get_id());
+            for(int parent_index : entry->second)
+            {
+                AbstractBlock* parent = bmap.find(parent_index)->second;
+                parent->replace_if_match(node, tmp);
+            }
+            preds.insert({{next_id, entry->second}});
+            // now remove the current node from the predecessor of the next.
+            // and add the newly created node as predecessor
+            if(next != nullptr)
+            {
+                auto parents = preds.find(next->get_id())->second;
+                parents.erase(node->get_id());
+                parents.insert(next_id);
+            }
+            next_id++;
+            // account for replacement of root
+            if(node == head)
+            {
+                head = tmp;
+            }
+            break;
         }
         // irreducible point
         if(!modified)
@@ -179,7 +217,7 @@ std::string ControlFlowStructure::to_dot() const
 
 std::ostream& operator<<(std::ostream& stream, const ControlFlowStructure& cfs)
 {
-    stream << "digraph {\n";
+    stream << "digraph {\ncompound=true;\n";
     cfs.head->print(stream);
     stream << "}\n";
     return stream;

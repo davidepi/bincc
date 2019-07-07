@@ -62,6 +62,17 @@ public:
      */
     const AbstractBlock* operator[](int index) const override;
 
+    /**
+     * \brief Print this block in Graphviz dot format using the input stream
+     * Then the method will return the last block of the cluster
+     * The stream will represent solely this block. In this case given that only
+     * one block composes the cluster, the function will return the id of the
+     * looping block
+     * \param[in,out] ss The input stream
+     * \return The id of the last node of the block
+     */
+    int print(std::ostream& ss) const override;
+
 private:
     // the looping block
     const BasicBlock* looping_block;

@@ -65,12 +65,14 @@ public:
     const AbstractBlock* operator[](int index) const override;
 
     /**
-     * \brief Returns a stream representing this block in Graphviz dot format
-     * The returned stream will represent solely this block
+     * \brief Print this block in Graphviz dot format using the input stream
+     * Then the method will return the last block of the cluster
+     * The stream will represent solely this block. In this case it
+     * will do nothing and return the block id
      * \param[in,out] ss The input stream
-     * \return The output stream
+     * \return The id of the last node of the block
      */
-    std::ostream& print(std::ostream& ss) const override;
+    int print(std::ostream& ss) const override;
 
 private:
 

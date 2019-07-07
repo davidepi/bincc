@@ -58,10 +58,20 @@ const AbstractBlock* SequenceBlock::operator[](int index) const
     return components[index];
 }
 
-std::ostream& SequenceBlock::print(std::ostream& ss) const
+int SequenceBlock::print(std::ostream& ss) const
 {
     ss << "subgraph cluster_" << this->get_id() << " {\n";
     int size = components.size();
+    int last_node = 0;
+    if(!components.empty() && components[0]->get_type() != BASIC)
+    {
+        // recursively print first node.
+        // later on, only the second node of the pair will be printed to avoid
+        // repetitions. The id of the innermost node will be saved in saved_id
+        last_node = components[0]->print(ss);
+    }
+    // nodes are taken two by two. Only the second one is called recursively.
+    // the first one has already been called in the previous iteration
     for(int i = 1; i < size; i++)
     {
         const AbstractBlock* node0 = components[i - 1];
@@ -70,10 +80,33 @@ std::ostream& SequenceBlock::print(std::ostream& ss) const
         // both are basic blocks, so print em
         if(node0->get_type() == BASIC && node1->get_type() == BASIC)
         {
-            ss << node0->get_id() << " -> " << node1->get_id() << ";\n";
+            ss << last_node << " -> " << node1->get_id() << ";\n";
+            last_node = node1->get_id();
         }
-        // TODO: add what happens if one of them (or both) are not basic
+        // the first one is not basic, but has already been processed.
+        else if(node0->get_type() != BASIC && node1->get_type() == BASIC)
+        {
+            // print recursively and obtains the innermost id of the block
+            ss << last_node << " -> " << node1->get_id() << "[ltail=cluster_"
+               << node0->get_id() << "];\n";
+            last_node = node1->get_id();
+        }
+        else if(node0->get_type() == BASIC && node1->get_type() != BASIC)
+        {
+            int id1 = node1->print(ss);
+            ss << node0->get_id() << " -> " << id1 << "[head=cluster_"
+               << node1->get_id() << "];\n";
+            last_node = id1;
+        }
+        else
+        {
+            int id1 = node1->print(ss);
+            ss << last_node << " -> " << id1 << "[ltail=cluster_"
+               << node0->get_id() << ",lhead=cluster_" << node1->get_id()
+               << "];\n";
+            last_node = id1;
+        }
     }
     ss << "label = \"Sequence\";\n}\n";
-    return ss;
+    return last_node;
 }

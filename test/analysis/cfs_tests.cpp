@@ -40,24 +40,24 @@ TEST(ControlFlowStructure, sequence)
 TEST(ControlFlowStructure, self_loop)
 {
     // 0 -> 1 -> 2 with 1 -> 1 conditional loop and 1 -> 2 unconditional
-//    ControlFlowGraph cfg(3);
-//    cfg.set_conditional(1, 1);
-//    ControlFlowStructure cfs;
-//    cfs.build(cfg.root(), cfg.nodes_no());
-//    const AbstractBlock* structured = cfs.root();
-//    ASSERT_NE(structured, nullptr);
-//    ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
-//    ASSERT_EQ(structured->size(), 3);
-//    const AbstractBlock* head = (*structured)[0];
-//    const AbstractBlock* middle = (*structured)[1];
-//    const AbstractBlock* tail = (*structured)[2];
-//    EXPECT_EQ(head->get_type(), BlockType::BASIC);
-//    EXPECT_EQ(head->size(), 0);
-//    EXPECT_EQ(tail->get_type(), BlockType::BASIC);
-//    EXPECT_EQ(tail->size(), 0);
-//    EXPECT_EQ(middle->get_type(), BlockType::SELF_LOOP);
-//    ASSERT_EQ(middle->size(), 1);
-//    const AbstractBlock* loop = (*middle)[0];
-//    EXPECT_EQ(loop->size(), 0);
-//    EXPECT_EQ(loop->get_type(), BlockType::BASIC);
+    ControlFlowGraph cfg(3);
+    cfg.set_conditional(1, 1);
+    ControlFlowStructure cfs;
+    cfs.build(cfg.root(), cfg.nodes_no());
+    const AbstractBlock* structured = cfs.root();
+    ASSERT_NE(structured, nullptr);
+    ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
+    ASSERT_EQ(structured->size(), 3);
+    const AbstractBlock* head = (*structured)[0];
+    const AbstractBlock* middle = (*structured)[1];
+    const AbstractBlock* tail = (*structured)[2];
+    EXPECT_EQ(head->get_type(), BlockType::BASIC);
+    EXPECT_EQ(head->size(), 0);
+    EXPECT_EQ(tail->get_type(), BlockType::BASIC);
+    EXPECT_EQ(tail->size(), 0);
+    EXPECT_EQ(middle->get_type(), BlockType::SELF_LOOP);
+    ASSERT_EQ(middle->size(), 1);
+    const AbstractBlock* loop = (*middle)[0];
+    EXPECT_EQ(loop->size(), 0);
+    EXPECT_EQ(loop->get_type(), BlockType::BASIC);
 }

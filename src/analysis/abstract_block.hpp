@@ -131,13 +131,14 @@ public:
     AbstractBlock& operator=(const AbstractBlock&) = delete;
 
     /**
-     * \brief Returns a stream representing this block in Graphviz dot format
-     * The returned stream will represent solely this block. In this case it
-     * will return the original stream unmodified
+     * \brief Print this block in Graphviz dot format using the input stream
+     * Then the method will return the last block of the cluster
+     * The stream will represent solely this block. In this case it
+     * will do nothing and return the block id
      * \param[in,out] ss The input stream
-     * \return The output stream
+     * \return The id of the last node of the block
      */
-    virtual std::ostream& print(std::ostream& ss) const;
+    virtual int print(std::ostream& ss) const;
 
 protected:
     // id of the BB

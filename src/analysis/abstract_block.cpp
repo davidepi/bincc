@@ -39,7 +39,7 @@ const AbstractBlock* AbstractBlock::operator[](int) const
 
 unsigned char AbstractBlock::get_out_edges() const
 {
-    return (unsigned char)(next == nullptr);
+    return (unsigned char)(next != nullptr);
 }
 
 void AbstractBlock::replace_if_match(const AbstractBlock* match,
@@ -51,7 +51,7 @@ void AbstractBlock::replace_if_match(const AbstractBlock* match,
     }
 }
 
-std::ostream& AbstractBlock::print(std::ostream& ss) const
+int AbstractBlock::print(std::ostream& ss) const
 {
-    return ss;
+    return id;
 }
