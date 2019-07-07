@@ -40,7 +40,6 @@ BlockType SequenceBlock::get_type() const
     return SEQUENCE;
 }
 
-
 SequenceBlock::~SequenceBlock()
 {
     for(const AbstractBlock* block : delete_list)
@@ -57,4 +56,24 @@ int SequenceBlock::size() const
 const AbstractBlock* SequenceBlock::operator[](int index) const
 {
     return components[index];
+}
+
+std::ostream& SequenceBlock::print(std::ostream& ss) const
+{
+    ss << "subgraph cluster_" << this->get_id() << " {\n";
+    int size = components.size();
+    for(int i = 1; i < size; i++)
+    {
+        const AbstractBlock* node0 = components[i - 1];
+        const AbstractBlock* node1 = components[i];
+
+        // both are basic blocks, so print em
+        if(node0->get_type() == BASIC && node1->get_type() == BASIC)
+        {
+            ss << node0->get_id() << " -> " << node1->get_id() << ";\n";
+        }
+        // TODO: add what happens if one of them (or both) are not basic
+    }
+    ss << "label = \"Sequence\";\n}\n";
+    return ss;
 }

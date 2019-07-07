@@ -50,3 +50,8 @@ void AbstractBlock::replace_if_match(const AbstractBlock* match,
         next = edge;
     }
 }
+
+std::ostream& AbstractBlock::print(std::ostream& ss) const
+{
+    return ss;
+}

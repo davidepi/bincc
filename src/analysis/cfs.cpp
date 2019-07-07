@@ -5,6 +5,8 @@
 #include "cfs.hpp"
 #include "acyclic_block.hpp"
 #include <cassert>
+#include <sstream>
+#include <fstream>
 #include <iostream>
 #include <queue>
 #include <unordered_map>
@@ -165,5 +167,35 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
         {
             break;
         }
+    }
+}
+
+std::string ControlFlowStructure::to_dot() const
+{
+    std::stringstream stream;
+    stream << *this;
+    return stream.str();
+}
+
+std::ostream& operator<<(std::ostream& stream, const ControlFlowStructure& cfs)
+{
+    stream << "digraph {\n";
+    cfs.head->print(stream);
+    stream << "}\n";
+    return stream;
+}
+
+void ControlFlowStructure::to_file(const char* filename) const
+{
+    std::ofstream fout;
+    fout.open(filename, std::ios::out);
+    if(fout.is_open())
+    {
+        fout << *this;
+        fout.close();
+    }
+    else
+    {
+        std::cerr << "Could not write file" << filename << std::endl;
     }
 }

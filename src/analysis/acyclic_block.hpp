@@ -64,6 +64,14 @@ public:
      */
     const AbstractBlock* operator[](int index) const override;
 
+    /**
+     * \brief Returns a stream representing this block in Graphviz dot format
+     * The returned stream will represent solely this block
+     * \param[in,out] ss The input stream
+     * \return The output stream
+     */
+    std::ostream& print(std::ostream& ss) const override;
+
 private:
 
     // components of the queue

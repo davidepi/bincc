@@ -5,6 +5,8 @@
 #ifndef __ABSTRACT_BLOCK_HPP__
 #define __ABSTRACT_BLOCK_HPP__
 
+#include <sstream>
+
 /**
  * \brief Identifies the type of block represented by the AbstractBlock
  */
@@ -127,6 +129,15 @@ public:
      * \return nothing
      */
     AbstractBlock& operator=(const AbstractBlock&) = delete;
+
+    /**
+     * \brief Returns a stream representing this block in Graphviz dot format
+     * The returned stream will represent solely this block. In this case it
+     * will return the original stream unmodified
+     * \param[in,out] ss The input stream
+     * \return The output stream
+     */
+    virtual std::ostream& print(std::ostream& ss) const;
 
 protected:
     // id of the BB
