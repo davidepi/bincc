@@ -3,6 +3,8 @@
 //
 
 #include "acyclic_block.hpp"
+#include "basic_block.hpp"
+#include <cassert>
 
 // The SequenceBlock::delete_list containg elements on which `delete` should be
 // called. This because if the components of the sequence are other sequences,
@@ -65,7 +67,7 @@ int SequenceBlock::print(std::ostream& ss) const
     int last_node = 0;
     if(!components.empty() && components[0]->get_type() != BASIC)
     {
-        // recursively print first node.
+        // print first node.
         // later on, only the second node of the pair will be printed to avoid
         // repetitions. The id of the innermost node will be saved in saved_id
         last_node = components[0]->print(ss);
@@ -94,7 +96,7 @@ int SequenceBlock::print(std::ostream& ss) const
         else if(node0->get_type() == BASIC && node1->get_type() != BASIC)
         {
             int id1 = node1->print(ss);
-            ss << node0->get_id() << " -> " << id1 << "[head=cluster_"
+            ss << node0->get_id() << " -> " << id1 << "[lhead=cluster_"
                << node1->get_id() << "];\n";
             last_node = id1;
         }
@@ -109,4 +111,101 @@ int SequenceBlock::print(std::ostream& ss) const
     }
     ss << "label = \"Sequence\";\n}\n";
     return last_node;
+}
+
+BlockType IfThenBlock::get_type() const
+{
+    return IF_THEN;
+}
+
+IfThenBlock::IfThenBlock(int id, const AbstractBlock* ifb,
+                         const AbstractBlock* thenb)
+    : AbstractBlock(id), head(ifb), then(thenb)
+{
+}
+
+IfThenBlock::~IfThenBlock()
+{
+    delete head;
+    delete then;
+}
+
+int IfThenBlock::size() const
+{
+    return 2;
+}
+
+const AbstractBlock* IfThenBlock::operator[](int index) const
+{
+    return index == 0 ? head : then;
+}
+
+int IfThenBlock::print(std::ostream& ss) const
+{
+    ss << "subgraph cluster_" << this->get_id() << " {\n";
+    ss << "dummy"<<id<<" [shape=point, style=invis];\n";
+    int last_node = 0;
+    if(head->get_type()==BASIC && then->get_type() == BASIC)
+    {
+        ss << head->get_id() <<" -> "<<then->get_id()<<";\n";
+        ss << head->get_id() <<" -> dummy"<<id<<" [style=dashed];\n";
+        ss << then->get_id() <<" -> dummy"<<id<<" [style=dashed];\n";
+        last_node = then->get_id();
+    }
+    //TODO: add additional cases
+    ss << "label = \"If-Then\";\n}\n";
+    return last_node;
+}
+
+bool is_sequence(const AbstractBlock* node,
+                 const std::unordered_map<int, std::unordered_set<int>>& preds)
+{
+    // conditions for a sequence:
+    // - current node has only one successor node
+    // - sucessor has only one predecessor (the current node)
+    if(node->get_out_edges() == 1)
+    {
+        // nominal case next is the correct node
+        const AbstractBlock* next = node->get_next();
+        if(next != nullptr)
+        {
+            // return the number of parents for the next node
+            return preds.find(next->get_id())->second.size() == 1;
+        }
+        else
+        {
+            // if next is nullptr and there is ONE out edge means that the edge
+            // is the conditional one and the block is a BasicBlock
+            const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+            const AbstractBlock* cond = bb->get_cond(); // never null
+            return preds.find(cond->get_id())->second.size() == 1;
+        }
+    }
+    return false;
+}
+
+bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
+               const std::unordered_map<int, std::unordered_set<int>>& preds)
+{
+    if(node->get_out_edges() == 2)
+    {
+        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+        const AbstractBlock* next = bb->get_next();
+        const AbstractBlock* cond = bb->get_cond();
+        if(next->get_next() == cond)
+        {
+            // variant 0: next is the "then"
+            *then_node = next;
+            return (next->get_out_edges() == 1) &&
+                   (preds.find(next->get_id())->second.size() == 1);
+        }
+        else if(cond->get_next() == next)
+        {
+            // variant 1: cond is the "then"
+            *then_node = cond;
+            return (cond->get_out_edges() == 1) &&
+                   (preds.find(cond->get_id())->second.size() == 1);
+        }
+    }
+    return false;
 }

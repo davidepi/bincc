@@ -121,26 +121,6 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
         preds.find(i)->second.erase(i);
     }
 
-    // TODO: reorganize this lambda function
-    auto is_sequence = [&preds](const AbstractBlock* cur,
-                                const AbstractBlock* next) -> bool {
-        if(next != nullptr && cur->get_out_edges() == 1)
-        {
-            auto entry = preds.find(next->get_id());
-            return entry->second.size() == 1;
-        }
-        return false;
-    };
-
-    auto is_self_loop = [](const AbstractBlock* cur) -> bool {
-        if(cur->get_type() == BlockType::BASIC)
-        {
-            const BasicBlock* node = static_cast<const BasicBlock*>(cur);
-            return node->get_cond() == node || node->get_next() == node;
-        }
-        return false;
-    };
-
     // iterate and resolve
     while(head->get_out_edges() != 0)
     {
@@ -154,19 +134,40 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
             list.pop();
             const AbstractBlock* next = node->get_next();
             AbstractBlock* tmp;
+            // block used to track the `then` part in an if-then
+            const AbstractBlock* then;
             if(is_self_loop(node))
             {
                 tmp = new SelfLoopBlock(next_id,
                                         static_cast<const BasicBlock*>(node));
                 tmp->set_next(next);
             }
-            // resolve sequence:
-            // this -> 1 exit
-            // next -> 1 entry
-            else if(is_sequence(node, next))
+            else if(is_ifthen(node, &then, preds))
             {
-                tmp = new SequenceBlock(next_id, node, next);
-                next = next->get_next(); // the previous "next" has been merged
+                tmp = new IfThenBlock(next_id, node, then);
+                tmp->set_next(then->get_next());
+                // remove the root from the parents of the next block
+                // otherwise it will have TWO parents and will never be merged
+                // as sequence
+                preds.find(then->get_next()->get_id())
+                    ->second.erase(node->get_id());
+            }
+            else if(is_sequence(node, preds))
+            {
+                // nominal case
+                if(next != nullptr)
+                {
+                    tmp = new SequenceBlock(next_id, node, next);
+                    next = next->get_next();
+                }
+                // conditional sequence
+                else
+                {
+                    const AbstractBlock* cond =
+                        static_cast<const BasicBlock*>(node)->get_cond();
+                    tmp = new SequenceBlock(next_id, node, cond);
+                    next = cond->get_next();
+                }
                 tmp->set_next(next);
             }
             else

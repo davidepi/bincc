@@ -78,4 +78,11 @@ private:
     const BasicBlock* looping_block;
 };
 
+/**
+ * \brief Returns true if the node is a self-looping node
+ * \param[in] node The node that will be checked
+ * \return true if node is self looping
+ */
+bool is_self_loop(const AbstractBlock* node);
+
 #endif //__CYCLIC_BLOCK_HPP__

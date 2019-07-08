@@ -6,6 +6,8 @@
 #define __ACYCLIC_BLOCK_HPP__
 
 #include "abstract_block.hpp"
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 /**
@@ -75,12 +77,49 @@ public:
     int print(std::ostream& ss) const override;
 
 private:
-
     // components of the queue
     std::vector<const AbstractBlock*> components;
 
     // explained in the .cpp file
     std::vector<const AbstractBlock*> delete_list;
 };
+
+class IfThenBlock : public AbstractBlock
+{
+public:
+    IfThenBlock(int id, const AbstractBlock* ifb, const AbstractBlock* thenb);
+    ~IfThenBlock() override;
+    int size() const override;
+    const AbstractBlock* operator[](int index) const override;
+    int print(std::ostream& ss) const override;
+    BlockType get_type() const override;
+
+private:
+    // if block
+    const AbstractBlock* head;
+    // then block
+    const AbstractBlock* then;
+};
+
+/**
+ * \brief Returns true if node and next are a sequence
+ * \param[in] node The node that will be checked if belongs to a sequence
+ * \param[in] preds Map of {key, list(key)} where the list contain the
+ * predecessors id for the current node
+ * \return true if node and its successor forms a sequence
+ */
+bool is_sequence(const AbstractBlock* node,
+                 const std::unordered_map<int, std::unordered_set<int>>& preds);
+
+/**
+ * \brief Returns true if node represents the root of an if-then block
+ * \param[in] node The node that will be checked as the root of if-then block
+ * \param[out] then_node The node representing the `then` block
+ * \param[in] preds Map of {key, list(key)} where the list contain the
+ * predecessors id for the current node
+ * \return true if node is the root of an if-then block
+ */
+bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
+               const std::unordered_map<int, std::unordered_set<int>>& preds);
 
 #endif //__ACYCLIC_BLOCK_HPP__

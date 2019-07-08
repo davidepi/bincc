@@ -18,6 +18,8 @@ enum BlockType
     SELF_LOOP,
     // block is a sequence
     SEQUENCE,
+    //block is a if-then block
+    IF_THEN,
 };
 
 /**

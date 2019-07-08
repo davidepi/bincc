@@ -167,3 +167,44 @@ TEST(SelfLoopBlock, ctor)
     const AbstractBlock* a0 = slb[0];
     EXPECT_EQ(a0->get_id(), 1);
 }
+
+TEST(IfThenBlock, type)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    b0->set_next(b2);
+    b0->set_cond(b1);
+    b1->set_next(b2);
+    IfThenBlock ift(3, b0, b1);
+    EXPECT_EQ(ift.get_type(), BlockType::IF_THEN);
+    delete b2;
+}
+
+TEST(IfThenBlock, size)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    b0->set_next(b2);
+    b0->set_cond(b1);
+    b1->set_next(b2);
+    IfThenBlock ift(3, b0, b1);
+    EXPECT_EQ(ift.size(), 2);
+    delete b2;
+}
+
+TEST(IfThenBlock, access)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    b0->set_next(b2);
+    b0->set_cond(b1);
+    b1->set_next(b2);
+    IfThenBlock ift(3, b0, b1);
+    ASSERT_EQ(ift.size(), 2);
+    EXPECT_EQ(ift[0], b0);
+    EXPECT_EQ(ift[1], b1);
+    delete b2;
+}

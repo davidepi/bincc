@@ -36,3 +36,13 @@ int SelfLoopBlock::print(std::ostream& ss) const
        << id << " -> " << id << ";\nlabel = \"Self-loop\";\n}\n";
     return id;
 }
+
+bool is_self_loop(const AbstractBlock* node)
+{
+    if(node->get_type() == BlockType::BASIC)
+    {
+        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+        return bb->get_cond() == bb || bb->get_next() == bb;
+    }
+    return false;
+}

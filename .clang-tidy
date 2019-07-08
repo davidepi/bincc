@@ -17,7 +17,8 @@ Checks: '-*,
          readability-*,
          -readability-magic-numbers,
          -readability-uppercase-literal-suffix,
-         -readability-named-parameter'
+         -readability-named-parameter,
+         -readability-else-after-return'
 
 CheckOptions:
     - key: hicpp-special-member-functions.AllowSoleDefaultDtor
