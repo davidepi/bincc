@@ -152,6 +152,19 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
                 preds.find(then->get_next()->get_id())
                     ->second.erase(node->get_id());
             }
+            else if(is_ifelse(node, preds))
+            {
+                const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+                then = bb->get_next();
+                tmp = new IfElseBlock(next_id, node, then,
+                                      bb->get_cond());
+                tmp->set_next(then->get_next());
+                // remove the else from the parents of the next block
+                // otherwise it will have TWO parents and will never be merged
+                // as sequence
+                preds.find(then->get_next()->get_id())
+                    ->second.erase(bb->get_cond()->get_id());
+            }
             else if(is_sequence(node, preds))
             {
                 // nominal case

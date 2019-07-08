@@ -114,7 +114,6 @@ TEST(ControlFlowStructure, if_then_next)
     const AbstractBlock* thenblock = (*middle)[1];
     EXPECT_EQ(ifblock->get_id(), 1);
     EXPECT_EQ(thenblock->get_id(), 2);
-    cfs.to_file("/home/davide/Desktop/test2.dot");
 }
 
 TEST(ControlFlowStructure, if_then_cond)
@@ -146,4 +145,37 @@ TEST(ControlFlowStructure, if_then_cond)
     const AbstractBlock* thenblock = (*middle)[1];
     EXPECT_EQ(ifblock->get_id(), 1);
     EXPECT_EQ(thenblock->get_id(), 2);
+}
+
+TEST(ControlFlowStructure, if_else)
+{
+    //`next` is the `then` block
+    // 0 -> 1 -> 2 -> 4 -> 5
+    //        ~> 3 -> 4
+    ControlFlowGraph cfg(6);
+    cfg.set_next(2, 4);
+    cfg.set_conditional(1, 3);
+    ControlFlowStructure cfs;
+    cfs.build(cfg.root(), cfg.nodes_no());
+    const AbstractBlock* structured = cfs.root();
+    ASSERT_NE(structured, nullptr);
+    ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
+    ASSERT_EQ(structured->size(), 4);
+    const AbstractBlock* head = (*structured)[0];
+    const AbstractBlock* middle = (*structured)[1];
+    const AbstractBlock* tail = (*structured)[2];
+    const AbstractBlock* tail2 = (*structured)[3];
+    EXPECT_EQ(head->get_type(), BlockType::BASIC);
+    EXPECT_EQ(head->size(), 0);
+    EXPECT_EQ(tail->get_type(), BlockType::BASIC);
+    EXPECT_EQ(tail->size(), 0);
+    EXPECT_EQ(tail2->get_type(), BlockType::BASIC);
+    EXPECT_EQ(tail2->size(), 0);
+    EXPECT_EQ(middle->get_type(), BlockType::IF_ELSE);
+    const AbstractBlock* ifblock = (*middle)[0];
+    const AbstractBlock* thenblock = (*middle)[1];
+    const AbstractBlock* elseblock = (*middle)[2];
+    EXPECT_EQ(ifblock->get_id(), 1);
+    EXPECT_EQ(thenblock->get_id(), 2);
+    EXPECT_EQ(elseblock->get_id(), 3);
 }

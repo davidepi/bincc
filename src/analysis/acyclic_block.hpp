@@ -69,8 +69,7 @@ public:
     /**
      * \brief Print this block in Graphviz dot format using the input stream
      * Then the method will return the last block of the cluster
-     * The stream will represent solely this block. In this case it
-     * will do nothing and return the block id
+     * The stream will represent solely this block.
      * \param[in,out] ss The input stream
      * \return The id of the last node of the block
      */
@@ -84,14 +83,60 @@ private:
     std::vector<const AbstractBlock*> delete_list;
 };
 
+/**
+ * \brief Class representing an If-Then block
+ *
+ * This class is composed by two blocks: an head that will always be executed
+ * and terminates with a conditional statement, and a `then` block that will be
+ * executed only if the conditional statement is satisfied. Exactly like the
+ * SequenceBlock class, internal linking between these two blocks is not
+ * enforced
+ */
 class IfThenBlock : public AbstractBlock
 {
 public:
+    /**
+     * \brief Parametrized constructor
+     * \note The pointer ownership of ifb and thenb will be inherited
+     * \param[in] id unique id of the current block
+     * \param[in] ifb Pointer to the head block that will be inherited
+     * \param[in] thenb Pointer to the then block that will be inherited
+     */
     IfThenBlock(int id, const AbstractBlock* ifb, const AbstractBlock* thenb);
+
+    /**
+     * \brief Default destructor
+     */
     ~IfThenBlock() override;
+
+    /**
+     * \brief Returns the number of elements composing the if-then
+     * \return always 2
+     */
     int size() const override;
+
+    /**
+     * \brief Returns the i-th element contained in the if-then block
+     * If index is 0 the head is returned, for every other number the `then`
+     * block is returned instead
+     * \param[in] index The index of the element that will be returned
+     * \return the head when index equals zero, the `then` block otherwise
+     */
     const AbstractBlock* operator[](int index) const override;
+
+    /**
+     * \brief Print this block in Graphviz dot format using the input stream
+     * Then the method will return the last block of the cluster
+     * The stream will represent solely this block.
+     * \param[in,out] ss The input stream
+     * \return The id of the `then` block
+     */
     int print(std::ostream& ss) const override;
+
+    /**
+     * \brief Returns the type of this block
+     * \return BlockType::IF_THEN
+     */
     BlockType get_type() const override;
 
 private:
@@ -99,6 +144,74 @@ private:
     const AbstractBlock* head;
     // then block
     const AbstractBlock* then;
+};
+
+/**
+ * \brief Class representing an If-Else block
+ *
+ * This class is composed by three blocks: an head that will always be executed
+ * and terminates with a conditional statement, a `then` block that will be
+ * executed only if the conditional statement is satisfied, and an `else` block
+ * that will be executed if the `then` is not. Exactly like the SequenceBlock
+ * class, internal linking between these two blocks is not enforced
+ */
+class IfElseBlock : public AbstractBlock
+{
+public:
+    /**
+     * \brief Parametrized constructor
+     * \note The pointer ownership of  ifb, thenb and elseb will be inherited
+     * \param[in] id unique id of the current block
+     * \param[in] ifb Pointer to the head block that will be inherited
+     * \param[in] thenb Pointer to the then block that will be inherited
+     * \param[in] elseb Pointer the the else block that will be inherited
+     */
+    IfElseBlock(int id, const AbstractBlock* ifb, const AbstractBlock* thenb,
+                const AbstractBlock* elseb);
+
+    /**
+     * \brief Default destructor
+     */
+    ~IfElseBlock() override;
+
+    /**
+     * \brief Returns the number of elements composing the if-else
+     * \return always 3
+     */
+    int size() const override;
+
+    /**
+     * \brief Returns the i-th element contained in the if-then block
+     * If index is 0 the head is returned, if 1 the `then` block is returned and
+     * for every other number the `else` block is returned
+     * \param[in] index The index of the element that will be returned
+     * \return the head when index equals zero, the `then` block when index
+     * equals 1, the `else` block otherwise
+     */
+    const AbstractBlock* operator[](int index) const override;
+
+    /**
+     * \brief Print this block in Graphviz dot format using the input stream
+     * Then the method will return the last block of the cluster
+     * The stream will represent solely this block.
+     * \param[in,out] ss The input stream
+     * \return The id of the `then` block
+     */
+    int print(std::ostream& ss) const override;
+
+    /**
+     * \brief Returns the type of this block
+     * \return BlockType::IF_ELSE
+     */
+    BlockType get_type() const override;
+
+private:
+    // if block
+    const AbstractBlock* head;
+    // then block
+    const AbstractBlock* then;
+    // else block
+    const AbstractBlock* ellse;
 };
 
 /**
@@ -120,6 +233,16 @@ bool is_sequence(const AbstractBlock* node,
  * \return true if node is the root of an if-then block
  */
 bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
+               const std::unordered_map<int, std::unordered_set<int>>& preds);
+
+/**
+ * \brief Returns true if node represents the root of an if-else block
+ * \param[in] node The node that will be checked as the root of if-else block
+ * \param[in] preds Map of {key, list(key)} where the list contain the
+ * predecessors id for the current node
+ * \return true if node is the root of an if-else block
+ */
+bool is_ifelse(const AbstractBlock* node,
                const std::unordered_map<int, std::unordered_set<int>>& preds);
 
 #endif //__ACYCLIC_BLOCK_HPP__

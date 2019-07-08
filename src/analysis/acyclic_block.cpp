@@ -143,17 +143,74 @@ const AbstractBlock* IfThenBlock::operator[](int index) const
 int IfThenBlock::print(std::ostream& ss) const
 {
     ss << "subgraph cluster_" << this->get_id() << " {\n";
-    ss << "dummy"<<id<<" [shape=point, style=invis];\n";
+    ss << "dummy" << id << " [shape=point, style=invis];\n";
     int last_node = 0;
-    if(head->get_type()==BASIC && then->get_type() == BASIC)
+    if(head->get_type() == BASIC && then->get_type() == BASIC)
     {
-        ss << head->get_id() <<" -> "<<then->get_id()<<";\n";
-        ss << head->get_id() <<" -> dummy"<<id<<" [style=dashed];\n";
-        ss << then->get_id() <<" -> dummy"<<id<<" [style=dashed];\n";
+        ss << head->get_id() << " -> " << then->get_id() << ";\n";
+        ss << head->get_id() << " -> dummy" << id << " [style=dashed];\n";
+        ss << then->get_id() << " -> dummy" << id << " [style=dashed];\n";
         last_node = then->get_id();
     }
-    //TODO: add additional cases
+    // TODO: add additional cases
     ss << "label = \"If-Then\";\n}\n";
+    return last_node;
+}
+
+IfElseBlock::IfElseBlock(int id, const AbstractBlock* ifb,
+                         const AbstractBlock* thenb, const AbstractBlock* elseb)
+    : AbstractBlock(id), head(ifb), then(thenb), ellse(elseb)
+{
+}
+
+IfElseBlock::~IfElseBlock()
+{
+    delete ellse;
+    delete then;
+    delete head;
+}
+
+BlockType IfElseBlock::get_type() const
+{
+    return BlockType::IF_ELSE;
+}
+
+int IfElseBlock::size() const
+{
+    return 3;
+}
+
+const AbstractBlock* IfElseBlock::operator[](int index) const
+{
+    if(index == 0)
+    {
+        return head;
+    }
+    else if(index == 1)
+    {
+        return then;
+    }
+    else
+    {
+        return ellse;
+    }
+}
+
+int IfElseBlock::print(std::ostream& ss) const
+{
+    ss << "subgraph cluster_" << this->get_id() << " {\n";
+    ss << "dummy" << id << " [shape=point, style=invis];\n";
+    int last_node = 0;
+    if(head->get_type() == BASIC && then->get_type() == BASIC)
+    {
+        ss << head->get_id() << " -> " << then->get_id() << ";\n";
+        ss << head->get_id() << " -> " << ellse->get_id() << ";\n";
+        ss << then->get_id() << " -> dummy" << id << " [style=dashed];\n";
+        ss << ellse->get_id() << " -> dummy" << id << " [style=dashed];\n";
+        last_node = then->get_id();
+    }
+    // TODO: add additional cases
+    ss << "label = \"If-Else\";\n}\n";
     return last_node;
 }
 
@@ -205,6 +262,24 @@ bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
             *then_node = cond;
             return (cond->get_out_edges() == 1) &&
                    (preds.find(cond->get_id())->second.size() == 1);
+        }
+    }
+    return false;
+}
+
+bool is_ifelse(const AbstractBlock* node,
+               const std::unordered_map<int, std::unordered_set<int>>& preds)
+{
+    if(node->get_out_edges() == 2)
+    {
+        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+        const AbstractBlock* next = bb->get_next();
+        const AbstractBlock* cond = bb->get_cond();
+        if(next->get_out_edges() == 1 && cond->get_out_edges() == 1)
+        {
+            return (preds.find(next->get_id())->second.size() == 1) &&
+                   (preds.find(cond->get_id())->second.size() == 1) &&
+                   next->get_next() == cond->get_next();
         }
     }
     return false;

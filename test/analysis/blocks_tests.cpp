@@ -208,3 +208,33 @@ TEST(IfThenBlock, access)
     EXPECT_EQ(ift[1], b1);
     delete b2;
 }
+
+TEST(IfElseBlock, type)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    IfElseBlock ift(3, b0, b1, b2);
+    EXPECT_EQ(ift.get_type(), BlockType::IF_ELSE);
+}
+
+TEST(IfElseBlock, size)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    IfElseBlock ift(3, b0, b1, b2);
+    EXPECT_EQ(ift.size(), 3);
+}
+
+TEST(IfElseBlock, access)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    IfElseBlock ift(3, b0, b1, b2);
+    ASSERT_EQ(ift.size(), 3);
+    EXPECT_EQ(ift[0], b0);
+    EXPECT_EQ(ift[1], b1);
+    EXPECT_EQ(ift[2], b2);
+}
