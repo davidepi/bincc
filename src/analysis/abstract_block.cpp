@@ -51,7 +51,8 @@ void AbstractBlock::replace_if_match(const AbstractBlock* match,
     }
 }
 
-int AbstractBlock::print(std::ostream& ss) const
+std::ostream& AbstractBlock::print(std::ostream& ss) const
 {
-    return id;
+    ss << id << ";\n";
+    return ss;
 }

@@ -125,7 +125,6 @@ TEST(ControlFlowGraph, dfst)
     cfg.set_next(2, 4);
     cfg.set_next(4, 1);
     cfg.set_conditional(4, 7);
-    cfg.to_file("/home/davide/Desktop/test.dot");
 
     std::queue<const BasicBlock*> postorder = cfg.dfst();
     int expected[8] = {7, 6, 5, 4, 3, 2, 1, 0};

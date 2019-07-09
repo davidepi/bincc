@@ -20,7 +20,7 @@ TEST(ControlFlowStructure, sequence)
     // 0 -> 1 -> 2 -> 3 -> 4
     ControlFlowGraph cfg(5);
     ControlFlowStructure cfs;
-    cfs.build(cfg.root(), cfg.nodes_no());
+    cfs.build(cfg);
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -44,7 +44,7 @@ TEST(ControlFlowStructure, sequence_conditional)
     cfg.set_next_null(2);
     cfg.set_conditional(2, 3);
     ControlFlowStructure cfs;
-    cfs.build(cfg.root(), cfg.nodes_no());
+    cfs.build(cfg);
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -67,7 +67,7 @@ TEST(ControlFlowStructure, self_loop)
     ControlFlowGraph cfg(3);
     cfg.set_conditional(1, 1);
     ControlFlowStructure cfs;
-    cfs.build(cfg.root(), cfg.nodes_no());
+    cfs.build(cfg);
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -94,7 +94,7 @@ TEST(ControlFlowStructure, if_then_next)
     ControlFlowGraph cfg(5);
     cfg.set_conditional(1, 3);
     ControlFlowStructure cfs;
-    cfs.build(cfg.root(), cfg.nodes_no());
+    cfs.build(cfg);
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -125,7 +125,7 @@ TEST(ControlFlowStructure, if_then_cond)
     cfg.set_next(1, 3);
     cfg.set_conditional(1, 2);
     ControlFlowStructure cfs;
-    cfs.build(cfg.root(), cfg.nodes_no());
+    cfs.build(cfg);
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -147,6 +147,35 @@ TEST(ControlFlowStructure, if_then_cond)
     EXPECT_EQ(thenblock->get_id(), 2);
 }
 
+TEST(ControlFlowStructure, if_chain)
+{
+    // 0 -> 1 -> 2 -> 3
+    // 0 ~> 3, 1 ~> 3
+    ControlFlowGraph cfg(4);
+    cfg.set_conditional(0, 3);
+    cfg.set_conditional(1, 3);
+    ControlFlowStructure cfs;
+    cfs.build(cfg);
+    const AbstractBlock* structured = cfs.root();
+    ASSERT_NE(structured, nullptr);
+    ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
+    ASSERT_EQ(structured->size(), 2);
+    const AbstractBlock* head = (*structured)[0];
+    const AbstractBlock* tail = (*structured)[1];
+    ASSERT_EQ(head->get_type(), BlockType::IF_THEN);
+    ASSERT_EQ(head->size(), 2);
+    EXPECT_EQ(tail->get_type(), BlockType::BASIC);
+    EXPECT_EQ(tail->get_id(), 3);
+    const AbstractBlock* if01 = (*head)[0];
+    const AbstractBlock* if12 = (*head)[1];
+    EXPECT_EQ(if01->get_type(), BASIC);
+    EXPECT_EQ(if01->get_id(), 0);
+    EXPECT_EQ(if12->get_type(), IF_THEN);
+    EXPECT_EQ((*if12)[0]->get_id(), 1);
+    EXPECT_EQ((*if12)[1]->get_id(), 2);
+    cfs.to_file("/home/davide/Desktop/test2.dot", cfg);
+}
+
 TEST(ControlFlowStructure, if_else)
 {
     //`next` is the `then` block
@@ -156,7 +185,7 @@ TEST(ControlFlowStructure, if_else)
     cfg.set_next(2, 4);
     cfg.set_conditional(1, 3);
     ControlFlowStructure cfs;
-    cfs.build(cfg.root(), cfg.nodes_no());
+    cfs.build(cfg);
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);

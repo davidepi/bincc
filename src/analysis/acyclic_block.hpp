@@ -68,12 +68,12 @@ public:
 
     /**
      * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the last block of the cluster
+     * Then the method will return the updated stream
      * The stream will represent solely this block.
      * \param[in,out] ss The input stream
-     * \return The id of the last node of the block
+     * \return The updated stream
      */
-    int print(std::ostream& ss) const override;
+    std::ostream& print(std::ostream& ss) const override;
 
 private:
     // components of the queue
@@ -126,12 +126,12 @@ public:
 
     /**
      * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the last block of the cluster
+     * Then the method will return the updated stream
      * The stream will represent solely this block.
      * \param[in,out] ss The input stream
-     * \return The id of the `then` block
+     * \return The updated stream
      */
-    int print(std::ostream& ss) const override;
+    std::ostream& print(std::ostream& ss) const override;
 
     /**
      * \brief Returns the type of this block
@@ -192,12 +192,12 @@ public:
 
     /**
      * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the last block of the cluster
+     * Then the method will return the updated stream
      * The stream will represent solely this block.
      * \param[in,out] ss The input stream
-     * \return The id of the `then` block
+     * \return The updated stream
      */
-    int print(std::ostream& ss) const override;
+    std::ostream& print(std::ostream& ss) const override;
 
     /**
      * \brief Returns the type of this block

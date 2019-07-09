@@ -64,14 +64,12 @@ public:
 
     /**
      * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the last block of the cluster
-     * The stream will represent solely this block. In this case given that only
-     * one block composes the cluster, the function will return the id of the
-     * looping block
+     * Then the method will return the updated stream
+     * The stream will represent solely this block.
      * \param[in,out] ss The input stream
-     * \return The id of the last node of the block
+     * \return The updated stream
      */
-    int print(std::ostream& ss) const override;
+    std::ostream& print(std::ostream& ss) const override;
 
 private:
     // the looping block

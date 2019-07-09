@@ -60,57 +60,16 @@ const AbstractBlock* SequenceBlock::operator[](int index) const
     return components[index];
 }
 
-int SequenceBlock::print(std::ostream& ss) const
+std::ostream& SequenceBlock::print(std::ostream& ss) const
 {
     ss << "subgraph cluster_" << this->get_id() << " {\n";
     int size = components.size();
-    int last_node = 0;
-    if(!components.empty() && components[0]->get_type() != BASIC)
+    for(int i = 0; i < size; i++)
     {
-        // print first node.
-        // later on, only the second node of the pair will be printed to avoid
-        // repetitions. The id of the innermost node will be saved in saved_id
-        last_node = components[0]->print(ss);
-    }
-    // nodes are taken two by two. Only the second one is called recursively.
-    // the first one has already been called in the previous iteration
-    for(int i = 1; i < size; i++)
-    {
-        const AbstractBlock* node0 = components[i - 1];
-        const AbstractBlock* node1 = components[i];
-
-        // both are basic blocks, so print em
-        if(node0->get_type() == BASIC && node1->get_type() == BASIC)
-        {
-            ss << last_node << " -> " << node1->get_id() << ";\n";
-            last_node = node1->get_id();
-        }
-        // the first one is not basic, but has already been processed.
-        else if(node0->get_type() != BASIC && node1->get_type() == BASIC)
-        {
-            // print recursively and obtains the innermost id of the block
-            ss << last_node << " -> " << node1->get_id() << "[ltail=cluster_"
-               << node0->get_id() << "];\n";
-            last_node = node1->get_id();
-        }
-        else if(node0->get_type() == BASIC && node1->get_type() != BASIC)
-        {
-            int id1 = node1->print(ss);
-            ss << node0->get_id() << " -> " << id1 << "[lhead=cluster_"
-               << node1->get_id() << "];\n";
-            last_node = id1;
-        }
-        else
-        {
-            int id1 = node1->print(ss);
-            ss << last_node << " -> " << id1 << "[ltail=cluster_"
-               << node0->get_id() << ",lhead=cluster_" << node1->get_id()
-               << "];\n";
-            last_node = id1;
-        }
+        components[i]->print(ss);
     }
     ss << "label = \"Sequence\";\n}\n";
-    return last_node;
+    return ss;
 }
 
 BlockType IfThenBlock::get_type() const
@@ -140,21 +99,13 @@ const AbstractBlock* IfThenBlock::operator[](int index) const
     return index == 0 ? head : then;
 }
 
-int IfThenBlock::print(std::ostream& ss) const
+std::ostream& IfThenBlock::print(std::ostream& ss) const
 {
     ss << "subgraph cluster_" << this->get_id() << " {\n";
-    ss << "dummy" << id << " [shape=point, style=invis];\n";
-    int last_node = 0;
-    if(head->get_type() == BASIC && then->get_type() == BASIC)
-    {
-        ss << head->get_id() << " -> " << then->get_id() << ";\n";
-        ss << head->get_id() << " -> dummy" << id << " [style=dashed];\n";
-        ss << then->get_id() << " -> dummy" << id << " [style=dashed];\n";
-        last_node = then->get_id();
-    }
-    // TODO: add additional cases
-    ss << "label = \"If-Then\";\n}\n";
-    return last_node;
+    head->print(ss);
+    then->print(ss);
+    ss << "label=\"If-Then\";\n}\n";
+    return ss;
 }
 
 IfElseBlock::IfElseBlock(int id, const AbstractBlock* ifb,
@@ -196,22 +147,14 @@ const AbstractBlock* IfElseBlock::operator[](int index) const
     }
 }
 
-int IfElseBlock::print(std::ostream& ss) const
+std::ostream& IfElseBlock::print(std::ostream& ss) const
 {
     ss << "subgraph cluster_" << this->get_id() << " {\n";
-    ss << "dummy" << id << " [shape=point, style=invis];\n";
-    int last_node = 0;
-    if(head->get_type() == BASIC && then->get_type() == BASIC)
-    {
-        ss << head->get_id() << " -> " << then->get_id() << ";\n";
-        ss << head->get_id() << " -> " << ellse->get_id() << ";\n";
-        ss << then->get_id() << " -> dummy" << id << " [style=dashed];\n";
-        ss << ellse->get_id() << " -> dummy" << id << " [style=dashed];\n";
-        last_node = then->get_id();
-    }
-    // TODO: add additional cases
-    ss << "label = \"If-Else\";\n}\n";
-    return last_node;
+    head->print(ss);
+    then->print(ss);
+    ellse->print(ss);
+    ss << "label=\"If-Else\";\n}\n";
+    return ss;
 }
 
 bool is_sequence(const AbstractBlock* node,

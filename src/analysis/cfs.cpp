@@ -103,20 +103,21 @@ static void postorder_visit(const AbstractBlock* node, std::queue<int>* list,
     list->push(node->get_id());
 }
 
-void ControlFlowStructure::build(const BasicBlock* root, int nodes)
+void ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
     std::unordered_map<int, AbstractBlock*> bmap;           // pair <id,block>
     std::unordered_map<int, std::unordered_set<int>> preds; // pair <id, preds>
     std::unordered_set<const AbstractBlock*> visited;
-    deep_copy(root, &bmap, &preds, &visited);
+    deep_copy(cfg.root(), &bmap, &preds, &visited);
     visited.clear();
-    int next_id = nodes;
+    const int NODES = cfg.nodes_no();
+    int next_id = NODES;
     head = bmap.find(0)->second;
 
     // remove self loops from predecessors, otherwise a new backlink will be
     // added everytime when replacing the parents while resolving a self-loop
-    for(int i = 0; i < nodes; i++)
+    for(int i = 0; i < NODES; i++)
     {
         preds.find(i)->second.erase(i);
     }
@@ -156,8 +157,7 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
             {
                 const BasicBlock* bb = static_cast<const BasicBlock*>(node);
                 then = bb->get_next();
-                tmp = new IfElseBlock(next_id, node, then,
-                                      bb->get_cond());
+                tmp = new IfElseBlock(next_id, node, then, bb->get_cond());
                 tmp->set_next(then->get_next());
                 // remove the else from the parents of the next block
                 // otherwise it will have TWO parents and will never be merged
@@ -222,32 +222,28 @@ void ControlFlowStructure::build(const BasicBlock* root, int nodes)
     }
 }
 
-std::string ControlFlowStructure::to_dot() const
-{
-    std::stringstream stream;
-    stream << *this;
-    return stream.str();
-}
-
-std::ostream& operator<<(std::ostream& stream, const ControlFlowStructure& cfs)
-{
-    stream << "digraph {\ncompound=true;\n";
-    cfs.head->print(stream);
-    stream << "}\n";
-    return stream;
-}
-
-void ControlFlowStructure::to_file(const char* filename) const
+void ControlFlowStructure::to_file(const char* filename,
+                                   const ControlFlowGraph& cfg) const
 {
     std::ofstream fout;
     fout.open(filename, std::ios::out);
     if(fout.is_open())
     {
-        fout << *this;
+        fout << to_dot(cfg);
         fout.close();
     }
     else
     {
         std::cerr << "Could not write file" << filename << std::endl;
     }
+}
+
+std::string ControlFlowStructure::to_dot(const ControlFlowGraph& cfg) const
+{
+    std::stringstream ss;
+    std::string cfg_dot = cfg.to_dot();
+    ss << cfg_dot.substr(0, cfg_dot.find_last_of('}'));
+    head->print(ss);
+    ss << "}";
+    return ss.str();
 }

@@ -136,13 +136,12 @@ public:
 
     /**
      * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the last block of the cluster
-     * The stream will represent solely this block. In this case it
-     * will do nothing and return the block id
+     * Then the method will return the updated stream. In this implementation,
+     * this method will print just the node number followed by a semicolon
      * \param[in,out] ss The input stream
-     * \return The id of the last node of the block
+     * \return The updated stream
      */
-    virtual int print(std::ostream& ss) const;
+    virtual std::ostream& print(std::ostream& ss) const;
 
 protected:
     // id of the BB
