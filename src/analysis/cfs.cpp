@@ -103,6 +103,65 @@ static void postorder_visit(const AbstractBlock* node, std::queue<int>* list,
     list->push(node->get_id());
 }
 
+static void DEBUG_PREDS(std::unordered_map<int, std::unordered_set<int>> preds)
+{
+    //TODO: REMOVEME
+#ifndef DNEBUG
+    std::cout <<"Predecessor list: \n";
+    for(auto& parents : preds)
+    {
+        std::cout << "\t" << parents.first << " -> [";
+        for(int parent : parents.second)
+        {
+            std::cout<<parent<<",";
+        }
+        std::cout<<"]\n";
+    }
+    std::cout<<std::flush;
+#endif
+}
+
+/**
+ * \brief Update the predecessor list
+ * Replace value of old block composing an aggregator with the new aggregator
+ * id, remove the predecessors of the aggregated nodes
+ * \param[in] added The newly created aggregator
+ * \param[in,out] preds Predecessors map
+ */
+static void update_pred(const AbstractBlock* added,
+                        std::unordered_map<int, std::unordered_set<int>>* preds)
+{
+    // insert the entry point list as predecessor for the newly created node
+    const AbstractBlock* oep = (*added)[0];
+    std::unordered_set<int> oep_preds = preds->find(oep->get_id())->second;
+    preds->insert({{added->get_id(), std::move(oep_preds)}});
+
+    std::unordered_set<int>* next_preds = nullptr;
+    if(added->get_next() != nullptr)
+    {
+        next_preds = &(preds->find(added->get_next()->get_id())->second);
+    }
+
+    // for every member of the newly created abstract block
+    for(int i = 0; i < added->size(); i++)
+    {
+        // destroy its predecessor list (to avoid inconsistent states)
+        int member_id = (*added)[i]->get_id();
+        preds->find(member_id)->second.clear();
+        // if in the predecessors of the next block there is the current member,
+        // it is replaced it with the new block id.
+        // i.e. if the situation was 1 -> 2 -> 3 and we replace 2 with 4, on the
+        // predecessors of the follower(3), the member (2) it is now replaced
+        // with 4
+        if(next_preds != nullptr &&
+           next_preds->find(member_id) != next_preds->end())
+        {
+            next_preds->erase(member_id);
+            next_preds->insert(added->get_id());
+        }
+    }
+}
+
 void ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
@@ -147,11 +206,6 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
             {
                 tmp = new IfThenBlock(next_id, node, then);
                 tmp->set_next(then->get_next());
-                // remove the root from the parents of the next block
-                // otherwise it will have TWO parents and will never be merged
-                // as sequence
-                preds.find(then->get_next()->get_id())
-                    ->second.erase(node->get_id());
             }
             else if(is_ifelse(node, preds))
             {
@@ -159,11 +213,6 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 then = bb->get_next();
                 tmp = new IfElseBlock(next_id, node, then, bb->get_cond());
                 tmp->set_next(then->get_next());
-                // remove the else from the parents of the next block
-                // otherwise it will have TWO parents and will never be merged
-                // as sequence
-                preds.find(then->get_next()->get_id())
-                    ->second.erase(bb->get_cond()->get_id());
             }
             else if(is_loop(node, &then))
             {
@@ -195,9 +244,6 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
                         tmp->set_next(next);
                     }
                 }
-                // remove the tail from parents of head or this will generate a
-                // lot of cycles
-                preds.find(in->get_id())->second.erase(tail->get_id());
             }
             else if(is_sequence(node, preds))
             {
@@ -221,8 +267,10 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
             {
                 continue;
             }
+
             modified = true;
             bmap.insert({{next_id, tmp}});
+
             // change edges of graph (remap predecessor to address new block
             // instead of the old basic block)
             auto entry = preds.find(node->get_id());
@@ -231,15 +279,11 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 AbstractBlock* parent = bmap.find(parent_index)->second;
                 parent->replace_if_match(node, tmp);
             }
-            preds.insert({{next_id, entry->second}});
-            // now remove the current node from the predecessor of the next.
-            // and add the newly created node as predecessor
-            if(next != nullptr)
-            {
-                auto parents = preds.find(next->get_id())->second;
-                parents.erase(node->get_id());
-                parents.insert(next_id);
-            }
+            std::cout<<"Adding "<<tmp->get_id()<<"\n";
+            DEBUG_PREDS(preds);
+            update_pred(tmp, &preds); // udpate predecessor list
+            std::cout<<"Then:\n"<<std::endl;
+            DEBUG_PREDS(preds);
             next_id++;
             // account for replacement of root
             if(node == head)

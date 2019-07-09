@@ -232,3 +232,18 @@ TEST(ControlFlowStructure, whileb)
     EXPECT_EQ(head->get_id(), 1);
     EXPECT_EQ(tail->get_id(), 2);
 }
+
+//test implemented in order to replicate and fix a bug
+
+TEST(ControlFlowStructure, if_else_abstract)
+{
+    ControlFlowGraph cfg(4);
+    cfg.set_conditional(0,2);
+    cfg.set_conditional(1,1);
+    cfg.set_conditional(2,2);
+    cfg.set_next(1,3);
+    cfg.set_next(5, 7);
+    ControlFlowStructure cfs;
+    cfs.build(cfg);
+    EXPECT_EQ(cfs.root()->get_type(), BlockType::SEQUENCE);
+}
