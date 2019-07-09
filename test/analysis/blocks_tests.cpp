@@ -238,3 +238,36 @@ TEST(IfElseBlock, access)
     EXPECT_EQ(ift[1], b1);
     EXPECT_EQ(ift[2], b2);
 }
+
+TEST(WhileBlock, type)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    b0->set_next(b1);
+    b1->set_next(b0);
+    WhileBlock wb(2, b0, b1);
+    EXPECT_EQ(wb.get_type(), BlockType::WHILE);
+}
+
+TEST(WhileBlock, size)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    b0->set_next(b1);
+    b1->set_next(b0);
+    WhileBlock wb(2, b0, b1);
+    EXPECT_EQ(wb.size(), 2);
+}
+
+TEST(WhileBlock, access)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    b0->set_next(b1);
+    b1->set_next(b0);
+    WhileBlock wb(2, b0, b1);
+    const AbstractBlock* head = wb[0];
+    const AbstractBlock* tail = wb[1];
+    EXPECT_EQ(head->get_id(), 0);
+    EXPECT_EQ(tail->get_id(), 1);
+}

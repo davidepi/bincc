@@ -131,7 +131,7 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
         bool modified = false;
         while(!list.empty())
         {
-            AbstractBlock* node = bmap.find(list.front())->second;
+            const AbstractBlock* node = bmap.find(list.front())->second;
             list.pop();
             const AbstractBlock* next = node->get_next();
             AbstractBlock* tmp;
@@ -164,6 +164,40 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 // as sequence
                 preds.find(then->get_next()->get_id())
                     ->second.erase(bb->get_cond()->get_id());
+            }
+            else if(is_loop(node, &then))
+            {
+                const AbstractBlock* in;
+                const AbstractBlock* tail;
+                if(node->get_id() < then->get_id())
+                {
+                    in = node;
+                    tail = then;
+                }
+                else
+                {
+                    in = then;
+                    tail = node;
+                    node = then;
+                }
+                if(in->get_out_edges() == 2) // while
+                {
+                    const BasicBlock* bb = static_cast<const BasicBlock*>(in);
+                    tmp = new WhileBlock(next_id, bb, tail);
+                    if(bb->get_next() == tail)
+                    {
+                        next = bb->get_cond();
+                        tmp->set_next(next);
+                    }
+                    else
+                    {
+                        next = bb->get_next();
+                        tmp->set_next(next);
+                    }
+                }
+                // remove the tail from parents of head or this will generate a
+                // lot of cycles
+                preds.find(in->get_id())->second.erase(tail->get_id());
             }
             else if(is_sequence(node, preds))
             {

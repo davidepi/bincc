@@ -21,7 +21,9 @@ enum BlockType
     // block is a if-then block
     IF_THEN,
     // block is an if-else block
-    IF_ELSE
+    IF_ELSE,
+    // block is a while block
+    WHILE,
 };
 
 /**

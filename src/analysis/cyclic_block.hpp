@@ -76,11 +76,54 @@ private:
     const BasicBlock* looping_block;
 };
 
+class WhileBlock : public AbstractBlock
+{
+public:
+    WhileBlock(int id, const BasicBlock* head, const AbstractBlock* tail);
+    ~WhileBlock() override;
+    BlockType get_type() const override;
+
+    /**
+     * \brief Returns the number of elements composing the while (always 2)
+     * \return The number 2
+     */
+    int size() const override;
+
+    /**
+     * \brief Returns the i-th element contained in the loop
+     * However, given that the self-loop composed by a single element,
+     * \param[in] index
+     * \return The loop head if index is 0, the tail otherwise
+     */
+    const AbstractBlock* operator[](int index) const override;
+
+    /**
+     * \brief Print this block in Graphviz dot format using the input stream
+     * Then the method will return the updated stream
+     * The stream will represent solely this block.
+     * \param[in,out] ss The input stream
+     * \return The updated stream
+     */
+    std::ostream& print(std::ostream& ss) const override;
+
+private:
+    const BasicBlock* head;
+    const AbstractBlock* tail;
+};
+
 /**
  * \brief Returns true if the node is a self-looping node
  * \param[in] node The node that will be checked
  * \return true if node is self looping
  */
 bool is_self_loop(const AbstractBlock* node);
+
+/**
+ * \brief Returns true if the node is a while, do-while or nat-while node
+ * \param[in] node The node that will be checked
+ * \param[out] next The next block inside the loop
+ * \return true if node is a loop
+ */
+bool is_loop(const AbstractBlock* node, const AbstractBlock** next);
 
 #endif //__CYCLIC_BLOCK_HPP__

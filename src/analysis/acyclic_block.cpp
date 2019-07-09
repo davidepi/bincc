@@ -5,6 +5,7 @@
 #include "acyclic_block.hpp"
 #include "basic_block.hpp"
 #include <cassert>
+#include <iostream>
 
 // The SequenceBlock::delete_list containg elements on which `delete` should be
 // called. This because if the components of the sequence are other sequences,
