@@ -43,6 +43,7 @@ TEST(ControlFlowStructure, sequence_conditional)
     ControlFlowGraph cfg(5);
     cfg.set_next_null(2);
     cfg.set_conditional(2, 3);
+    cfg.finalize();
     ControlFlowStructure cfs;
     cfs.build(cfg);
     const AbstractBlock* structured = cfs.root();

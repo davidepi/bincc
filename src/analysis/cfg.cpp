@@ -180,9 +180,20 @@ void ControlFlowGraph::finalize()
     std::unordered_set<int> exit_nodes;
     for(unsigned int i = 0; i < nodes; i++)
     {
-        if(blocks[i].get_next() == nullptr && blocks[i].get_cond() == nullptr)
+        if(blocks[i].get_next() == nullptr)
         {
-            exit_nodes.insert(i);
+            if(blocks[i].get_cond() == nullptr)
+            {
+                // return node
+                exit_nodes.insert(i);
+            }
+            else
+            {
+                // node has conditional branch but no next branch... no sense
+                // swap 'em
+                blocks[i].set_next(blocks[i].get_cond());
+                blocks[i].set_cond(nullptr);
+            }
         }
     }
 

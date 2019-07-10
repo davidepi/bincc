@@ -6,7 +6,6 @@
 #define __ACYCLIC_BLOCK_HPP__
 
 #include "abstract_block.hpp"
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -222,7 +221,7 @@ private:
  * \return true if node and its successor forms a sequence
  */
 bool is_sequence(const AbstractBlock* node,
-                 const std::unordered_map<int, std::unordered_set<int>>& preds);
+                 const std::vector<std::unordered_set<int>>* preds);
 
 /**
  * \brief Returns true if node represents the root of an if-then block
@@ -233,7 +232,7 @@ bool is_sequence(const AbstractBlock* node,
  * \return true if node is the root of an if-then block
  */
 bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
-               const std::unordered_map<int, std::unordered_set<int>>& preds);
+               const std::vector<std::unordered_set<int>>* preds);
 
 /**
  * \brief Returns true if node represents the root of an if-else block
@@ -243,6 +242,6 @@ bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
  * \return true if node is the root of an if-else block
  */
 bool is_ifelse(const AbstractBlock* node,
-               const std::unordered_map<int, std::unordered_set<int>>& preds);
+               const std::vector<std::unordered_set<int>>* preds);
 
 #endif //__ACYCLIC_BLOCK_HPP__

@@ -10,8 +10,8 @@
 #include <iostream>
 #include <queue>
 #include <sstream>
-#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 ControlFlowStructure::~ControlFlowStructure()
 {
@@ -27,25 +27,27 @@ const AbstractBlock* ControlFlowStructure::root() const
  * \brief Perform a deep copy of the CFG and build the predecessor list and the
  * map {id, block}
  * \param[in] src starting node of the CFG
- * \param[out] bmap Map containing pairs {id, block} with the newly constructed
- * blocks
- * \param[out] pred List of predecessor in form {current id, array of
- * ids} where array of ids is a set containing the id of the predecessor for
- * each key
+ * \param[out] bmap Vector containing pairs {id, block} with the newly
+ * constructed blocks. Given that nodes are indexed subsequentially, the index
+ * represents the key. This should be resized to the correct size!
+ * \param[out] pred List of predecessor in form {current id, array of ids} where
+ * array of ids is a set containing the id of the predecessor for each key. As
+ * for the bmap parameter the index of the vector is the id of the node. Also
+ * this, should be resized!
  * \param[in,out] visited Array containing the already visited nodes
  * \return The newly created block
  */
 static AbstractBlock*
-deep_copy(const BasicBlock* src, std::unordered_map<int, AbstractBlock*>* bmap,
-          std::unordered_map<int, std::unordered_set<int>>* pred,
+deep_copy(const BasicBlock* src, std::vector<AbstractBlock*>* bmap,
+          std::vector<std::unordered_set<int>>* pred,
           std::unordered_set<const AbstractBlock*>* visited)
 {
     visited->insert(src);
     // create the node
     int current_id = src->get_id();
     BasicBlock* created = new BasicBlock(current_id);
-    bmap->insert({{current_id, created}});
-    pred->insert({{current_id, std::move(std::unordered_set<int>())}});
+    (*bmap)[current_id] = created;
+    (*pred)[current_id] = std::move(std::unordered_set<int>());
     // resolve the children
     const BasicBlock* next = static_cast<const BasicBlock*>(src->get_next());
     const BasicBlock* cond = static_cast<const BasicBlock*>(src->get_cond());
@@ -56,8 +58,8 @@ deep_copy(const BasicBlock* src, std::unordered_map<int, AbstractBlock*>* bmap,
             deep_copy(next, bmap, pred, visited);
         }
         int next_id = next->get_id();
-        pred->find(next_id)->second.insert(current_id);
-        created->set_next(bmap->find(next_id)->second);
+        (*pred)[next_id].insert(current_id);
+        created->set_next((*bmap)[next_id]);
     }
     if(cond != nullptr)
     {
@@ -66,8 +68,8 @@ deep_copy(const BasicBlock* src, std::unordered_map<int, AbstractBlock*>* bmap,
             deep_copy(cond, bmap, pred, visited);
         }
         int cond_id = cond->get_id();
-        pred->find(cond_id)->second.insert(current_id);
-        created->set_cond(bmap->find(cond_id)->second);
+        (*pred)[cond_id].insert(current_id);
+        created->set_cond((*bmap)[cond_id]);
     }
     return created;
 }
@@ -103,21 +105,22 @@ static void postorder_visit(const AbstractBlock* node, std::queue<int>* list,
     list->push(node->get_id());
 }
 
-static void DEBUG_PREDS(std::unordered_map<int, std::unordered_set<int>> preds)
+static void DEBUG_PREDS(std::vector<std::unordered_set<int>>* preds)
 {
-    //TODO: REMOVEME
+    // TODO: REMOVEME LATER
 #ifndef DNEBUG
-    std::cout <<"Predecessor list: \n";
-    for(auto& parents : preds)
+    std::cout << "Predecessor list: \n";
+    int size = preds->size();
+    for(int i = 0; i < size; i++)
     {
-        std::cout << "\t" << parents.first << " -> [";
-        for(int parent : parents.second)
+        std::cout << "\t" << i << " -> [";
+        for(int parent : (*preds)[i])
         {
-            std::cout<<parent<<",";
+            std::cout << parent << ",";
         }
-        std::cout<<"]\n";
+        std::cout << "]\n";
     }
-    std::cout<<std::flush;
+    std::cout << std::flush;
 #endif
 }
 
@@ -126,20 +129,21 @@ static void DEBUG_PREDS(std::unordered_map<int, std::unordered_set<int>> preds)
  * Replace value of old block composing an aggregator with the new aggregator
  * id, remove the predecessors of the aggregated nodes
  * \param[in] added The newly created aggregator
- * \param[in,out] preds Predecessors map
+ * \param[in,out] preds Predecessors map (but it is an array)
  */
 static void update_pred(const AbstractBlock* added,
-                        std::unordered_map<int, std::unordered_set<int>>* preds)
+                        std::vector<std::unordered_set<int>>* preds)
 {
-    // insert the entry point list as predecessor for the newly created node
+    // insert the entry point list as predecessor for the newly created
+    // node. This is here and not in update_preds so the intent is clear
     const AbstractBlock* oep = (*added)[0];
-    std::unordered_set<int> oep_preds = preds->find(oep->get_id())->second;
-    preds->insert({{added->get_id(), std::move(oep_preds)}});
+    preds->push_back(std::move((*preds)[oep->get_id()]));
 
+    // get predecessors list for the newly created abstract block
     std::unordered_set<int>* next_preds = nullptr;
     if(added->get_next() != nullptr)
     {
-        next_preds = &(preds->find(added->get_next()->get_id())->second);
+        next_preds = &((*preds)[added->get_next()->get_id()]);
     }
 
     // for every member of the newly created abstract block
@@ -147,7 +151,7 @@ static void update_pred(const AbstractBlock* added,
     {
         // destroy its predecessor list (to avoid inconsistent states)
         int member_id = (*added)[i]->get_id();
-        preds->find(member_id)->second.clear();
+        (*preds)[member_id].clear();
         // if in the predecessors of the next block there is the current member,
         // it is replaced it with the new block id.
         // i.e. if the situation was 1 -> 2 -> 3 and we replace 2 with 4, on the
@@ -165,20 +169,20 @@ static void update_pred(const AbstractBlock* added,
 void ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
-    std::unordered_map<int, AbstractBlock*> bmap;           // pair <id,block>
-    std::unordered_map<int, std::unordered_set<int>> preds; // pair <id, preds>
+    std::vector<AbstractBlock*> bmap(cfg.nodes_no());           //[id] = block>
+    std::vector<std::unordered_set<int>> preds(cfg.nodes_no()); // [id] = preds
     std::unordered_set<const AbstractBlock*> visited;
     deep_copy(cfg.root(), &bmap, &preds, &visited);
     visited.clear();
     const int NODES = cfg.nodes_no();
     int next_id = NODES;
-    head = bmap.find(0)->second;
+    head = bmap[0];
 
     // remove self loops from predecessors, otherwise a new backlink will be
     // added everytime when replacing the parents while resolving a self-loop
     for(int i = 0; i < NODES; i++)
     {
-        preds.find(i)->second.erase(i);
+        preds[i].erase(i);
     }
 
     // iterate and resolve
@@ -190,7 +194,7 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
         bool modified = false;
         while(!list.empty())
         {
-            const AbstractBlock* node = bmap.find(list.front())->second;
+            const AbstractBlock* node = bmap[list.front()];
             list.pop();
             const AbstractBlock* next = node->get_next();
             AbstractBlock* tmp;
@@ -202,12 +206,12 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
                                         static_cast<const BasicBlock*>(node));
                 tmp->set_next(next);
             }
-            else if(is_ifthen(node, &then, preds))
+            else if(is_ifthen(node, &then, &preds))
             {
                 tmp = new IfThenBlock(next_id, node, then);
                 tmp->set_next(then->get_next());
             }
-            else if(is_ifelse(node, preds))
+            else if(is_ifelse(node, &preds))
             {
                 const BasicBlock* bb = static_cast<const BasicBlock*>(node);
                 then = bb->get_next();
@@ -245,22 +249,13 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
                     }
                 }
             }
-            else if(is_sequence(node, preds))
+            else if(is_sequence(node, &preds))
             {
-                // nominal case
-                if(next != nullptr)
-                {
-                    tmp = new SequenceBlock(next_id, node, next);
-                    next = next->get_next();
-                }
-                // conditional sequence
-                else
-                {
-                    const AbstractBlock* cond =
-                        static_cast<const BasicBlock*>(node)->get_cond();
-                    tmp = new SequenceBlock(next_id, node, cond);
-                    next = cond->get_next();
-                }
+                // the sequence cannot be conditional: the cfg finalize() step
+                // take care of that. In any other case anything else with more
+                // than one exit has already been resolved
+                tmp = new SequenceBlock(next_id, node, next);
+                next = next->get_next();
                 tmp->set_next(next);
             }
             else
@@ -269,21 +264,23 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
             }
 
             modified = true;
-            bmap.insert({{next_id, tmp}});
+            // this always push at bmap[next_index], without undefined behaviour
+            bmap.push_back(tmp);
+            std::cout << "Adding " << tmp->get_id() << "\n";
+            DEBUG_PREDS(&preds);
 
             // change edges of graph (remap predecessor to address new block
             // instead of the old basic block)
-            auto entry = preds.find(node->get_id());
-            for(int parent_index : entry->second)
+            for(int parent_index : preds[node->get_id()])
             {
-                AbstractBlock* parent = bmap.find(parent_index)->second;
+                AbstractBlock* parent = bmap[parent_index];
                 parent->replace_if_match(node, tmp);
             }
-            std::cout<<"Adding "<<tmp->get_id()<<"\n";
-            DEBUG_PREDS(preds);
-            update_pred(tmp, &preds); // udpate predecessor list
-            std::cout<<"Then:\n"<<std::endl;
-            DEBUG_PREDS(preds);
+
+            update_pred(tmp,
+                        &preds); // create new node and udpate predecessor list
+            std::cout << "Then:\n" << std::endl;
+            DEBUG_PREDS(&preds);
             next_id++;
             // account for replacement of root
             if(node == head)

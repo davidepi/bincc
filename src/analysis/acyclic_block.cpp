@@ -159,7 +159,7 @@ std::ostream& IfElseBlock::print(std::ostream& ss) const
 }
 
 bool is_sequence(const AbstractBlock* node,
-                 const std::unordered_map<int, std::unordered_set<int>>& preds)
+                 const std::vector<std::unordered_set<int>>* preds)
 {
     // conditions for a sequence:
     // - current node has only one successor node
@@ -168,25 +168,18 @@ bool is_sequence(const AbstractBlock* node,
     {
         // nominal case next is the correct node
         const AbstractBlock* next = node->get_next();
-        if(next != nullptr)
-        {
-            // return the number of parents for the next node
-            return preds.find(next->get_id())->second.size() == 1;
-        }
-        else
-        {
-            // if next is nullptr and there is ONE out edge means that the edge
-            // is the conditional one and the block is a BasicBlock
-            const BasicBlock* bb = static_cast<const BasicBlock*>(node);
-            const AbstractBlock* cond = bb->get_cond(); // never null
-            return preds.find(cond->get_id())->second.size() == 1;
-        }
+
+        // if there is only ONE out node it MUST be the next
+        assert(next != nullptr);
+
+        // return the number of parents for the next node
+        return (*preds)[next->get_id()].size() == 1;
     }
     return false;
 }
 
 bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
-               const std::unordered_map<int, std::unordered_set<int>>& preds)
+               const std::vector<std::unordered_set<int>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
@@ -198,21 +191,21 @@ bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
             // variant 0: next is the "then"
             *then_node = next;
             return (next->get_out_edges() == 1) &&
-                   (preds.find(next->get_id())->second.size() == 1);
+                   ((*preds)[next->get_id()].size() == 1);
         }
         else if(cond->get_next() == next)
         {
             // variant 1: cond is the "then"
             *then_node = cond;
             return (cond->get_out_edges() == 1) &&
-                   (preds.find(cond->get_id())->second.size() == 1);
+                   ((*preds)[cond->get_id()].size() == 1);
         }
     }
     return false;
 }
 
 bool is_ifelse(const AbstractBlock* node,
-               const std::unordered_map<int, std::unordered_set<int>>& preds)
+               const std::vector<std::unordered_set<int>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
@@ -221,8 +214,8 @@ bool is_ifelse(const AbstractBlock* node,
         const AbstractBlock* cond = bb->get_cond();
         if(next->get_out_edges() == 1 && cond->get_out_edges() == 1)
         {
-            return (preds.find(next->get_id())->second.size() == 1) &&
-                   (preds.find(cond->get_id())->second.size() == 1) &&
+            return ((*preds)[next->get_id()].size() == 1) &&
+                   ((*preds)[cond->get_id()].size() == 1) &&
                    next->get_next() == cond->get_next();
         }
     }
