@@ -6,10 +6,12 @@
 #include "acyclic_block.hpp"
 #include "cyclic_block.hpp"
 #include <cassert>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <queue>
 #include <sstream>
+#include <stack>
 #include <unordered_set>
 #include <vector>
 
@@ -122,6 +124,118 @@ static void DEBUG_PREDS(std::vector<std::unordered_set<int>>* preds)
     }
     std::cout << std::flush;
 #endif
+}
+
+/**
+ * \brief Strong connected components, recursive step
+ * For every array the array index is the node id
+ * \param[in] root root node of the graph
+ * \param[in,out] index array representing tarjan's index for every node
+ * \param[in,out] lowlink array representing backlinks indexes
+ * \param[in,out] onstack array tracking if the node is on the stack
+ * \param[in,out] stack Stack containing all the nodes of a scc
+ * \param[in,out] next_index Next index that will be assigned to a node
+ * \param[in,out] next_scc The next index that will be assigned to an scc
+ * \param[out] scc array reporting the scc index for every node
+ */
+void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
+            std::stack<int>* stack, int* next_index, int* next_scc, int* scc)
+{
+    // in the pseudocode of the tarjan paper is written v.index and v.lowlink...
+    // I don't want to change the class so arrays are used and this syntax with
+    // index[array] is exploited to get a similar wording as the paper
+    int v = root->get_id();
+    v[index] = *next_index;
+    v[lowlink] = *next_index;
+    *next_index = (*next_index) + 1;
+    stack->push(v);
+    v[onstack] = true;
+
+    const BasicBlock* successors[2];
+    successors[0] = static_cast<const BasicBlock*>(root->get_next());
+    successors[1] = static_cast<const BasicBlock*>(root->get_cond());
+    for(auto successor : successors)
+    {
+        if(successor == nullptr)
+        {
+            continue;
+        }
+
+        int w = successor->get_id();
+        if(w[index] == -1)
+        {
+            s_conn(successor, index, lowlink, onstack, stack, next_index,
+                   next_scc, scc);
+            v[lowlink] = std::min(v[lowlink], w[lowlink]);
+        }
+        else if(w[onstack])
+        {
+            v[lowlink] = std::min(v[lowlink], w[index]);
+        }
+    }
+
+    if(v[lowlink] == v[index])
+    {
+        int x;
+        do
+        {
+            x = stack->top();
+            stack->pop();
+            x[onstack] = false;
+            scc[x] = *next_scc;
+        } while(x != v);
+        (*next_scc) = (*next_scc) + 1;
+    }
+}
+
+/**
+ * \brief Return a bool array where every index represent if a node is a cycle
+ * \param[in] array The array containing all the graph nodes
+ * \param[in] nodes The number of nodes in the graph
+ * \return an array where each index correpond to the graph id and the value is
+ * a boolean representing whether that node is in a cycle or not
+ */
+static std::vector<bool> find_cycles(const BasicBlock** array, int nodes)
+{
+    std::stack<int> stack;
+    int* index = (int*)malloc(sizeof(int) * nodes);
+    memset(index, -1, sizeof(int) * nodes);
+    int* lowlink = (int*)malloc(sizeof(int) * nodes);
+    bool* onstack = (bool*)malloc(sizeof(bool) * nodes);
+    memset(onstack, 0, sizeof(bool) * nodes);
+    int* scc = (int*)malloc(sizeof(int) * nodes);
+    int next_scc = 0;
+    int next_int = 0;
+    for(int i = 0; i < nodes; i++)
+    {
+        int v = array[i]->get_id();
+        if(v[index] == -1)
+        {
+            s_conn(array[i], index, lowlink, onstack, &stack, &next_int,
+                   &next_scc, scc);
+        }
+    }
+
+    // now use counting sort to record IF a scc appears more than once
+    // recycle the index array for this
+
+    free(lowlink);
+    free(onstack);
+    memset(index, 0, sizeof(int) * nodes);
+    for(int i = 0; i < nodes; i++)
+    {
+        // array containing how many times an scc appears
+        index[scc[i]]++;
+    }
+    std::vector<bool> retval(nodes);
+    // now writes down the results in the array indexed by node
+    for(int i = 0; i < nodes; i++)
+    {
+        retval[i] = index[scc[i]] > 1;
+    }
+    free(scc);
+    free(index);
+    return std::move(retval);
 }
 
 /**
