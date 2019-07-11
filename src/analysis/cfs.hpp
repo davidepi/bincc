@@ -14,7 +14,7 @@ class ControlFlowStructure
 public:
     ControlFlowStructure() = default;
     ~ControlFlowStructure();
-    void build(const ControlFlowGraph& cfg);
+    bool build(const ControlFlowGraph& cfg);
     const AbstractBlock* root() const;
     ControlFlowStructure(const ControlFlowStructure&) = delete;
     ControlFlowStructure& operator=(const ControlFlowStructure&) = delete;
@@ -42,5 +42,7 @@ public:
 private:
     AbstractBlock* head{nullptr};
 };
+
+std::vector<int> dominator(const BasicBlock** array, int nodes);
 
 #endif //__CFS_HPP__

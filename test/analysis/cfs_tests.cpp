@@ -20,7 +20,7 @@ TEST(ControlFlowStructure, sequence)
     // 0 -> 1 -> 2 -> 3 -> 4
     ControlFlowGraph cfg(5);
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -45,7 +45,7 @@ TEST(ControlFlowStructure, sequence_conditional)
     cfg.set_conditional(2, 3);
     cfg.finalize();
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -68,7 +68,7 @@ TEST(ControlFlowStructure, self_loop)
     ControlFlowGraph cfg(3);
     cfg.set_conditional(1, 1);
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -95,7 +95,7 @@ TEST(ControlFlowStructure, if_then_next)
     ControlFlowGraph cfg(5);
     cfg.set_conditional(1, 3);
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -126,7 +126,7 @@ TEST(ControlFlowStructure, if_then_cond)
     cfg.set_next(1, 3);
     cfg.set_conditional(1, 2);
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -156,7 +156,7 @@ TEST(ControlFlowStructure, if_chain)
     cfg.set_conditional(0, 3);
     cfg.set_conditional(1, 3);
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -185,7 +185,7 @@ TEST(ControlFlowStructure, if_else)
     cfg.set_next(2, 4);
     cfg.set_conditional(1, 3);
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -217,7 +217,7 @@ TEST(ControlFlowStructure, whileb)
     cfg.set_next(2, 1);
     cfg.set_conditional(1, 3);
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -234,17 +234,51 @@ TEST(ControlFlowStructure, whileb)
     EXPECT_EQ(tail->get_id(), 2);
 }
 
-//test implemented in order to replicate and fix a bug
+TEST(ControlFlowStructure, impossible_CFG)
+{
+    ControlFlowGraph cfg(3);
+    cfg.set_next(0, 1);
+    cfg.set_conditional(0, 2);
+    cfg.set_next(1, 2);
+    cfg.set_next(2, 1);
+    ControlFlowStructure cfs;
+    EXPECT_FALSE(cfs.build(cfg));
+}
+
+// test implemented in order to replicate and fix a bug
 
 TEST(ControlFlowStructure, if_else_abstract)
 {
     ControlFlowGraph cfg(4);
-    cfg.set_conditional(0,2);
-    cfg.set_conditional(1,1);
-    cfg.set_conditional(2,2);
-    cfg.set_next(1,3);
+    cfg.set_conditional(0, 2);
+    cfg.set_conditional(1, 1);
+    cfg.set_conditional(2, 2);
+    cfg.set_next(1, 3);
     cfg.set_next(5, 7);
     ControlFlowStructure cfs;
-    cfs.build(cfg);
+    ASSERT_TRUE(cfs.build(cfg));
     EXPECT_EQ(cfs.root()->get_type(), BlockType::SEQUENCE);
+}
+
+TEST(Boh, dominator)
+{
+    BasicBlock** b = new BasicBlock*[5];
+    b[0] = new BasicBlock(0);
+    b[1] = new BasicBlock(1);
+    b[2] = new BasicBlock(2);
+    b[3] = new BasicBlock(3);
+    b[4] = new BasicBlock(4);
+
+    b[0]->set_next(b[1]);
+    b[1]->set_next(b[2]);
+    b[1]->set_cond(b[3]);
+    b[2]->set_next(b[4]);
+    b[3]->set_next(b[4]);
+
+    std::vector<int> dom = dominator((const BasicBlock**)b, 5);
+    EXPECT_EQ(dom[0],0);
+    EXPECT_EQ(dom[1],0);
+    EXPECT_EQ(dom[2],1);
+    EXPECT_EQ(dom[3],1);
+    EXPECT_EQ(dom[4],1);
 }

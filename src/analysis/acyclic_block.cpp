@@ -25,7 +25,7 @@ SequenceBlock::SequenceBlock(int id, const AbstractBlock* fst,
             for(int i = 0; i < size; i++)
             {
                 components.push_back((*p)[i]);
-            };
+            }
         }
         // if it was a single node just add the node
         else

@@ -154,7 +154,7 @@ void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
     const BasicBlock* successors[2];
     successors[0] = static_cast<const BasicBlock*>(root->get_next());
     successors[1] = static_cast<const BasicBlock*>(root->get_cond());
-    for(auto successor : successors)
+    for(const BasicBlock* successor : successors)
     {
         if(successor == nullptr)
         {
@@ -190,6 +190,8 @@ void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
 
 /**
  * \brief Return a bool array where every index represent if a node is a cycle
+ * The Tarjan's SCC algorithm is used underneath
+ * \complexity linear: O(v+e) where v are vertices and e edges of the CFG
  * \param[in] array The array containing all the graph nodes
  * \param[in] nodes The number of nodes in the graph
  * \return an array where each index correpond to the graph id and the value is
@@ -239,6 +241,193 @@ static std::vector<bool> find_cycles(const BasicBlock** array, int nodes)
 }
 
 /**
+ * \brief Depth first visit used in the Tarjan's dominator tree algorithm
+ * \param[in] node The current node being visited
+ * \param[in, out] semi Semidominator number. Check paper for more info
+ * \param[in, out] vertex array of node id's corresponding to numbering
+ * \param[in, out] parent array of parents in the generated spanning tree
+ * \param[in, out] pred array of predecessors in the original graph
+ * \param[in, out] next_num next number that will be assigned to a node
+ */
+static void preorder_visit(const BasicBlock* node, int* semi, int* vertex,
+                           int* parent, std::unordered_set<int>* pred,
+                           int* next_num)
+{
+    int v = node->get_id();
+    semi[v] = *next_num;
+    vertex[semi[v]] = v;
+    (*next_num) = (*next_num) + 1;
+    const BasicBlock* successors[2];
+    successors[0] = static_cast<const BasicBlock*>(node->get_next());
+    successors[1] = static_cast<const BasicBlock*>(node->get_cond());
+    for(const BasicBlock* successor : successors)
+    {
+        if(successor == nullptr)
+        {
+            continue;
+        }
+        int w = successor->get_id();
+        if(semi[w] == 0)
+        {
+            parent[w] = v;
+            preorder_visit(successor, semi, vertex, parent, pred, next_num);
+        }
+        pred[w].insert(v);
+    }
+}
+
+/**
+ * \brief COMPRESS function as presented in the Tarjan's dominator algorithm
+ */
+static void compress(int v, int* ancestor, int* semi, int* label)
+{
+    if(ancestor[ancestor[v]] != 0)
+    {
+        compress(ancestor[v], ancestor, semi, label);
+        if(semi[label[ancestor[v]]] < semi[label[v]])
+        {
+            label[v] = label[ancestor[v]];
+        }
+        ancestor[v] = ancestor[ancestor[v]];
+    }
+}
+
+/**
+ * \brief EVAL function as presented in the Tarjan's dominator algorithm
+ */
+static int eval(int v, int* ancestor, int* semi, int* label)
+{
+    if(ancestor[v] == 0)
+    {
+        return label[v];
+    }
+    else
+    {
+        compress(v, ancestor, semi, label);
+        if(semi[label[ancestor[v]]] >= semi[label[v]])
+        {
+            return label[v];
+        }
+        else
+        {
+            return label[ancestor[v]];
+        }
+    }
+}
+
+/**
+ * \brief LINK function as presented in the Tarjan's dominator algorithm
+ */
+static void link(int v, int w, int* size, int* label, const int* semi,
+                 int* child, int* parent)
+{
+    int s = w;
+    while(semi[label[w]] < semi[label[child[s]]])
+    {
+        if(size[s] + size[child[child[s]]] >= 2 * size[child[s]])
+        {
+            parent[child[s]] = s;
+            child[s] = child[child[s]];
+        }
+        else
+        {
+            size[child[s]] = size[s];
+            s = parent[s] = child[s];
+        }
+    }
+    label[s] = label[w];
+    size[v] = size[v] + size[w];
+    if(size[v] < 2 * size[w])
+    {
+        // swap
+        s ^= child[v];
+        s ^= child[v];
+        s ^= child[v];
+    }
+
+    while(s != 0)
+    {
+        parent[s] = v;
+        s = child[s];
+    }
+}
+
+/**
+ * \brief Find dominators using tarjan algorithm
+ * A full version of the pseudocode implemented here can be found in the paper
+ * by T.Lengauer and R.E.Tarjan named "A Fast Algorithm for Finding Dominators
+ * in a Flowgraph". The array used in this implementation as well as the
+ * variables names reflect the ones in the aforementioned paper
+ * \param[in] array The CFG for which the dominator tree will be calculated
+ * \param[in] nodes The total number of nodes in the CFG
+ */
+std::vector<int> dominator(const BasicBlock** array, int nodes)
+{
+    // super big contiguous array
+    int* cache_friendly_array = (int*)malloc(sizeof(int) * nodes * 7);
+    // other array extracted as part of the big one
+    int* parent = cache_friendly_array + (nodes * 0);
+    int* semi = cache_friendly_array + (nodes * 1);
+    int* vertex = cache_friendly_array + (nodes * 2);
+    int* ancestor = cache_friendly_array + (nodes * 3);
+    int* label = cache_friendly_array + (nodes * 4);
+    int* size = cache_friendly_array + (nodes * 5);
+    int* child = cache_friendly_array + (nodes * 6);
+    std::unordered_set<int>* pred = new std::unordered_set<int>[nodes];
+    std::unordered_set<int>* bucket = new std::unordered_set<int>[nodes];
+    std::vector<int> dom(nodes);
+
+    // step 1
+    int next_num = 0;
+    memset(semi, 0, sizeof(int) * nodes);
+    memset(ancestor, 0, sizeof(int) * nodes);
+    memset(child, 0, sizeof(int) * nodes);
+    for(int i = 0; i < nodes; i++)
+    {
+        label[i] = i;
+        size[i] = 1;
+    }
+    preorder_visit(array[0], semi, vertex, parent, pred, &next_num);
+
+    for(int n = nodes; n > 0; n--)
+    {
+        int w = vertex[n];
+        // step 2
+        for(int v : pred[w])
+        {
+            int u = eval(v, ancestor, semi, label);
+            semi[w] = semi[u] < semi[w] ? semi[u] : semi[w];
+        }
+        bucket[vertex[semi[w]]].insert(w);
+        link(parent[w], w, size, label, semi, child, parent);
+
+        // step 3
+        for(int v : bucket[parent[w]])
+        {
+            bucket[parent[w]].erase(v);
+            int u = eval(v, ancestor, semi, label);
+            dom[v] = semi[u] < semi[v] ? u : parent[w];
+        }
+    }
+
+    // step 4
+    for(int i = 1; i < nodes; i++)
+    {
+        int w = vertex[i];
+        if(dom[w] != vertex[semi[w]])
+        {
+            dom[w] = dom[dom[w]];
+        }
+    }
+    dom[0] = 0;
+
+    free(cache_friendly_array);
+    delete[] pred;
+    delete[] bucket;
+    return dom;
+}
+
+/**
  * \brief Update the predecessor list
  * Replace value of old block composing an aggregator with the new aggregator
  * id, remove the predecessors of the aggregated nodes
@@ -280,7 +469,7 @@ static void update_pred(const AbstractBlock* added,
     }
 }
 
-void ControlFlowStructure::build(const ControlFlowGraph& cfg)
+bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
     std::vector<AbstractBlock*> bmap(cfg.nodes_no());           //[id] = block>
@@ -406,9 +595,10 @@ void ControlFlowStructure::build(const ControlFlowGraph& cfg)
         // irreducible point
         if(!modified)
         {
-            break;
+            return false;
         }
     }
+    return true;
 }
 
 void ControlFlowStructure::to_file(const char* filename,
