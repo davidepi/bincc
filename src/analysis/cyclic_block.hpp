@@ -76,11 +76,37 @@ private:
     const BasicBlock* looping_block;
 };
 
+/**
+ * \brief Class representing a while loop
+ * This class represents a loop where the entry and the exit are represented by
+ * the same block, called head from here on. This while can be composed solely
+ * by two blocks, meaning that everything in between should be reduced
+ * beforehand. Breaks and continues should be handles manually before performing
+ * the reduction
+ */
 class WhileBlock : public AbstractBlock
 {
 public:
+    /**
+     * \brief Parametrized constructor
+     * \note The head and tail parameters will be inherited by this class
+     * \param[in] id The id that will be assigned to this block
+     * \param[in] head BasicBlock representing the head of the loop, containing
+     * both the entry point and the exit point
+     * \param[in] tail BasicBlock representing the tail of the loop, a block
+     * reachable only from the head and pointing only towards the head
+     */
     WhileBlock(int id, const BasicBlock* head, const AbstractBlock* tail);
+
+    /**
+     * \brief Destructor
+     */
     ~WhileBlock() override;
+
+    /**
+     * \brief Returns the type of this block
+     * \return BlockType::WHILE
+     */
     BlockType get_type() const override;
 
     /**
@@ -107,7 +133,9 @@ public:
     std::ostream& print(std::ostream& ss) const override;
 
 private:
+    // entry and exit point of the loop
     const BasicBlock* head;
+    // bottom point of the loop
     const AbstractBlock* tail;
 };
 
@@ -117,13 +145,5 @@ private:
  * \return true if node is self looping
  */
 bool is_self_loop(const AbstractBlock* node);
-
-/**
- * \brief Returns true if the node is a while, do-while or nat-while node
- * \param[in] node The node that will be checked
- * \param[out] next The next block inside the loop
- * \return true if node is a loop
- */
-bool is_loop(const AbstractBlock* node, const AbstractBlock** next);
 
 #endif //__CYCLIC_BLOCK_HPP__

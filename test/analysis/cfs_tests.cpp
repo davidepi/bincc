@@ -212,7 +212,7 @@ TEST(ControlFlowStructure, if_else)
 TEST(ControlFlowStructure, whileb)
 {
     // 0 -> 1 -> 2 -> 3
-    //          2 ~> 1
+    //           2 ~> 1
     ControlFlowGraph cfg(4);
     cfg.set_next(2, 1);
     cfg.set_conditional(1, 3);
@@ -258,27 +258,4 @@ TEST(ControlFlowStructure, if_else_abstract)
     ControlFlowStructure cfs;
     ASSERT_TRUE(cfs.build(cfg));
     EXPECT_EQ(cfs.root()->get_type(), BlockType::SEQUENCE);
-}
-
-TEST(Boh, dominator)
-{
-    BasicBlock** b = new BasicBlock*[5];
-    b[0] = new BasicBlock(0);
-    b[1] = new BasicBlock(1);
-    b[2] = new BasicBlock(2);
-    b[3] = new BasicBlock(3);
-    b[4] = new BasicBlock(4);
-
-    b[0]->set_next(b[1]);
-    b[1]->set_next(b[2]);
-    b[1]->set_cond(b[3]);
-    b[2]->set_next(b[4]);
-    b[3]->set_next(b[4]);
-
-    std::vector<int> dom = dominator((const BasicBlock**)b, 5);
-    EXPECT_EQ(dom[0],0);
-    EXPECT_EQ(dom[1],0);
-    EXPECT_EQ(dom[2],1);
-    EXPECT_EQ(dom[3],1);
-    EXPECT_EQ(dom[4],1);
 }

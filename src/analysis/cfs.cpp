@@ -139,17 +139,18 @@ static void DEBUG_PREDS(std::vector<std::unordered_set<int>>* preds)
  * \param[out] scc array reporting the scc index for every node
  */
 void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
-            std::stack<int>* stack, int* next_index, int* next_scc, int* scc)
+            std::stack<int>* stack, int* next_index, int* next_scc,
+            std::vector<int>* scc)
 {
     // in the pseudocode of the tarjan paper is written v.index and v.lowlink...
     // I don't want to change the class so arrays are used and this syntax with
     // index[array] is exploited to get a similar wording as the paper
     int v = root->get_id();
-    v[index] = *next_index;
-    v[lowlink] = *next_index;
+    index[v] = *next_index;
+    lowlink[v] = *next_index;
     *next_index = (*next_index) + 1;
     stack->push(v);
-    v[onstack] = true;
+    onstack[v] = true;
 
     const BasicBlock* successors[2];
     successors[0] = static_cast<const BasicBlock*>(root->get_next());
@@ -162,27 +163,27 @@ void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
         }
 
         int w = successor->get_id();
-        if(w[index] == -1)
+        if(index[w] == -1)
         {
             s_conn(successor, index, lowlink, onstack, stack, next_index,
                    next_scc, scc);
-            v[lowlink] = std::min(v[lowlink], w[lowlink]);
+            lowlink[v] = std::min(lowlink[v], lowlink[w]);
         }
-        else if(w[onstack])
+        else if(onstack[w])
         {
-            v[lowlink] = std::min(v[lowlink], w[index]);
+            lowlink[v] = std::min(lowlink[v], index[w]);
         }
     }
 
-    if(v[lowlink] == v[index])
+    if(index[v] == lowlink[v])
     {
         int x;
         do
         {
             x = stack->top();
             stack->pop();
-            x[onstack] = false;
-            scc[x] = *next_scc;
+            onstack[x] = false;
+            (*scc)[x] = *next_scc;
         } while(x != v);
         (*next_scc) = (*next_scc) + 1;
     }
@@ -197,24 +198,24 @@ void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
  * \return an array where each index correpond to the graph id and the value is
  * a boolean representing whether that node is in a cycle or not
  */
-static std::vector<bool> find_cycles(const BasicBlock** array, int nodes)
+static std::vector<int> find_cycles(const BasicBlock** array, int nodes)
 {
     std::stack<int> stack;
     int* index = (int*)malloc(sizeof(int) * nodes);
-    memset(index, -1, sizeof(int) * nodes);
+    memset(index, 0xFF, sizeof(int) * nodes); // set everything to -1
     int* lowlink = (int*)malloc(sizeof(int) * nodes);
     bool* onstack = (bool*)malloc(sizeof(bool) * nodes);
     memset(onstack, 0, sizeof(bool) * nodes);
-    int* scc = (int*)malloc(sizeof(int) * nodes);
+    std::vector<int> scc(nodes);
     int next_scc = 0;
     int next_int = 0;
     for(int i = 0; i < nodes; i++)
     {
         int v = array[i]->get_id();
-        if(v[index] == -1)
+        if(index[v] == -1)
         {
             s_conn(array[i], index, lowlink, onstack, &stack, &next_int,
-                   &next_scc, scc);
+                   &next_scc, &scc);
         }
     }
 
@@ -223,21 +224,8 @@ static std::vector<bool> find_cycles(const BasicBlock** array, int nodes)
 
     free(lowlink);
     free(onstack);
-    memset(index, 0, sizeof(int) * nodes);
-    for(int i = 0; i < nodes; i++)
-    {
-        // array containing how many times an scc appears
-        index[scc[i]]++;
-    }
-    std::vector<bool> retval(nodes);
-    // now writes down the results in the array indexed by node
-    for(int i = 0; i < nodes; i++)
-    {
-        retval[i] = index[scc[i]] > 1;
-    }
-    free(scc);
     free(index);
-    return std::move(retval);
+    return scc;
 }
 
 /**
@@ -319,20 +307,21 @@ static int eval(int v, int* ancestor, int* semi, int* label)
  * \brief LINK function as presented in the Tarjan's dominator algorithm
  */
 static void link(int v, int w, int* size, int* label, const int* semi,
-                 int* child, int* parent)
+                 int* child, int* ancestor)
 {
     int s = w;
     while(semi[label[w]] < semi[label[child[s]]])
     {
         if(size[s] + size[child[child[s]]] >= 2 * size[child[s]])
         {
-            parent[child[s]] = s;
+            ancestor[child[s]] = s;
             child[s] = child[child[s]];
         }
         else
         {
             size[child[s]] = size[s];
-            s = parent[s] = child[s];
+            ancestor[s] = child[s];
+            s = ancestor[s];
         }
     }
     label[s] = label[w];
@@ -347,7 +336,7 @@ static void link(int v, int w, int* size, int* label, const int* semi,
 
     while(s != 0)
     {
-        parent[s] = v;
+        ancestor[s] = v;
         s = child[s];
     }
 }
@@ -361,7 +350,7 @@ static void link(int v, int w, int* size, int* label, const int* semi,
  * \param[in] array The CFG for which the dominator tree will be calculated
  * \param[in] nodes The total number of nodes in the CFG
  */
-std::vector<int> dominator(const BasicBlock** array, int nodes)
+static std::vector<int> dominator(const BasicBlock** array, int nodes)
 {
     // super big contiguous array
     int* cache_friendly_array = (int*)malloc(sizeof(int) * nodes * 7);
@@ -388,8 +377,11 @@ std::vector<int> dominator(const BasicBlock** array, int nodes)
         size[i] = 1;
     }
     preorder_visit(array[0], semi, vertex, parent, pred, &next_num);
+    size[0] = 0;
+    label[0] = 0;
+    semi[0] = 0;
 
-    for(int n = nodes; n > 0; n--)
+    for(int n = nodes - 1; n > 0; n--)
     {
         int w = vertex[n];
         // step 2
@@ -399,11 +391,14 @@ std::vector<int> dominator(const BasicBlock** array, int nodes)
             semi[w] = semi[u] < semi[w] ? semi[u] : semi[w];
         }
         bucket[vertex[semi[w]]].insert(w);
-        link(parent[w], w, size, label, semi, child, parent);
+        link(parent[w], w, size, label, semi, child, ancestor);
 
         // step 3
-        for(int v : bucket[parent[w]])
+        auto it = bucket[parent[w]].begin();
+        while(it != bucket[parent[w]].end())
         {
+            int v = *it;
+            it = bucket[parent[w]].erase(it);
             bucket[parent[w]].erase(v);
             int u = eval(v, ancestor, semi, label);
             dom[v] = semi[u] < semi[v] ? u : parent[w];
@@ -437,8 +432,7 @@ std::vector<int> dominator(const BasicBlock** array, int nodes)
 static void update_pred(const AbstractBlock* added,
                         std::vector<std::unordered_set<int>>* preds)
 {
-    // insert the entry point list as predecessor for the newly created
-    // node. This is here and not in update_preds so the intent is clear
+    // insert the entry point list as predecessor for the newly created node
     const AbstractBlock* oep = (*added)[0];
     preds->push_back(std::move((*preds)[oep->get_id()]));
 
@@ -481,6 +475,24 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     int next_id = NODES;
     head = bmap[0];
 
+    // prepare data for the loop resolution
+    std::vector<int> scc = find_cycles((const BasicBlock**)&bmap[0], NODES);
+    std::vector<int> dom = dominator((const BasicBlock**)&bmap[0], NODES);
+    std::vector<bool> is_loop(NODES);
+    // array containing how many times an scc appears
+    int* scc_count = (int*)malloc(sizeof(int) * NODES);
+    memset(scc_count, 0, sizeof(int) * NODES);
+    for(int i = 0; i < NODES; i++)
+    {
+        scc_count[scc[i]]++;
+    }
+    // now writes down the results in the array indexed by node
+    for(int i = 0; i < NODES; i++)
+    {
+        is_loop[i] = scc_count[scc[i]] > 1;
+    }
+    free(scc_count);
+
     // remove self loops from predecessors, otherwise a new backlink will be
     // added everytime when replacing the parents while resolving a self-loop
     for(int i = 0; i < NODES; i++)
@@ -498,6 +510,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         while(!list.empty())
         {
             const AbstractBlock* node = bmap[list.front()];
+            int node_id = node->get_id();
             list.pop();
             const AbstractBlock* next = node->get_next();
             AbstractBlock* tmp;
@@ -521,36 +534,38 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 tmp = new IfElseBlock(next_id, node, then, bb->get_cond());
                 tmp->set_next(then->get_next());
             }
-            else if(is_loop(node, &then))
+            // condition for the loop: being in a strong connected comp. (scc)
+            // and the dominator either is in a different scc or i'm the root
+            // (implies this node is the head of the cycle)
+            else if(is_loop[node_id] &&
+                    (scc[dom[node_id]] != scc[node_id] || node_id == 0))
             {
-                const AbstractBlock* in;
-                const AbstractBlock* tail;
-                if(node->get_id() < then->get_id())
+                //          if(node->get_out_edges()==2) //while loop
+                //{
+                const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+                const AbstractBlock* cond = bb->get_cond();
+                const AbstractBlock* tail = cond;
+                if(scc[next->get_id()] == scc[node_id])
                 {
-                    in = node;
-                    tail = then;
+                    // next is the tail so swap them
+                    tail = next;
+                    next = cond;
                 }
-                else
+                tmp = new WhileBlock(next_id, bb, tail);
+                //}
+                //first check that the loop is not impossible
+                if(dom[node_id]==dom[tail->get_id()])
                 {
-                    in = then;
-                    tail = node;
-                    node = then;
+                    //this case is impossible to reduce
+                    return false;
                 }
-                if(in->get_out_edges() == 2) // while
-                {
-                    const BasicBlock* bb = static_cast<const BasicBlock*>(in);
-                    tmp = new WhileBlock(next_id, bb, tail);
-                    if(bb->get_next() == tail)
-                    {
-                        next = bb->get_cond();
-                        tmp->set_next(next);
-                    }
-                    else
-                    {
-                        next = bb->get_next();
-                        tmp->set_next(next);
-                    }
-                }
+                // TODO: insert code for nested whiles
+                is_loop.push_back(false);
+                dom.push_back(dom[node_id]);
+                tmp->set_next(next);
+
+                // remove tail from predecessors or they will propagate wrongly
+                preds[node_id].erase(tail->get_id());
             }
             else if(is_sequence(node, &preds))
             {

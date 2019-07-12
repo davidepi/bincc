@@ -9,6 +9,7 @@
 #include "basic_block.hpp"
 #include "cfg.hpp"
 
+//TODO: write doc
 class ControlFlowStructure
 {
 public:
@@ -42,7 +43,5 @@ public:
 private:
     AbstractBlock* head{nullptr};
 };
-
-std::vector<int> dominator(const BasicBlock** array, int nodes);
 
 #endif //__CFS_HPP__

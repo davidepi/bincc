@@ -17,7 +17,7 @@
 /**
  * \brief Class used to perform the analysis of the disassembled code
  *
- * TODO: write desc
+ * //TODO: write doc
  */
 class Analysis
 {
