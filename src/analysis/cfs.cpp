@@ -17,12 +17,87 @@
 
 ControlFlowStructure::~ControlFlowStructure()
 {
-    delete head;
+    delete root_node;
 }
 
 const AbstractBlock* ControlFlowStructure::root() const
 {
-    return head;
+    return root_node;
+}
+
+static bool is_self_loop(const AbstractBlock* node)
+{
+    if(node->get_type() == BlockType::BASIC)
+    {
+        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+        return bb->get_cond() == bb || bb->get_next() == bb;
+    }
+    return false;
+}
+
+static bool is_sequence(const AbstractBlock* node,
+                        const std::vector<std::unordered_set<int>>* preds)
+{
+    // conditions for a sequence:
+    // - current node has only one successor node
+    // - sucessor has only one predecessor (the current node)
+    if(node->get_out_edges() == 1)
+    {
+        // nominal case next is the correct node
+        const AbstractBlock* next = node->get_next();
+
+        // if there is only ONE out node it MUST be the next
+        assert(next != nullptr);
+
+        // return the number of parents for the next node
+        return (*preds)[next->get_id()].size() == 1;
+    }
+    return false;
+}
+
+static bool is_ifthen(const AbstractBlock* node,
+                      const AbstractBlock** then_node,
+                      const std::vector<std::unordered_set<int>>* preds)
+{
+    if(node->get_out_edges() == 2)
+    {
+        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+        const AbstractBlock* next = bb->get_next();
+        const AbstractBlock* cond = bb->get_cond();
+        if(next->get_next() == cond)
+        {
+            // variant 0: next is the "then"
+            *then_node = next;
+            return (next->get_out_edges() == 1) &&
+                   ((*preds)[next->get_id()].size() == 1);
+        }
+        else if(cond->get_next() == next)
+        {
+            // variant 1: cond is the "then"
+            *then_node = cond;
+            return (cond->get_out_edges() == 1) &&
+                   ((*preds)[cond->get_id()].size() == 1);
+        }
+    }
+    return false;
+}
+
+static bool is_ifelse(const AbstractBlock* node,
+                      const std::vector<std::unordered_set<int>>* preds)
+{
+    if(node->get_out_edges() == 2)
+    {
+        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+        const AbstractBlock* next = bb->get_next();
+        const AbstractBlock* cond = bb->get_cond();
+        if(next->get_out_edges() == 1 && cond->get_out_edges() == 1)
+        {
+            return ((*preds)[next->get_id()].size() == 1) &&
+                   ((*preds)[cond->get_id()].size() == 1) &&
+                   next->get_next() == cond->get_next();
+        }
+    }
+    return false;
 }
 
 /**
@@ -473,7 +548,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     visited.clear();
     const int NODES = cfg.nodes_no();
     int next_id = NODES;
-    head = bmap[0];
+    root_node = bmap[0];
 
     // prepare data for the loop resolution
     std::vector<int> scc = find_cycles((const BasicBlock**)&bmap[0], NODES);
@@ -501,10 +576,10 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     }
 
     // iterate and resolve
-    while(head->get_out_edges() != 0)
+    while(root_node->get_out_edges() != 0)
     {
         std::queue<int> list;
-        postorder_visit(head, &list, &visited);
+        postorder_visit(root_node, &list, &visited);
         visited.clear();
         bool modified = false;
         while(!list.empty())
@@ -540,23 +615,36 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             else if(is_loop[node_id] &&
                     (scc[dom[node_id]] != scc[node_id] || node_id == 0))
             {
-                //          if(node->get_out_edges()==2) //while loop
-                //{
-                const BasicBlock* bb = static_cast<const BasicBlock*>(node);
-                const AbstractBlock* cond = bb->get_cond();
-                const AbstractBlock* tail = cond;
-                if(scc[next->get_id()] == scc[node_id])
+                const AbstractBlock* head = node;
+                const AbstractBlock* tail = node->get_next();
+                if(node->get_out_edges() == 2) // while loop
                 {
-                    // next is the tail so swap them
-                    tail = next;
-                    next = cond;
+                    const BasicBlock* head_bb = (const BasicBlock*)(head);
+                    const AbstractBlock* cond = head_bb->get_cond();
+                    tail = cond;
+                    if(scc[next->get_id()] == scc[node_id])
+                    {
+                        // next is the tail so swap them
+                        tail = next;
+                        next = cond;
+                    }
+                    tmp = new WhileBlock(next_id, head_bb, tail);
                 }
-                tmp = new WhileBlock(next_id, bb, tail);
-                //}
-                //first check that the loop is not impossible
-                if(dom[node_id]==dom[tail->get_id()])
+                else // do-while loop
                 {
-                    //this case is impossible to reduce
+                    const BasicBlock* tail_bb = (const BasicBlock*)(tail);
+                    next = tail->get_next();
+                    if(scc[next->get_id()] == scc[node_id])
+                    {
+                        next = tail_bb->get_cond();
+                    }
+                    tmp = new DoWhileBlock(next_id, head, tail_bb);
+                }
+                // first check that the loop is not impossible
+                if(dom[node_id] == dom[tail->get_id()])
+                {
+                    // this case is impossible to reduce
+                    delete tmp;
                     return false;
                 }
                 // TODO: insert code for nested whiles
@@ -601,9 +689,9 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             DEBUG_PREDS(&preds);
             next_id++;
             // account for replacement of root
-            if(node == head)
+            if(node == root_node)
             {
-                head = tmp;
+                root_node = tmp;
             }
             break;
         }
@@ -637,7 +725,7 @@ std::string ControlFlowStructure::to_dot(const ControlFlowGraph& cfg) const
     std::stringstream ss;
     std::string cfg_dot = cfg.to_dot();
     ss << cfg_dot.substr(0, cfg_dot.find_last_of('}'));
-    head->print(ss);
+    root_node->print(ss);
     ss << "}";
     return ss.str();
 }

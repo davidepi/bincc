@@ -37,16 +37,6 @@ std::ostream& SelfLoopBlock::print(std::ostream& ss) const
     return ss;
 }
 
-bool is_self_loop(const AbstractBlock* node)
-{
-    if(node->get_type() == BlockType::BASIC)
-    {
-        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
-        return bb->get_cond() == bb || bb->get_next() == bb;
-    }
-    return false;
-}
-
 WhileBlock::WhileBlock(int id, const BasicBlock* head,
                        const AbstractBlock* tail)
     : AbstractBlock(id), head(head), tail(tail)
@@ -80,5 +70,41 @@ std::ostream& WhileBlock::print(std::ostream& ss) const
     head->print(ss);
     tail->print(ss);
     ss << "label=\"While\"\n}\n";
+    return ss;
+}
+
+DoWhileBlock::DoWhileBlock(int id, const AbstractBlock* head,
+                           const BasicBlock* tail)
+    : AbstractBlock(id), head(head), tail(tail)
+{
+}
+
+DoWhileBlock::~DoWhileBlock()
+{
+    delete tail;
+    delete head;
+}
+
+BlockType DoWhileBlock::get_type() const
+{
+    return DO_WHILE;
+}
+
+int DoWhileBlock::size() const
+{
+    return 2;
+}
+
+const AbstractBlock* DoWhileBlock::operator[](int index) const
+{
+    return index == 0 ? head : tail;
+}
+
+std::ostream& DoWhileBlock::print(std::ostream& ss) const
+{
+    ss << "subgraph cluster_" << this->get_id() << "{\n";
+    head->print(ss);
+    tail->print(ss);
+    ss << "label=\"Do-While\"\n}\n";
     return ss;
 }

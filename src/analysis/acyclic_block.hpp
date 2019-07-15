@@ -213,35 +213,4 @@ private:
     const AbstractBlock* ellse;
 };
 
-/**
- * \brief Returns true if node and next are a sequence
- * \param[in] node The node that will be checked if belongs to a sequence
- * \param[in] preds Map of {key, list(key)} where the list contain the
- * predecessors id for the current node
- * \return true if node and its successor forms a sequence
- */
-bool is_sequence(const AbstractBlock* node,
-                 const std::vector<std::unordered_set<int>>* preds);
-
-/**
- * \brief Returns true if node represents the root of an if-then block
- * \param[in] node The node that will be checked as the root of if-then block
- * \param[out] then_node The node representing the `then` block
- * \param[in] preds Map of {key, list(key)} where the list contain the
- * predecessors id for the current node
- * \return true if node is the root of an if-then block
- */
-bool is_ifthen(const AbstractBlock* node, const AbstractBlock** then_node,
-               const std::vector<std::unordered_set<int>>* preds);
-
-/**
- * \brief Returns true if node represents the root of an if-else block
- * \param[in] node The node that will be checked as the root of if-else block
- * \param[in] preds Map of {key, list(key)} where the list contain the
- * predecessors id for the current node
- * \return true if node is the root of an if-else block
- */
-bool is_ifelse(const AbstractBlock* node,
-               const std::vector<std::unordered_set<int>>* preds);
-
 #endif //__ACYCLIC_BLOCK_HPP__

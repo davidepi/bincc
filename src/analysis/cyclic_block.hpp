@@ -140,10 +140,67 @@ private:
 };
 
 /**
- * \brief Returns true if the node is a self-looping node
- * \param[in] node The node that will be checked
- * \return true if node is self looping
+ * \brief Class representing a do-while loop
+ * This class represents a loop where the entry and the exit are represented by
+ * the different blocks. From here on the entry block will be called head, while
+ * the exit will be called tail. This while can be composed solely by two
+ * blocks, meaning that everything in between should be reduced beforehand.
+ * Breaks and continues should be handles manually before performing the
+ * reduction
  */
-bool is_self_loop(const AbstractBlock* node);
+class DoWhileBlock : public AbstractBlock
+{
+public:
+    /**
+     * \brief Parametrized constructor
+     * \note The head and tail parameters will be inherited by this class
+     * \param[in] id The id that will be assigned to this block
+     * \param[in] head BasicBlock representing the head of the loop, containing
+     * both the entry point and the exit point
+     * \param[in] tail BasicBlock representing the tail of the loop, a block
+     * reachable only from the head and pointing only towards the head
+     */
+    DoWhileBlock(int id, const AbstractBlock* head, const BasicBlock* tail);
+
+    /**
+     * \brief Destructor
+     */
+    ~DoWhileBlock() override;
+
+    /**
+     * \brief Returns the type of this block
+     * \return BlockType::WHILE
+     */
+    BlockType get_type() const override;
+
+    /**
+     * \brief Returns the number of elements composing the while (always 2)
+     * \return The number 2
+     */
+    int size() const override;
+
+    /**
+     * \brief Returns the i-th element contained in the loop
+     * However, given that the self-loop composed by a single element,
+     * \param[in] index
+     * \return The loop head if index is 0, the tail otherwise
+     */
+    const AbstractBlock* operator[](int index) const override;
+
+    /**
+     * \brief Print this block in Graphviz dot format using the input stream
+     * Then the method will return the updated stream
+     * The stream will represent solely this block.
+     * \param[in,out] ss The input stream
+     * \return The updated stream
+     */
+    std::ostream& print(std::ostream& ss) const override;
+
+private:
+    // entry and exit point of the loop
+    const AbstractBlock* head;
+    // bottom point of the loop
+    const BasicBlock* tail;
+};
 
 #endif //__CYCLIC_BLOCK_HPP__

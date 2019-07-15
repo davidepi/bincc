@@ -41,7 +41,7 @@ public:
     void to_file(const char* filename, const ControlFlowGraph& cfg) const;
 
 private:
-    AbstractBlock* head{nullptr};
+    AbstractBlock* root_node{nullptr};
 };
 
 #endif //__CFS_HPP__

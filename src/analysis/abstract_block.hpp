@@ -24,6 +24,8 @@ enum BlockType
     IF_ELSE,
     // block is a while block
     WHILE,
+    // block is a do-while block
+    DO_WHILE,
 };
 
 /**

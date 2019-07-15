@@ -211,8 +211,8 @@ TEST(ControlFlowStructure, if_else)
 
 TEST(ControlFlowStructure, whileb)
 {
-    // 0 -> 1 -> 2 -> 3
-    //           2 ~> 1
+    // 0 -> 1 -> 2 -> 1
+    //      1 ~> 3
     ControlFlowGraph cfg(4);
     cfg.set_next(2, 1);
     cfg.set_conditional(1, 3);
@@ -228,6 +228,33 @@ TEST(ControlFlowStructure, whileb)
     EXPECT_EQ(head->get_type(), BlockType::BASIC);
     EXPECT_EQ(tail->get_type(), BlockType::BASIC);
     EXPECT_EQ(middle->get_type(), BlockType::WHILE);
+    head = (*middle)[0];
+    tail = (*middle)[1];
+    EXPECT_EQ(head->get_id(), 1);
+    EXPECT_EQ(tail->get_id(), 2);
+    cfs.to_file("/Users/davide/Desktop/test2.dot", cfg);
+}
+
+TEST(ControlFlowStructure, do_whileb)
+{
+    // 0 -> 1 -> 2 -> 1
+    //      2 ~> 3
+    ControlFlowGraph cfg(4);
+    cfg.set_next(2, 1);
+    cfg.set_conditional(2, 3);
+    cfg.finalize();
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    const AbstractBlock* structured = cfs.root();
+    ASSERT_NE(structured, nullptr);
+    ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
+    ASSERT_EQ(structured->size(), 3);
+    const AbstractBlock* head = (*structured)[0];
+    const AbstractBlock* middle = (*structured)[1];
+    const AbstractBlock* tail = (*structured)[2];
+    EXPECT_EQ(head->get_type(), BlockType::BASIC);
+    EXPECT_EQ(tail->get_type(), BlockType::BASIC);
+    EXPECT_EQ(middle->get_type(), BlockType::DO_WHILE);
     head = (*middle)[0];
     tail = (*middle)[1];
     EXPECT_EQ(head->get_id(), 1);
