@@ -62,15 +62,6 @@ public:
      */
     const AbstractBlock* operator[](int index) const override;
 
-    /**
-     * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the updated stream
-     * The stream will represent solely this block.
-     * \param[in,out] ss The input stream
-     * \return The updated stream
-     */
-    std::ostream& print(std::ostream& ss) const override;
-
 private:
     // the looping block
     const BasicBlock* looping_block;
@@ -122,15 +113,6 @@ public:
      * \return The loop head if index is 0, the tail otherwise
      */
     const AbstractBlock* operator[](int index) const override;
-
-    /**
-     * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the updated stream
-     * The stream will represent solely this block.
-     * \param[in,out] ss The input stream
-     * \return The updated stream
-     */
-    std::ostream& print(std::ostream& ss) const override;
 
 private:
     // entry and exit point of the loop
@@ -186,15 +168,6 @@ public:
      * \return The loop head if index is 0, the tail otherwise
      */
     const AbstractBlock* operator[](int index) const override;
-
-    /**
-     * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the updated stream
-     * The stream will represent solely this block.
-     * \param[in,out] ss The input stream
-     * \return The updated stream
-     */
-    std::ostream& print(std::ostream& ss) const override;
 
 private:
     // entry and exit point of the loop

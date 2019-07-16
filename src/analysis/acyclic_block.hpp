@@ -65,15 +65,6 @@ public:
      */
     const AbstractBlock* operator[](int index) const override;
 
-    /**
-     * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the updated stream
-     * The stream will represent solely this block.
-     * \param[in,out] ss The input stream
-     * \return The updated stream
-     */
-    std::ostream& print(std::ostream& ss) const override;
-
 private:
     // components of the queue
     std::vector<const AbstractBlock*> components;
@@ -122,15 +113,6 @@ public:
      * \return the head when index equals zero, the `then` block otherwise
      */
     const AbstractBlock* operator[](int index) const override;
-
-    /**
-     * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the updated stream
-     * The stream will represent solely this block.
-     * \param[in,out] ss The input stream
-     * \return The updated stream
-     */
-    std::ostream& print(std::ostream& ss) const override;
 
     /**
      * \brief Returns the type of this block
@@ -188,15 +170,6 @@ public:
      * equals 1, the `else` block otherwise
      */
     const AbstractBlock* operator[](int index) const override;
-
-    /**
-     * \brief Print this block in Graphviz dot format using the input stream
-     * Then the method will return the updated stream
-     * The stream will represent solely this block.
-     * \param[in,out] ss The input stream
-     * \return The updated stream
-     */
-    std::ostream& print(std::ostream& ss) const override;
 
     /**
      * \brief Returns the type of this block

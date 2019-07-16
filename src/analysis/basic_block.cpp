@@ -40,3 +40,9 @@ void BasicBlock::replace_if_match(const AbstractBlock* match,
         cond = edge;
     }
 }
+
+std::ostream& BasicBlock::print(std::ostream& ss) const
+{
+    ss << id << ";\n";
+    return ss;
+}

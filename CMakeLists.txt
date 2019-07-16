@@ -75,7 +75,7 @@ IF(NOT DISASM_MAIN_SOURCES)
 ENDIF()
 
 #JSON LIB CONFIGURATION
-IF(NOT EXISTS ${PROJECT_SOURCE_DIR}/lib/json)
+IF(NOT EXISTS ${PROJECT_SOURCE_DIR}/lib/json/CMakeLists.txt)
     MESSAGE(FATAL_ERROR "The lib folder is empty. Please run `git submodule init` and `git submodule update`")
 ELSE()
     SET(JSON_BuildTests OFF CACHE INTERNAL "")

@@ -286,3 +286,24 @@ TEST(ControlFlowStructure, if_else_abstract)
     ASSERT_TRUE(cfs.build(cfg));
     EXPECT_EQ(cfs.root()->get_type(), BlockType::SEQUENCE);
 }
+
+TEST(ControlFlowStructure, structures_inside_loop)
+{
+    ControlFlowGraph cfg(7);
+    cfg.set_conditional(2,4);
+    cfg.set_next(3,5);
+    cfg.set_conditional(3,3);
+    cfg.set_next(5,1);
+    cfg.set_conditional(5,6);
+    cfg.finalize();
+    cfg.to_file("/home/davide/Desktop/test2.dot");
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    const AbstractBlock* head = cfs.root();
+    EXPECT_EQ(head->get_type(), SEQUENCE);
+    EXPECT_EQ((*head)[0]->get_type(), BASIC);
+    EXPECT_EQ((*head)[2]->get_type(), BASIC);
+    const AbstractBlock* middle = (*head)[1];
+    ASSERT_EQ(middle->get_type(), DO_WHILE);
+    cfs.to_file("/home/davide/Desktop/test2.dot", cfg);
+}

@@ -75,6 +75,15 @@ public:
     void replace_if_match(const AbstractBlock* match,
                           const AbstractBlock* edge) override;
 
+    /**
+     * \brief Print this block in Graphviz dot format using the input stream
+     * Then the method will return the updated stream
+     * The stream will represent solely this block.
+     * \param[in,out] ss The input stream
+     * \return The updated stream
+     */
+    std::ostream& print(std::ostream& ss) const override;
+
 private:
     // target of the conditional jump if the condition is satisfied
     const AbstractBlock* cond{nullptr};

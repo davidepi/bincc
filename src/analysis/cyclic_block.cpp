@@ -29,14 +29,6 @@ const AbstractBlock* SelfLoopBlock::operator[](int) const
     return looping_block;
 }
 
-std::ostream& SelfLoopBlock::print(std::ostream& ss) const
-{
-    ss << "subgraph cluster_" << this->get_id() << "{\n";
-    looping_block->print(ss);
-    ss << "label=\"Self-loop\"\n}\n";
-    return ss;
-}
-
 WhileBlock::WhileBlock(int id, const BasicBlock* head,
                        const AbstractBlock* tail)
     : AbstractBlock(id), head(head), tail(tail)
@@ -64,15 +56,6 @@ const AbstractBlock* WhileBlock::operator[](int index) const
     return index == 0 ? head : tail;
 }
 
-std::ostream& WhileBlock::print(std::ostream& ss) const
-{
-    ss << "subgraph cluster_" << this->get_id() << "{\n";
-    head->print(ss);
-    tail->print(ss);
-    ss << "label=\"While\"\n}\n";
-    return ss;
-}
-
 DoWhileBlock::DoWhileBlock(int id, const AbstractBlock* head,
                            const BasicBlock* tail)
     : AbstractBlock(id), head(head), tail(tail)
@@ -98,13 +81,4 @@ int DoWhileBlock::size() const
 const AbstractBlock* DoWhileBlock::operator[](int index) const
 {
     return index == 0 ? head : tail;
-}
-
-std::ostream& DoWhileBlock::print(std::ostream& ss) const
-{
-    ss << "subgraph cluster_" << this->get_id() << "{\n";
-    head->print(ss);
-    tail->print(ss);
-    ss << "label=\"Do-While\"\n}\n";
-    return ss;
 }

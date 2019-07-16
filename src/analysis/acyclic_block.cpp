@@ -61,18 +61,6 @@ const AbstractBlock* SequenceBlock::operator[](int index) const
     return components[index];
 }
 
-std::ostream& SequenceBlock::print(std::ostream& ss) const
-{
-    ss << "subgraph cluster_" << this->get_id() << " {\n";
-    int size = components.size();
-    for(int i = 0; i < size; i++)
-    {
-        components[i]->print(ss);
-    }
-    ss << "label = \"Sequence\";\n}\n";
-    return ss;
-}
-
 BlockType IfThenBlock::get_type() const
 {
     return IF_THEN;
@@ -98,15 +86,6 @@ int IfThenBlock::size() const
 const AbstractBlock* IfThenBlock::operator[](int index) const
 {
     return index == 0 ? head : then;
-}
-
-std::ostream& IfThenBlock::print(std::ostream& ss) const
-{
-    ss << "subgraph cluster_" << this->get_id() << " {\n";
-    head->print(ss);
-    then->print(ss);
-    ss << "label=\"If-Then\";\n}\n";
-    return ss;
 }
 
 IfElseBlock::IfElseBlock(int id, const AbstractBlock* ifb,
@@ -146,14 +125,4 @@ const AbstractBlock* IfElseBlock::operator[](int index) const
     {
         return ellse;
     }
-}
-
-std::ostream& IfElseBlock::print(std::ostream& ss) const
-{
-    ss << "subgraph cluster_" << this->get_id() << " {\n";
-    head->print(ss);
-    then->print(ss);
-    ellse->print(ss);
-    ss << "label=\"If-Else\";\n}\n";
-    return ss;
 }

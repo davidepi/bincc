@@ -63,6 +63,12 @@ TEST(BasicBlok, type)
     EXPECT_EQ(b.get_type(), BlockType::BASIC);
 }
 
+TEST(BasicBlok, name)
+{
+    BasicBlock b;
+    EXPECT_STREQ(b.get_name(), "Basic");
+}
+
 TEST(BasicBlock, flow)
 {
     BasicBlock b0(0);
@@ -101,13 +107,22 @@ TEST(BasicBlock, flow)
     EXPECT_EQ(b2.get_cond(), nullptr);
 }
 
-TEST(SequenceBlok, type)
+TEST(SequenceBlock, type)
 {
     BasicBlock* b0 = new BasicBlock(1);
     BasicBlock* b1 = new BasicBlock(2);
     b0->set_next(b1);
     SequenceBlock seq(0, b0, b1);
     EXPECT_EQ(seq.get_type(), BlockType::SEQUENCE);
+}
+
+TEST(SequenceBlock, name)
+{
+    BasicBlock* b0 = new BasicBlock(1);
+    BasicBlock* b1 = new BasicBlock(2);
+    b0->set_next(b1);
+    SequenceBlock seq(0, b0, b1);
+    EXPECT_STREQ(seq.get_name(), "Sequence");
 }
 
 TEST(SequenceBlock, ctor_no_sequences)
@@ -158,6 +173,14 @@ TEST(SelfLoopBlock, type)
     EXPECT_EQ(slb.get_type(), BlockType::SELF_LOOP);
 }
 
+TEST(SelfLoopBlock, name)
+{
+    BasicBlock* b0 = new BasicBlock(1);
+    b0->set_cond(b0);
+    SelfLoopBlock slb(2, b0);
+    EXPECT_STREQ(slb.get_name(), "Self-loop");
+}
+
 TEST(SelfLoopBlock, ctor)
 {
     BasicBlock* b0 = new BasicBlock(1);
@@ -178,6 +201,19 @@ TEST(IfThenBlock, type)
     b1->set_next(b2);
     IfThenBlock ift(3, b0, b1);
     EXPECT_EQ(ift.get_type(), BlockType::IF_THEN);
+    delete b2;
+}
+
+TEST(IfThenBlock, name)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    b0->set_next(b2);
+    b0->set_cond(b1);
+    b1->set_next(b2);
+    IfThenBlock ift(3, b0, b1);
+    EXPECT_STREQ(ift.get_name(), "If-then");
     delete b2;
 }
 
@@ -218,6 +254,15 @@ TEST(IfElseBlock, type)
     EXPECT_EQ(ift.get_type(), BlockType::IF_ELSE);
 }
 
+TEST(IfElseBlock, name)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    IfElseBlock ift(3, b0, b1, b2);
+    EXPECT_STREQ(ift.get_name(), "If-else");
+}
+
 TEST(IfElseBlock, size)
 {
     BasicBlock* b0 = new BasicBlock(0);
@@ -247,6 +292,16 @@ TEST(WhileBlock, type)
     b1->set_next(b0);
     WhileBlock wb(2, b0, b1);
     EXPECT_EQ(wb.get_type(), BlockType::WHILE);
+}
+
+TEST(WhileBlock, name)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    b0->set_next(b1);
+    b1->set_next(b0);
+    WhileBlock wb(2, b0, b1);
+    EXPECT_STREQ(wb.get_name(), "While");
 }
 
 TEST(WhileBlock, size)
@@ -280,6 +335,16 @@ TEST(DoWhileBlock, type)
     b1->set_next(b0);
     DoWhileBlock wb(2, b0, b1);
     EXPECT_EQ(wb.get_type(), BlockType::DO_WHILE);
+}
+
+TEST(DoWhileBlock, name)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    b0->set_next(b1);
+    b1->set_next(b0);
+    DoWhileBlock wb(2, b0, b1);
+    EXPECT_STREQ(wb.get_name(), "Do-While");
 }
 
 TEST(DoWhileBlock, size)

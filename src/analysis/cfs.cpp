@@ -41,6 +41,8 @@ static bool is_sequence(const AbstractBlock* node,
     // conditions for a sequence:
     // - current node has only one successor node
     // - sucessor has only one predecessor (the current node)
+    // - successor has one or none successors
+    //   ^--- this is necessary to avoid a double exit sequence
     if(node->get_out_edges() == 1)
     {
         // nominal case next is the correct node
@@ -50,7 +52,8 @@ static bool is_sequence(const AbstractBlock* node,
         assert(next != nullptr);
 
         // return the number of parents for the next node
-        return (*preds)[next->get_id()].size() == 1;
+        return (*preds)[next->get_id()].size() == 1 &&
+               next->get_out_edges() < 2;
     }
     return false;
 }
@@ -591,6 +594,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             AbstractBlock* tmp;
             // block used to track the `then` part in an if-then
             const AbstractBlock* then;
+            bool was_loop = false;
             if(is_self_loop(node))
             {
                 tmp = new SelfLoopBlock(next_id,
@@ -608,6 +612,15 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 then = bb->get_next();
                 tmp = new IfElseBlock(next_id, node, then, bb->get_cond());
                 tmp->set_next(then->get_next());
+            }
+            else if(is_sequence(node, &preds))
+            {
+                // the sequence cannot be conditional: the cfg finalize() step
+                // take care of that. In any other case anything else with more
+                // than one exit has already been resolved
+                tmp = new SequenceBlock(next_id, node, next);
+                next = next->get_next();
+                tmp->set_next(next);
             }
             // condition for the loop: being in a strong connected comp. (scc)
             // and the dominator either is in a different scc or i'm the root
@@ -640,6 +653,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                     }
                     tmp = new DoWhileBlock(next_id, head, tail_bb);
                 }
+
                 // first check that the loop is not impossible
                 if(dom[node_id] == dom[tail->get_id()])
                 {
@@ -647,22 +661,12 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                     delete tmp;
                     return false;
                 }
+                was_loop = true;
                 // TODO: insert code for nested whiles
-                is_loop.push_back(false);
-                dom.push_back(dom[node_id]);
                 tmp->set_next(next);
 
                 // remove tail from predecessors or they will propagate wrongly
                 preds[node_id].erase(tail->get_id());
-            }
-            else if(is_sequence(node, &preds))
-            {
-                // the sequence cannot be conditional: the cfg finalize() step
-                // take care of that. In any other case anything else with more
-                // than one exit has already been resolved
-                tmp = new SequenceBlock(next_id, node, next);
-                next = next->get_next();
-                tmp->set_next(next);
             }
             else
             {
@@ -672,7 +676,11 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             modified = true;
             // this always push at bmap[next_index], without undefined behaviour
             bmap.push_back(tmp);
-            std::cout << "Adding " << tmp->get_id() << "\n";
+            is_loop.push_back(was_loop ? false : is_loop[node_id]);
+            scc.push_back(scc[node_id]);
+            dom.push_back(dom[node_id]);
+            std::cout << "Adding " << tmp->get_id() << " as " << tmp->get_name()
+                      << " \n";
             DEBUG_PREDS(&preds);
 
             // change edges of graph (remap predecessor to address new block

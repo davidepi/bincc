@@ -3,6 +3,12 @@
 //
 
 #include "abstract_block.hpp"
+#include <cassert>
+
+const char* AbstractBlock::block_names[BLOCK_TOTAL] = {
+    "Basic",   "Self-loop", "Sequence", "If-then",
+    "If-else", "While",     "Do-While"};
+
 AbstractBlock::AbstractBlock(int number) : id(number), next(nullptr)
 {
 }
@@ -51,8 +57,19 @@ void AbstractBlock::replace_if_match(const AbstractBlock* match,
     }
 }
 
+const char* AbstractBlock::get_name() const
+{
+    return AbstractBlock::block_names[this->get_type()];
+}
+
 std::ostream& AbstractBlock::print(std::ostream& ss) const
 {
-    ss << id << ";\n";
+    ss << "subgraph cluster_" << this->get_id() << " {\n";
+    int size = this->size();
+    for(int i = 0; i < size; i++)
+    {
+        (*this)[i]->print(ss);
+    }
+    ss << "label = \"" << this->get_name() << "\";\n}\n";
     return ss;
 }

@@ -26,6 +26,9 @@ enum BlockType
     WHILE,
     // block is a do-while block
     DO_WHILE,
+
+    // total number of BlockType entry. LEAVE THIS AS LAST ENTRY!!!!
+    BLOCK_TOTAL
 };
 
 /**
@@ -93,6 +96,14 @@ public:
     virtual BlockType get_type() const = 0;
 
     /**
+     * \brief Returns the name of this abstract block
+     * The returned name is based on the BlockType index and the array of names
+     * statically declared in this class
+     * \return The name of the abstract block
+     */
+    const char* get_name() const;
+
+    /**
      * \brief Returns the number of nodes contained in this abstract block
      * If not overriden, this method returns 0
      * \return 0, in this implementation
@@ -153,6 +164,10 @@ protected:
     // block following the current one (unconditional jump or unsatisfied
     // conditional one)
     const AbstractBlock* next{nullptr};
+
+private:
+    // names that will be returned by the get_name() function
+    static const char* block_names[BLOCK_TOTAL];
 };
 
 #endif //__ABSTRACT_BLOCK_HPP__
