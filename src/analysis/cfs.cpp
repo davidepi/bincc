@@ -15,6 +15,13 @@
 #include <unordered_set>
 #include <vector>
 
+struct LoopHelpers
+{
+    std::vector<bool> is_loop;
+    std::vector<int> scc;
+    std::vector<int> dom;
+};
+
 ControlFlowStructure::~ControlFlowStructure()
 {
     delete root_node;
@@ -25,18 +32,26 @@ const AbstractBlock* ControlFlowStructure::root() const
     return root_node;
 }
 
-static bool is_self_loop(const AbstractBlock* node)
+static bool reduce_self_loop(const AbstractBlock* node, AbstractBlock** created,
+                             int next_id)
 {
     if(node->get_type() == BlockType::BASIC)
     {
         const BasicBlock* bb = static_cast<const BasicBlock*>(node);
-        return bb->get_cond() == bb || bb->get_next() == bb;
+        if(bb->get_cond() == bb || bb->get_next() == bb)
+        {
+            *created = new SelfLoopBlock(next_id,
+                                         static_cast<const BasicBlock*>(node));
+            (*created)->set_next(node->get_next());
+            return true;
+        }
     }
     return false;
 }
 
-static bool is_sequence(const AbstractBlock* node,
-                        const std::vector<std::unordered_set<int>>* preds)
+static bool reduce_sequence(const AbstractBlock* node, AbstractBlock** created,
+                            int next_id,
+                            const std::vector<std::unordered_set<int>>* preds)
 {
     // conditions for a sequence:
     // - current node has only one successor node
@@ -52,15 +67,23 @@ static bool is_sequence(const AbstractBlock* node,
         assert(next != nullptr);
 
         // return the number of parents for the next node
-        return (*preds)[next->get_id()].size() == 1 &&
-               next->get_out_edges() < 2;
+        if((*preds)[next->get_id()].size() == 1 && next->get_out_edges() < 2)
+        {
+            // the sequence cannot be conditional: the cfg finalize() step
+            // take care of that. In any other case anything else with more
+            // than one exit has already been resolved
+            *created = new SequenceBlock(next_id, node, next);
+            next = next->get_next();
+            (*created)->set_next(next);
+            return true;
+        }
     }
     return false;
 }
 
-static bool is_ifthen(const AbstractBlock* node,
-                      const AbstractBlock** then_node,
-                      const std::vector<std::unordered_set<int>>* preds)
+static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
+                          int next_id,
+                          const std::vector<std::unordered_set<int>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
@@ -70,23 +93,32 @@ static bool is_ifthen(const AbstractBlock* node,
         if(next->get_next() == cond)
         {
             // variant 0: next is the "then"
-            *then_node = next;
-            return (next->get_out_edges() == 1) &&
-                   ((*preds)[next->get_id()].size() == 1);
+            if((next->get_out_edges() == 1) &&
+               ((*preds)[next->get_id()].size() == 1))
+            {
+                *created = new IfThenBlock(next_id, node, next);
+                (*created)->set_next(next->get_next());
+                return true;
+            }
         }
         else if(cond->get_next() == next)
         {
             // variant 1: cond is the "then"
-            *then_node = cond;
-            return (cond->get_out_edges() == 1) &&
-                   ((*preds)[cond->get_id()].size() == 1);
+            if((cond->get_out_edges() == 1) &&
+               ((*preds)[cond->get_id()].size() == 1))
+            {
+                *created = new IfThenBlock(next_id, node, cond);
+                (*created)->set_next(cond->get_next());
+                return true;
+            }
         }
     }
     return false;
 }
 
-static bool is_ifelse(const AbstractBlock* node,
-                      const std::vector<std::unordered_set<int>>* preds)
+static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
+                          int next_id,
+                          const std::vector<std::unordered_set<int>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
@@ -95,10 +127,77 @@ static bool is_ifelse(const AbstractBlock* node,
         const AbstractBlock* cond = bb->get_cond();
         if(next->get_out_edges() == 1 && cond->get_out_edges() == 1)
         {
-            return ((*preds)[next->get_id()].size() == 1) &&
-                   ((*preds)[cond->get_id()].size() == 1) &&
-                   next->get_next() == cond->get_next();
+            if(((*preds)[next->get_id()].size() == 1) &&
+               ((*preds)[cond->get_id()].size() == 1) &&
+               next->get_next() == cond->get_next())
+            {
+                *created = new IfElseBlock(next_id, node, next, cond);
+                (*created)->set_next(next->get_next());
+                return true;
+            }
         }
+    }
+    return false;
+}
+
+static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
+                        int next_id, const LoopHelpers& lh,
+                        std::vector<std::unordered_set<int>>* preds)
+{
+    int node_id = node->get_id();
+    // condition for the loop: being in a strong connected comp. (scc)
+    // and the dominator either is in a different scc or i'm the root
+    // (implies this node is the head of the cycle)
+    if(lh.is_loop[node_id] &&
+       (lh.scc[lh.dom[node_id]] != lh.scc[node_id] || node_id == 0))
+    {
+        const AbstractBlock* head = node;
+        const AbstractBlock* next = node->get_next();
+        const AbstractBlock* tail = node->get_next();
+        if(node->get_out_edges() == 2) // while loop
+        {
+            const BasicBlock* head_bb = static_cast<const BasicBlock*>(head);
+            const AbstractBlock* cond = head_bb->get_cond();
+            tail = cond;
+            if(lh.scc[next->get_id()] == lh.scc[node_id])
+            {
+                // next is the tail so swap them
+                tail = next;
+                next = cond;
+            }
+            // if not impossible loop, create the block
+            if(!(lh.dom[node_id] == lh.dom[tail->get_id()]))
+            {
+                *created = new WhileBlock(next_id, head_bb, tail);
+            }
+            else
+            {
+                return false;
+            }
+        }
+        else // do-while loop
+        {
+            const BasicBlock* tail_bb = (const BasicBlock*)(tail);
+            next = tail->get_next();
+            if(lh.scc[next->get_id()] == lh.scc[node_id])
+            {
+                next = tail_bb->get_cond();
+            }
+            // if not impossible loop, create the block
+            if(!(lh.dom[node_id] == lh.dom[tail->get_id()]))
+            {
+                *created = new DoWhileBlock(next_id, head, tail_bb);
+            }
+            else
+            {
+                return false;
+            }
+        }
+        (*created)->set_next(next);
+
+        // remove tail from predecessors or they will propagate wrongly
+        (*preds)[node_id].erase(tail->get_id());
+        return true;
     }
     return false;
 }
@@ -541,6 +640,44 @@ static void update_pred(const AbstractBlock* added,
     }
 }
 
+/**
+ * \brief Checks if a node is the head of a nested loop
+ * This method is much slower than the dominator tree approach, so, although it
+ * could be used for any loop it is left only for the nested loops (which are
+ * not found with the scc + dominator approach). Note that the loop is
+ * considered as a 2 blocks loop!
+ * \param[in] node The node that will be checked
+ * \param[in] all_preds The list of predecessors for the current node
+ * \return true if the node is the head of a nested loop, false otherwise
+ */
+static bool is_nested_loop(const AbstractBlock* node,
+                           const std::unordered_set<int>* preds)
+{
+    // it's nested loop if the child point back to this one.
+    if(preds->size() > 1)
+    {
+        int child0;
+        int child1 = -1;
+        const AbstractBlock* next = node->get_next();
+        child0 = next != nullptr ? next->get_id() : -1;
+        if(node->get_out_edges() > 1)
+        {
+            const BasicBlock* bb = static_cast<const BasicBlock*>(node);
+            const AbstractBlock* cond = bb->get_cond();
+            child1 = cond != nullptr ? cond->get_id() : -1;
+        }
+        for(int pred : *preds)
+        {
+            // if one of the children is also the parent then it's a loop
+            if(child0 == pred || child1 == pred)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
@@ -554,20 +691,21 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     root_node = bmap[0];
 
     // prepare data for the loop resolution
-    std::vector<int> scc = find_cycles((const BasicBlock**)&bmap[0], NODES);
-    std::vector<int> dom = dominator((const BasicBlock**)&bmap[0], NODES);
-    std::vector<bool> is_loop(NODES);
+    LoopHelpers lh;
+    lh.scc = find_cycles((const BasicBlock**)&bmap[0], NODES);
+    lh.dom = dominator((const BasicBlock**)&bmap[0], NODES);
+    lh.is_loop.resize(NODES);
     // array containing how many times an scc appears
     int* scc_count = (int*)malloc(sizeof(int) * NODES);
     memset(scc_count, 0, sizeof(int) * NODES);
     for(int i = 0; i < NODES; i++)
     {
-        scc_count[scc[i]]++;
+        scc_count[lh.scc[i]]++;
     }
     // now writes down the results in the array indexed by node
     for(int i = 0; i < NODES; i++)
     {
-        is_loop[i] = scc_count[scc[i]] > 1;
+        lh.is_loop[i] = scc_count[lh.scc[i]] > 1;
     }
     free(scc_count);
 
@@ -590,118 +728,52 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             const AbstractBlock* node = bmap[list.front()];
             int node_id = node->get_id();
             list.pop();
-            const AbstractBlock* next = node->get_next();
-            AbstractBlock* tmp;
-            // block used to track the `then` part in an if-then
-            const AbstractBlock* then;
-            bool was_loop = false;
-            if(is_self_loop(node))
+            AbstractBlock* created = nullptr;
+            bool loop_resolved = false;
+
+            // exploit short-circuit eval
+            modified = reduce_self_loop(node, &created, next_id) ||
+                       reduce_ifthen(node, &created, next_id, &preds) ||
+                       reduce_ifelse(node, &created, next_id, &preds) ||
+                       reduce_sequence(node, &created, next_id, &preds);
+            if(!modified && reduce_loop(node, &created, next_id, lh, &preds))
             {
-                tmp = new SelfLoopBlock(next_id,
-                                        static_cast<const BasicBlock*>(node));
-                tmp->set_next(next);
+                modified = true;
+                loop_resolved = true;
             }
-            else if(is_ifthen(node, &then, &preds))
+            if(modified)
             {
-                tmp = new IfThenBlock(next_id, node, then);
-                tmp->set_next(then->get_next());
-            }
-            else if(is_ifelse(node, &preds))
-            {
-                const BasicBlock* bb = static_cast<const BasicBlock*>(node);
-                then = bb->get_next();
-                tmp = new IfElseBlock(next_id, node, then, bb->get_cond());
-                tmp->set_next(then->get_next());
-            }
-            else if(is_sequence(node, &preds))
-            {
-                // the sequence cannot be conditional: the cfg finalize() step
-                // take care of that. In any other case anything else with more
-                // than one exit has already been resolved
-                tmp = new SequenceBlock(next_id, node, next);
-                next = next->get_next();
-                tmp->set_next(next);
-            }
-            // condition for the loop: being in a strong connected comp. (scc)
-            // and the dominator either is in a different scc or i'm the root
-            // (implies this node is the head of the cycle)
-            else if(is_loop[node_id] &&
-                    (scc[dom[node_id]] != scc[node_id] || node_id == 0))
-            {
-                const AbstractBlock* head = node;
-                const AbstractBlock* tail = node->get_next();
-                if(node->get_out_edges() == 2) // while loop
+                // this always push at bmap[next_index], without undefined
+                // behaviour
+                bmap.push_back(created);
+                lh.is_loop.push_back(loop_resolved ? false :
+                                                     lh.is_loop[node_id]);
+                lh.scc.push_back(lh.scc[node_id]);
+                lh.dom.push_back(lh.dom[node_id]);
+                std::cout << "Adding " << created->get_id() << " as "
+                          << created->get_name() << " \n";
+                DEBUG_PREDS(&preds);
+
+                // change edges of graph (remap predecessor to address new block
+                // instead of the old basic block)
+                for(int parent_index : preds[node->get_id()])
                 {
-                    const BasicBlock* head_bb = (const BasicBlock*)(head);
-                    const AbstractBlock* cond = head_bb->get_cond();
-                    tail = cond;
-                    if(scc[next->get_id()] == scc[node_id])
-                    {
-                        // next is the tail so swap them
-                        tail = next;
-                        next = cond;
-                    }
-                    tmp = new WhileBlock(next_id, head_bb, tail);
-                }
-                else // do-while loop
-                {
-                    const BasicBlock* tail_bb = (const BasicBlock*)(tail);
-                    next = tail->get_next();
-                    if(scc[next->get_id()] == scc[node_id])
-                    {
-                        next = tail_bb->get_cond();
-                    }
-                    tmp = new DoWhileBlock(next_id, head, tail_bb);
+                    AbstractBlock* parent = bmap[parent_index];
+                    parent->replace_if_match(node, created);
                 }
 
-                // first check that the loop is not impossible
-                if(dom[node_id] == dom[tail->get_id()])
+                // udpate predecessor list
+                update_pred(created, &preds);
+                std::cout << "Then:\n" << std::endl;
+                DEBUG_PREDS(&preds);
+                next_id++;
+                // account for replacement of root
+                if(node == root_node)
                 {
-                    // this case is impossible to reduce
-                    delete tmp;
-                    return false;
+                    root_node = created;
                 }
-                was_loop = true;
-                // TODO: insert code for nested whiles
-                tmp->set_next(next);
-
-                // remove tail from predecessors or they will propagate wrongly
-                preds[node_id].erase(tail->get_id());
+                break;
             }
-            else
-            {
-                continue;
-            }
-
-            modified = true;
-            // this always push at bmap[next_index], without undefined behaviour
-            bmap.push_back(tmp);
-            is_loop.push_back(was_loop ? false : is_loop[node_id]);
-            scc.push_back(scc[node_id]);
-            dom.push_back(dom[node_id]);
-            std::cout << "Adding " << tmp->get_id() << " as " << tmp->get_name()
-                      << " \n";
-            DEBUG_PREDS(&preds);
-
-            // change edges of graph (remap predecessor to address new block
-            // instead of the old basic block)
-            for(int parent_index : preds[node->get_id()])
-            {
-                AbstractBlock* parent = bmap[parent_index];
-                parent->replace_if_match(node, tmp);
-            }
-
-            update_pred(tmp,
-                        &preds); // create new node and udpate predecessor list
-            std::cout << "Then:\n" << std::endl;
-            DEBUG_PREDS(&preds);
-            next_id++;
-            // account for replacement of root
-            if(node == root_node)
-            {
-                root_node = tmp;
-            }
-            break;
         }
         // irreducible point
         if(!modified)

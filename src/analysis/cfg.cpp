@@ -119,7 +119,8 @@ std::ostream& operator<<(std::ostream& stream, const ControlFlowGraph& cfg)
         }
         if(cond != nullptr)
         {
-            stream << current->get_id() << "->" << cond->get_id() << "\n";
+            stream << current->get_id() << "->" << cond->get_id()
+                   << "[arrowhead=\"empty\"];\n";
             if(visited.find(cond->get_id()) == visited.end())
             {
                 unvisited.push(cond);
@@ -194,6 +195,11 @@ void ControlFlowGraph::finalize()
                 blocks[i].set_next(blocks[i].get_cond());
                 blocks[i].set_cond(nullptr);
             }
+        }
+        else if(blocks[i].get_next() == blocks[i].get_cond())
+        {
+            // both children are the same
+            blocks[i].set_cond(nullptr);
         }
     }
 
