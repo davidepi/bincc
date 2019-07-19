@@ -360,11 +360,11 @@ TEST(ControlFlowStructure, structures_inside_loop)
 
 TEST(ControlFlowStructure, nested_loop)
 {
-//    ControlFlowGraph cfg(6);
-//    cfg.set_conditional(3, 2);
-//    cfg.set_conditional(4, 1);
-//    cfg.finalize();
-//    ControlFlowStructure cfs;
-//    ASSERT_TRUE(cfs.build(cfg));
-//    cfg.to_file("/home/davide/Desktop/test.dot");
+    //    ControlFlowGraph cfg(6);
+    //    cfg.set_conditional(3, 2);
+    //    cfg.set_conditional(4, 1);
+    //    cfg.finalize();
+    //    ControlFlowStructure cfs;
+    //    ASSERT_TRUE(cfs.build(cfg));
+    //    cfg.to_file("/home/davide/Desktop/test.dot");
 }

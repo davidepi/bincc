@@ -1,10 +1,9 @@
 //
 // Created by davide on 6/13/19.
 //
-#include "architectures/architecture_x86.hpp"
 #include "architectures/architecture_arm.hpp"
+#include "architectures/architecture_x86.hpp"
 #include <gtest/gtest.h>
-
 
 TEST(Architecture, UNK_is_jump)
 {
@@ -22,7 +21,6 @@ TEST(Architecture, UNK_get_name)
 
     EXPECT_STREQ(arch.get_name().c_str(), "unknown");
 }
-
 
 TEST(Architecture, X86_is_jump)
 {

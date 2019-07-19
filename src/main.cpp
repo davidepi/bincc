@@ -11,7 +11,7 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
                    SynchronizedQueue<Disassembler*>* done);
 int main(int argc, const char* argv[])
 {
-    printf("%lu\n",sizeof(std::vector<void*>));
+    printf("%lu\n", sizeof(std::vector<void*>));
     return run(argc, argv);
 }
 

@@ -33,7 +33,6 @@ public:
      */
     ~Info() = default;
 
-
     /**
      * \brief Getter for the endianness
      *
@@ -65,7 +64,6 @@ public:
     bool is_64bit() const;
 
 private:
-
     // true if big endian
     bool big_endian;
 

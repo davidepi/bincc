@@ -12,12 +12,11 @@
  *
  * Implements the Architecture class by using the ARM specifications
  */
-class ArchitectureARM : public Architecture {
+class ArchitectureARM : public Architecture
+{
 public:
     std::string get_name() override;
     JumpType is_jump(const std::string& mnemonic) override;
 };
-
-
 
 #endif //__ARCHITECTURE_ARM_HPP__
