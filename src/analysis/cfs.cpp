@@ -24,7 +24,10 @@ struct LoopHelpers
 
 ControlFlowStructure::~ControlFlowStructure()
 {
-    delete root_node;
+    if(root_node != nullptr)
+    {
+        delete root_node;
+    }
 }
 
 const AbstractBlock* ControlFlowStructure::root() const
@@ -737,6 +740,8 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     const int NODES = cfg.nodes_no();
     int next_id = NODES;
     root_node = bmap[0];
+    // nodes that should NOT be deleted in case of failure
+    std::unordered_set<int> inherited(NODES);
 
     // prepare data for the loop resolution
     LoopHelpers lh;
@@ -757,8 +762,8 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     }
     free(scc_count);
 
-    // remove self loops from predecessors, otherwise a new backlink will be
-    // added everytime when replacing the parents while resolving a self-loop
+    // remove self loops from predecessors, otherwise a new back link will be
+    // added every time when replacing the parents while resolving a self-loop
     for(int i = 0; i < NODES; i++)
     {
         preds[i].erase(i);
@@ -815,6 +820,19 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 std::cout << "Then:\n" << std::endl;
                 DEBUG_PREDS(&preds);
                 next_id++;
+
+                // record which of the original nodes has been inherited
+                // to avoid leak in case of premature termination
+                int created_size = created->size();
+                for(int i = 0; i < created_size; i++)
+                {
+                    int id = (*created)[i]->get_id();
+                    if(id < NODES)
+                    {
+                        inherited.insert(id);
+                    }
+                }
+
                 // account for replacement of root
                 if(node == root_node)
                 {
@@ -826,6 +844,16 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         // irreducible point
         if(!modified)
         {
+            // delete everything
+            int tot_nodes = bmap.size();
+            for(int i = 0; i < tot_nodes; i++)
+            {
+                if(inherited.find(i) == inherited.end())
+                {
+                    delete bmap[i];
+                }
+                root_node = nullptr;
+            }
             return false;
         }
     }
