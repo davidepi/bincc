@@ -1,4 +1,4 @@
-image: rikorose/gcc-cmake:latest
+image: ubuntu:latest
 
 before_script:
     - apt-get update
@@ -24,7 +24,7 @@ x86_syntax:
 x86_build:
     stage: build
     script:
-        - apt-get install -y radare2
+        - apt-get install -y build-essential g++ cmake radare2
         - mkdir build && cd build && cmake .. && make
     tags:
         - x86_64
@@ -32,7 +32,7 @@ x86_build:
 x86_test:
     stage: test
     script:
-        - apt-get install -y radare2
+        - apt-get install -y build-essential g++ cmake radare2
         - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz && tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
         - mkdir build && cd build && cmake .. && make runTests && make test
     tags:
@@ -41,7 +41,7 @@ x86_test:
 x86_memcheck:
     stage: memcheck
     script:
-        - apt-get install -y radare2 valgrind
+        - apt-get install -y build-essential g++ cmake radare2 valgrind
         - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz && tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
         - mkdir build && cd build && cmake .. && make runTests && valgrind --trace-children=no --leak-check=full --error-exitcode=1 ./runTests
     tags:
