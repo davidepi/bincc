@@ -6,6 +6,7 @@
 #include "basic_block.hpp"
 #include <cassert>
 #include <iostream>
+#include <stack>
 
 // The SequenceBlock::delete_list containg elements on which `delete` should be
 // called. This because if the components of the sequence are other sequences,
@@ -66,7 +67,7 @@ BlockType IfThenBlock::get_type() const
     return IF_THEN;
 }
 
-IfThenBlock::IfThenBlock(int id, const AbstractBlock* ifb,
+IfThenBlock::IfThenBlock(int id, const BasicBlock* ifb,
                          const AbstractBlock* thenb)
     : AbstractBlock(id), head(ifb), then(thenb)
 {
@@ -88,10 +89,40 @@ const AbstractBlock* IfThenBlock::operator[](int index) const
     return index == 0 ? head : then;
 }
 
-IfElseBlock::IfElseBlock(int id, const AbstractBlock* ifb,
+IfElseBlock::IfElseBlock(int id, const BasicBlock* ifb,
                          const AbstractBlock* thenb, const AbstractBlock* elseb)
     : AbstractBlock(id), head(ifb), then(thenb), ellse(elseb)
 {
+    // resolve chained heads
+    std::stack<const BasicBlock*> chain_stack;
+    const BasicBlock* tmp_head = ifb;
+    const AbstractBlock* next = tmp_head->get_next() != elseb ?
+                                    tmp_head->get_next() :
+                                    tmp_head->get_cond();
+    while(next != thenb)
+    {
+        chain_len++;
+        tmp_head = static_cast<const BasicBlock*>(next);
+        chain_stack.push(tmp_head);
+        next = tmp_head->get_next() != elseb ? tmp_head->get_next() :
+                                               tmp_head->get_cond();
+    }
+
+    if(chain_len != 0)
+    {
+        // copy the stack into the more space_efficient array
+        chain =
+            (const BasicBlock**)malloc(sizeof(const BasicBlock*) * chain_len);
+        for(int i = chain_len - 1; i >= 0; i--)
+        {
+            chain[i] = chain_stack.top();
+            chain_stack.pop();
+        }
+    }
+    else
+    {
+        chain = nullptr;
+    }
 }
 
 IfElseBlock::~IfElseBlock()
@@ -99,6 +130,14 @@ IfElseBlock::~IfElseBlock()
     delete ellse;
     delete then;
     delete head;
+    if(chain != nullptr)
+    {
+        for(int i = 0; i < chain_len; i++)
+        {
+            delete chain[i];
+        }
+        free(chain);
+    }
 }
 
 BlockType IfElseBlock::get_type() const
@@ -108,7 +147,7 @@ BlockType IfElseBlock::get_type() const
 
 int IfElseBlock::size() const
 {
-    return 3;
+    return chain_len + 3;
 }
 
 const AbstractBlock* IfElseBlock::operator[](int index) const
@@ -121,8 +160,12 @@ const AbstractBlock* IfElseBlock::operator[](int index) const
     {
         return then;
     }
-    else
+    else if(index == 2)
     {
         return ellse;
+    }
+    else
+    {
+        return chain[index - 3];
     }
 }

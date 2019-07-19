@@ -202,8 +202,8 @@ TEST(ControlFlowStructure, if_else)
     EXPECT_EQ(tail2->size(), 0);
     EXPECT_EQ(middle->get_type(), BlockType::IF_ELSE);
     const AbstractBlock* ifblock = (*middle)[0];
-    const AbstractBlock* thenblock = (*middle)[1];
-    const AbstractBlock* elseblock = (*middle)[2];
+    const AbstractBlock* elseblock = (*middle)[1];
+    const AbstractBlock* thenblock = (*middle)[2];
     EXPECT_EQ(ifblock->get_id(), 1);
     EXPECT_EQ(thenblock->get_id(), 2);
     EXPECT_EQ(elseblock->get_id(), 3);
@@ -268,31 +268,46 @@ TEST(ControlFlowStructure, impossible_CFG)
     cfg.set_next(1, 2);
     cfg.set_next(2, 1);
     cfg.finalize();
-    cfg.to_file("/home/davide/Desktop/test.dot");
     ControlFlowStructure cfs;
     EXPECT_FALSE(cfs.build(cfg));
 }
 
 TEST(ControlFlowStructure, short_circuit_if_else)
 {
-    ControlFlowGraph cfg(5);
-    cfg.set_next(2, 4);
+    ControlFlowGraph cfg(6);
     cfg.set_conditional(0, 3);
     cfg.set_conditional(1, 3);
-    cfg.set_next(3, 4);
+    cfg.set_conditional(2, 4);
+    cfg.set_next(3, 5);
+    cfg.finalize();
     ControlFlowStructure cfs;
     ASSERT_TRUE(cfs.build(cfg));
+    const AbstractBlock* seq = cfs.root();
+    ASSERT_EQ(seq->size(), 2);
+    const AbstractBlock* ifelse = (*seq)[0];
+    EXPECT_EQ(ifelse->get_type(), IF_ELSE);
+    ASSERT_EQ(ifelse->size(), 5);
+    const AbstractBlock* node = (*ifelse)[0];
+    EXPECT_EQ(node->get_id(), 0);
+    node = (*ifelse)[1];
+    EXPECT_EQ(node->get_id(), 4);
+    node = (*ifelse)[2];
+    EXPECT_EQ(node->get_id(), 3);
+    node = (*ifelse)[3];
+    EXPECT_EQ(node->get_id(), 1);
+    node = (*ifelse)[4];
+    EXPECT_EQ(node->get_id(), 2);
 }
 
 TEST(ControlFlowStructure, short_circuit_if_then)
 {
     ControlFlowGraph cfg(7);
-    cfg.set_conditional(0,6);
-    cfg.set_conditional(1,6);
-    cfg.set_conditional(2,6);
-    cfg.set_conditional(3,6);
-    cfg.set_conditional(4,6);
-    cfg.set_conditional(5,6);
+    cfg.set_conditional(0, 6);
+    cfg.set_conditional(1, 6);
+    cfg.set_conditional(2, 6);
+    cfg.set_conditional(3, 6);
+    cfg.set_conditional(4, 6);
+    cfg.set_conditional(5, 6);
     cfg.finalize();
     ControlFlowStructure cfs;
     ASSERT_TRUE(cfs.build(cfg));
@@ -345,11 +360,11 @@ TEST(ControlFlowStructure, structures_inside_loop)
 
 TEST(ControlFlowStructure, nested_loop)
 {
-    ControlFlowGraph cfg(6);
-    cfg.set_conditional(3, 2);
-    cfg.set_conditional(4, 1);
-    cfg.finalize();
-    ControlFlowStructure cfs;
-    ASSERT_TRUE(cfs.build(cfg));
-    cfg.to_file("/home/davide/Desktop/test.dot");
+//    ControlFlowGraph cfg(6);
+//    cfg.set_conditional(3, 2);
+//    cfg.set_conditional(4, 1);
+//    cfg.finalize();
+//    ControlFlowStructure cfs;
+//    ASSERT_TRUE(cfs.build(cfg));
+//    cfg.to_file("/home/davide/Desktop/test.dot");
 }

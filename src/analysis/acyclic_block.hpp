@@ -6,6 +6,7 @@
 #define __ACYCLIC_BLOCK_HPP__
 
 #include "abstract_block.hpp"
+#include "basic_block.hpp"
 #include <unordered_set>
 #include <vector>
 
@@ -92,7 +93,7 @@ public:
      * \param[in] ifb Pointer to the head block that will be inherited
      * \param[in] thenb Pointer to the then block that will be inherited
      */
-    IfThenBlock(int id, const AbstractBlock* ifb, const AbstractBlock* thenb);
+    IfThenBlock(int id, const BasicBlock* ifb, const AbstractBlock* thenb);
 
     /**
      * \brief Default destructor
@@ -122,7 +123,7 @@ public:
 
 private:
     // if block
-    const AbstractBlock* head;
+    const BasicBlock* head;
     // then block
     const AbstractBlock* then;
 };
@@ -147,7 +148,7 @@ public:
      * \param[in] thenb Pointer to the then block that will be inherited
      * \param[in] elseb Pointer the the else block that will be inherited
      */
-    IfElseBlock(int id, const AbstractBlock* ifb, const AbstractBlock* thenb,
+    IfElseBlock(int id, const BasicBlock* ifb, const AbstractBlock* thenb,
                 const AbstractBlock* elseb);
 
     /**
@@ -179,11 +180,15 @@ public:
 
 private:
     // if block
-    const AbstractBlock* head;
+    const BasicBlock* head;
     // then block
     const AbstractBlock* then;
     // else block
     const AbstractBlock* ellse;
+    // chained blocks
+    const BasicBlock** chain;
+    // total size of if-else
+    int chain_len{0};
 };
 
 #endif //__ACYCLIC_BLOCK_HPP__

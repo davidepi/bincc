@@ -96,7 +96,8 @@ static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
             if((next->get_out_edges() == 1) &&
                ((*preds)[next->get_id()].size() == 1))
             {
-                *created = new IfThenBlock(next_id, node, next);
+                *created = new IfThenBlock(
+                    next_id, static_cast<const BasicBlock*>(node), next);
                 (*created)->set_next(next->get_next());
                 return true;
             }
@@ -107,7 +108,8 @@ static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
             if((cond->get_out_edges() == 1) &&
                ((*preds)[cond->get_id()].size() == 1))
             {
-                *created = new IfThenBlock(next_id, node, cond);
+                *created = new IfThenBlock(
+                    next_id, static_cast<const BasicBlock*>(node), cond);
                 (*created)->set_next(cond->get_next());
                 return true;
             }
@@ -118,23 +120,69 @@ static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
 
 static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
                           int next_id,
-                          const std::vector<std::unordered_set<int>>* preds)
+                          std::vector<std::unordered_set<int>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
-        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
-        const AbstractBlock* next = bb->get_next();
-        const AbstractBlock* cond = bb->get_cond();
-        if(next->get_out_edges() == 1 && cond->get_out_edges() == 1)
+        std::stack<int> added;
+
+        // init: determine then block and else block based on preds
+        const BasicBlock* head = static_cast<const BasicBlock*>(node);
+        const AbstractBlock* thenb = head->get_cond();
+        const AbstractBlock* elseb = head->get_next();
+        int preds_then = (*preds)[thenb->get_id()].size();
+        int preds_else = (*preds)[elseb->get_id()].size();
+        int heads = 1;
+        if(preds_then > 1)
         {
-            if(((*preds)[next->get_id()].size() == 1) &&
-               ((*preds)[cond->get_id()].size() == 1) &&
-               next->get_next() == cond->get_next())
+            if(preds_else > 1)
             {
-                *created = new IfElseBlock(next_id, node, next, cond);
-                (*created)->set_next(next->get_next());
-                return true;
+                // not an if-else
+                return false;
             }
+            else if(preds_else == 1)
+            {
+                // could be an if-else but the then and else blocks are swapped
+                const AbstractBlock* tmp = thenb;
+                thenb = elseb;
+                elseb = tmp;
+            }
+        }
+
+        // iterative step: try to descend as much as possible with the then
+        const AbstractBlock* next;
+        const AbstractBlock* cond;
+        while(thenb->get_out_edges() == 2)
+        {
+            const BasicBlock* new_hd;
+            new_hd = static_cast<const BasicBlock*>(thenb);
+            next = new_hd->get_next();
+            cond = new_hd->get_cond();
+            if(next == elseb && (*preds)[cond->get_id()].size() == 1)
+            {
+                heads++;
+                thenb = cond;
+            }
+            else if(cond == elseb && (*preds)[next->get_id()].size() == 1)
+            {
+                heads++;
+                thenb = next;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // last check: then and else should merge to the same block and the
+        // number of entries to the else must be equal to the number of heads
+        if(elseb->get_out_edges() == 1 && thenb->get_out_edges() == 1 &&
+           elseb->get_next() == thenb->get_next() &&
+           (*preds)[elseb->get_id()].size() == heads)
+        {
+            *created = new IfElseBlock(next_id, head, thenb, elseb);
+            (*created)->set_next(thenb->get_next());
+            return true;
         }
     }
     return false;
@@ -166,7 +214,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
                 next = cond;
             }
             // if not impossible loop, create the block
-            if(!(lh.dom[node_id] == lh.dom[tail->get_id()]))
+            if(lh.dom[node_id] != lh.dom[tail->get_id()])
             {
                 *created = new WhileBlock(next_id, head_bb, tail);
             }
@@ -184,7 +232,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
                 next = tail_bb->get_cond();
             }
             // if not impossible loop, create the block
-            if(!(lh.dom[node_id] == lh.dom[tail->get_id()]))
+            if(lh.dom[node_id] != lh.dom[tail->get_id()])
             {
                 *created = new DoWhileBlock(next_id, head, tail_bb);
             }

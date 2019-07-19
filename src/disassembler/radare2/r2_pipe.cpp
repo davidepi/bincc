@@ -181,5 +181,9 @@ void R2Pipe::close()
         ::close(pipe_out[WRITE_END]);
         ::close(pipe_in[READ_END]);
     }
+    if(analyzed != nullptr)
+    {
+        free((void*)analyzed);
+    }
     analyzed = nullptr;
 }

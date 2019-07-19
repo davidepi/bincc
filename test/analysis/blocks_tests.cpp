@@ -250,6 +250,8 @@ TEST(IfElseBlock, type)
     BasicBlock* b0 = new BasicBlock(0);
     BasicBlock* b1 = new BasicBlock(1);
     BasicBlock* b2 = new BasicBlock(2);
+    b0->set_next(b1);
+    b0->set_cond(b2);
     IfElseBlock ift(3, b0, b1, b2);
     EXPECT_EQ(ift.get_type(), BlockType::IF_ELSE);
 }
@@ -259,6 +261,8 @@ TEST(IfElseBlock, name)
     BasicBlock* b0 = new BasicBlock(0);
     BasicBlock* b1 = new BasicBlock(1);
     BasicBlock* b2 = new BasicBlock(2);
+    b0->set_next(b1);
+    b0->set_cond(b2);
     IfElseBlock ift(3, b0, b1, b2);
     EXPECT_STREQ(ift.get_name(), "If-else");
 }
@@ -268,6 +272,8 @@ TEST(IfElseBlock, size)
     BasicBlock* b0 = new BasicBlock(0);
     BasicBlock* b1 = new BasicBlock(1);
     BasicBlock* b2 = new BasicBlock(2);
+    b0->set_next(b1);
+    b0->set_cond(b2);
     IfElseBlock ift(3, b0, b1, b2);
     EXPECT_EQ(ift.size(), 3);
 }
@@ -277,6 +283,8 @@ TEST(IfElseBlock, access)
     BasicBlock* b0 = new BasicBlock(0);
     BasicBlock* b1 = new BasicBlock(1);
     BasicBlock* b2 = new BasicBlock(2);
+    b0->set_next(b1);
+    b0->set_cond(b2);
     IfElseBlock ift(3, b0, b1, b2);
     ASSERT_EQ(ift.size(), 3);
     EXPECT_EQ(ift[0], b0);
