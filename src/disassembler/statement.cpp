@@ -32,11 +32,12 @@ std::string Statement::get_args() const
 Statement::Statement(uint64_t offset, std::string opcode)
     : offset(offset), instruction(std::move(opcode))
 {
+    constexpr const unsigned int NPOS = (unsigned int)std::string::npos;
     // everything lowercase. I'm sorry, little one
     std::transform(instruction.begin(), instruction.end(), instruction.begin(),
                    ::tolower);
     args_at = instruction.find_first_of(' ');
-    if(args_at == std::string::npos)
+    if(args_at == NPOS)
     {
         args_at = instruction.length();
     }

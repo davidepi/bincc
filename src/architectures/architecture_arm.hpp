@@ -12,7 +12,7 @@
  *
  * Implements the Architecture class by using the ARM specifications
  */
-class ArchitectureARM : public Architecture
+class ArchitectureARM final : public Architecture
 {
 public:
     std::string get_name() override;

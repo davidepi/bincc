@@ -39,9 +39,6 @@ SET(DEBUG_FLAGS
     -g
     -Wall
     -Wpedantic
-    -Wsuggest-attribute=pure
-    -Wsuggest-attribute=const
-    -Wsuggest-attribute=noreturn
     -Werror
     -Wfatal-errors
     )

@@ -70,7 +70,7 @@ public:
  * or produce unusable results. This is a fallback for unrecognized
  * architectures.
  */
-class ArchitectureUNK : public Architecture
+class ArchitectureUNK final : public Architecture
 {
 public:
     std::string get_name() override

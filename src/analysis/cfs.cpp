@@ -5,6 +5,7 @@
 #include "cfs.hpp"
 #include "acyclic_block.hpp"
 #include "cyclic_block.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <fstream>
@@ -264,40 +265,41 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
  * array of ids is a set containing the id of the predecessor for each key. As
  * for the bmap parameter the index of the vector is the id of the node. Also
  * this, should be resized!
- * \param[in,out] visited Array containing the already visited nodes
+ * \param[in,out] visited Array containing the already visited nodes. The array
+ * is indexed by node ID
  * \return The newly created block
  */
-static AbstractBlock*
-deep_copy(const BasicBlock* src, std::vector<AbstractBlock*>* bmap,
-          std::vector<std::unordered_set<int>>* pred,
-          std::unordered_set<const AbstractBlock*>* visited)
+static AbstractBlock* deep_copy(const BasicBlock* src,
+                                std::vector<AbstractBlock*>* bmap,
+                                std::vector<std::unordered_set<int>>* pred,
+                                std::vector<bool>* visited)
 {
-    visited->insert(src);
     // create the node
     int current_id = src->get_id();
+    (*visited)[current_id] = true;
     BasicBlock* created = new BasicBlock(current_id);
     (*bmap)[current_id] = created;
-    (*pred)[current_id] = std::move(std::unordered_set<int>());
+    (*pred)[current_id] = std::unordered_set<int>();
     // resolve the children
     const BasicBlock* next = static_cast<const BasicBlock*>(src->get_next());
     const BasicBlock* cond = static_cast<const BasicBlock*>(src->get_cond());
     if(next != nullptr)
     {
-        if(visited->find(next) == visited->end())
+        int next_id = next->get_id();
+        if(!(*visited)[next_id])
         {
             deep_copy(next, bmap, pred, visited);
         }
-        int next_id = next->get_id();
         (*pred)[next_id].insert(current_id);
         created->set_next((*bmap)[next_id]);
     }
     if(cond != nullptr)
     {
-        if(visited->find(cond) == visited->end())
+        int cond_id = cond->get_id();
+        if(!(*visited)[cond_id])
         {
             deep_copy(cond, bmap, pred, visited);
         }
-        int cond_id = cond->get_id();
         (*pred)[cond_id].insert(current_id);
         created->set_cond((*bmap)[cond_id]);
     }
@@ -308,18 +310,19 @@ deep_copy(const BasicBlock* src, std::vector<AbstractBlock*>* bmap,
  * \brief Recursive call of the post-order depth-first visit
  * \param[in] node the starting point of the dfs (recursive step)
  * \param[out] list the queue containing the post-order id of the visited nodes
- * \param[in, out] marked the set containing all the already-visited nodes
- * (recall that the cfg is not a tree so we must avoid loops)
+ * \param[in, out] marked an array containing all the already-visited nodes. The
+ * array index correspond to the node ID. This exploits the fact that IDs are
+ * contiguous
  */
 static void postorder_visit(const AbstractBlock* node, std::queue<int>* list,
-                            std::unordered_set<const AbstractBlock*>* marked)
+                            std::vector<bool>* marked)
 {
-    marked->insert(node);
+    (*marked)[node->get_id()] = true;
     // this get_next() force me to put everything const. Note to myself of the
     // future: don't attempt to remove constness just because this function is
     // private
     const AbstractBlock* next = node->get_next();
-    if(next != nullptr && marked->find(next) == marked->end())
+    if(next != nullptr && !(*marked)[next->get_id()])
     {
         postorder_visit(next, list, marked);
     }
@@ -327,7 +330,7 @@ static void postorder_visit(const AbstractBlock* node, std::queue<int>* list,
     {
         const BasicBlock* cond = static_cast<const BasicBlock*>(
             static_cast<const BasicBlock*>(node)->get_cond());
-        if(cond != nullptr && marked->find(cond) == marked->end())
+        if(cond != nullptr && !(*marked)[cond->get_id()])
         {
             postorder_visit(cond, list, marked);
         }
@@ -691,53 +694,15 @@ static void update_pred(const AbstractBlock* added,
     }
 }
 
-/**
- * \brief Checks if a node is the head of a nested loop
- * This method is much slower than the dominator tree approach, so, although it
- * could be used for any loop it is left only for the nested loops (which are
- * not found with the scc + dominator approach). Note that the loop is
- * considered as a 2 blocks loop!
- * \param[in] node The node that will be checked
- * \param[in] all_preds The list of predecessors for the current node
- * \return true if the node is the head of a nested loop, false otherwise
- */
-static bool is_nested_loop(const AbstractBlock* node,
-                           const std::unordered_set<int>* preds)
-{
-    // it's nested loop if the child point back to this one.
-    if(preds->size() > 1)
-    {
-        int child0;
-        int child1 = -1;
-        const AbstractBlock* next = node->get_next();
-        child0 = next != nullptr ? next->get_id() : -1;
-        if(node->get_out_edges() > 1)
-        {
-            const BasicBlock* bb = static_cast<const BasicBlock*>(node);
-            const AbstractBlock* cond = bb->get_cond();
-            child1 = cond != nullptr ? cond->get_id() : -1;
-        }
-        for(int pred : *preds)
-        {
-            // if one of the children is also the parent then it's a loop
-            if(child0 == pred || child1 == pred)
-            {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
 bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
-    std::vector<AbstractBlock*> bmap(cfg.nodes_no());           //[id] = block>
-    std::vector<std::unordered_set<int>> preds(cfg.nodes_no()); // [id] = preds
-    std::unordered_set<const AbstractBlock*> visited;
-    deep_copy(cfg.root(), &bmap, &preds, &visited);
-    visited.clear();
     const int NODES = cfg.nodes_no();
+    std::vector<AbstractBlock*> bmap(NODES);           //[id] = block>
+    std::vector<std::unordered_set<int>> preds(NODES); // [id] = preds
+    std::vector<bool> visited(NODES, false);
+    deep_copy(cfg.root(), &bmap, &preds, &visited);
+    std::fill(visited.begin(), visited.end(), 0);
     int next_id = NODES;
     root_node = bmap[0];
     // nodes that should NOT be deleted in case of failure
@@ -773,6 +738,8 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     while(root_node->get_out_edges() != 0)
     {
         std::queue<int> list;
+        //update visited size if necessary (because it is accesed by index)
+        visited.reserve(bmap.size());
         postorder_visit(root_node, &list, &visited);
         visited.clear();
         bool modified = false;
