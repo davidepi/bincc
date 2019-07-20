@@ -702,7 +702,6 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     std::vector<std::unordered_set<int>> preds(NODES); // [id] = preds
     std::vector<bool> visited(NODES, false);
     deep_copy(cfg.root(), &bmap, &preds, &visited);
-    std::fill(visited.begin(), visited.end(), 0);
     int next_id = NODES;
     root_node = bmap[0];
     // nodes that should NOT be deleted in case of failure
@@ -738,10 +737,10 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     while(root_node->get_out_edges() != 0)
     {
         std::queue<int> list;
-        //update visited size if necessary (because it is accesed by index)
+        // update visited size if necessary (because it is accesed by index)
         visited.reserve(bmap.size());
+        std::fill(visited.begin(), visited.end(), false);
         postorder_visit(root_node, &list, &visited);
-        visited.clear();
         bool modified = false;
         while(!list.empty())
         {
@@ -812,15 +811,15 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         if(!modified)
         {
             // delete everything
-            int tot_nodes = bmap.size();
-            for(int i = 0; i < tot_nodes; i++)
-            {
-                if(inherited.find(i) == inherited.end())
-                {
-                    delete bmap[i];
-                }
-                root_node = nullptr;
-            }
+//            int tot_nodes = bmap.size();
+//            for(int i = 0; i < tot_nodes; i++)
+//            {
+//                if(inherited.find(i) == inherited.end())
+//                {
+//                    delete bmap[i];
+//                }
+//                root_node = nullptr;
+//            }
             return false;
         }
     }
