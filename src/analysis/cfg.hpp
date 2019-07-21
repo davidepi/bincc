@@ -9,6 +9,7 @@
 #include "basic_block.hpp"
 #include <queue>
 #include <string>
+#include <vector>
 
 /**
  * \brief Control Flow Graph of a function
@@ -39,7 +40,7 @@ public:
     /**
      * \brief Default destructor
      */
-    ~ControlFlowGraph();
+    ~ControlFlowGraph() = default;
 
     /**
      * \brief Finalize the computation of the CFG
@@ -153,7 +154,7 @@ private:
     // number of edges of the CFG
     unsigned int edges;
     // root of the nodes
-    BasicBlock* blocks;
+    std::vector<BasicBlock> blocks;
 };
 
 #endif //__CFG_HPP__

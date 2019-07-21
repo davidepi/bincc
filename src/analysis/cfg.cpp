@@ -10,11 +10,9 @@
 #include <stack>
 #include <unordered_set>
 
-ControlFlowGraph::ControlFlowGraph(unsigned int size) : nodes(size), edges(0)
+ControlFlowGraph::ControlFlowGraph(unsigned int size)
+    : nodes(size), edges(0), blocks(size + 1)
 {
-    // an extra block is allocated, in case a single exit point is needed:
-    // otherwise it will be a mess to update every pointer.
-    blocks = new BasicBlock[nodes + 1];
     for(unsigned int i = 0; i < size - 1; i++)
     {
         blocks[i].set_id(i);
@@ -25,11 +23,6 @@ ControlFlowGraph::ControlFlowGraph(unsigned int size) : nodes(size), edges(0)
     blocks[size - 1].set_id(size - 1);
     blocks[size - 1].set_next(nullptr);
     blocks[size - 1].set_cond(nullptr);
-}
-
-ControlFlowGraph::~ControlFlowGraph()
-{
-    delete[] blocks;
 }
 
 std::string ControlFlowGraph::to_dot() const
@@ -175,6 +168,26 @@ std::queue<const BasicBlock*> ControlFlowGraph::dfst() const
     return retval;
 }
 
+/**
+ * \brief Performs a DFS without additional actions. Just to mark reachability
+ * \param[in] root The root node
+ * \param[in] visited The already visited nodes
+ */
+static void dfs(const BasicBlock* root, std::vector<bool>& visited)
+{
+    visited[root->get_id()] = true;
+    const BasicBlock* left = static_cast<const BasicBlock*>(root->get_next());
+    const BasicBlock* right = static_cast<const BasicBlock*>(root->get_cond());
+    if(left != nullptr && !visited[left->get_id()])
+    {
+        dfs(left, visited);
+    }
+    if(right != nullptr && !visited[right->get_id()])
+    {
+        dfs(right, visited);
+    }
+}
+
 void ControlFlowGraph::finalize()
 {
     // check for single exit
@@ -205,7 +218,6 @@ void ControlFlowGraph::finalize()
 
     if(exit_nodes.size() > 1)
     {
-        // this extra node is already allocated in the constructor just in case
         nodes++;
         blocks[nodes - 1].set_id(nodes - 1);
         blocks[nodes - 1].set_next(nullptr);
@@ -215,6 +227,62 @@ void ControlFlowGraph::finalize()
             set_next(id, nodes - 1);
         }
     }
+
+    struct BBCopy
+    {
+        int id;
+        int left_id;
+        int right_id;
+    };
+
+    // at this point perform a deep copy and keep only reachable nodes
+    std::vector<bool> marked(nodes, false);
+    // how many skipped nodes prior to the indexed one
+    std::vector<int> skipped(nodes, 0);
+    // old cfg representation using only ids, in case a realloc is needed
+    std::vector<BBCopy> bbmap(nodes);
+
+    dfs(&(blocks[0]), marked);
+    int skip_counter = 0;
+    for(int i = 0; i < nodes; i++)
+    {
+        bbmap[i].id = blocks[i].get_id();
+        bbmap[i].left_id =
+            blocks[i].get_next() != nullptr ?
+                (const BasicBlock*)(blocks[i].get_next()) - &(blocks[0]) :
+                -1;
+        bbmap[i].right_id =
+            blocks[i].get_cond() != nullptr ?
+                (const BasicBlock*)(blocks[i].get_cond()) - &(blocks[0]) :
+                -1;
+        if(!marked[i])
+        {
+            skip_counter++;
+        }
+        skipped[i] = skip_counter;
+    }
+    /* TODO: finish implementation
+    // realloc everything only if there are skipped nodes
+    if(skip_counter != 0)
+    {
+        void* begin = &(blocks[0]);
+        std::vector<BasicBlock> tmp = blocks;
+        blocks.clear();
+        blocks.resize(nodes - skip_counter);
+        int new_index = 0;
+        int old_index = 0;
+        while(old_index < nodes)
+        {
+            if(marked[old_index])
+            {
+                blocks[new_index] = tmp[old_index];
+                blocks[new_index].set_id(new_index);
+                int left = tmp[old_index].g new_index++;
+            }
+            old_index++;
+        }
+    }
+     */
 }
 
 const BasicBlock* ControlFlowGraph::get_node(unsigned int id) const

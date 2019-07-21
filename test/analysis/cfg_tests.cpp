@@ -138,3 +138,27 @@ TEST(ControlFlowGraph, dfst)
         postorder.pop();
     }
 }
+
+TEST(ControlFlowGraph, unreachables)
+{
+    ControlFlowGraph cfg(6);
+    cfg.set_next(1, 4);
+    cfg.set_conditional(2, 5);
+    cfg.set_next(5, 1);
+    cfg.set_conditional(5, 4);
+    cfg.finalize();
+    EXPECT_EQ(cfg.nodes_no(), 4);
+    EXPECT_EQ(cfg.edges_no(), 5);
+    const BasicBlock* head = cfg.root();
+    EXPECT_EQ(head->get_id(), 0);
+    ASSERT_NE(head->get_next(), nullptr);
+    head = static_cast<const BasicBlock*>(head->get_next());
+    EXPECT_EQ(head->get_id(), 1);
+    ASSERT_NE(head->get_next(), nullptr);
+    head = static_cast<const BasicBlock*>(head->get_next());
+    EXPECT_EQ(head->get_id(), 2);
+    ASSERT_NE(head->get_next(), nullptr);
+    head = static_cast<const BasicBlock*>(head->get_next());
+    EXPECT_EQ(head->get_id(), 3);
+    ASSERT_NE(head->get_next(), nullptr);
+}
