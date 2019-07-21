@@ -739,7 +739,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         std::queue<int> list;
         // update visited size if necessary (because it is accesed by index)
         visited.reserve(bmap.size());
-        std::fill(visited.begin(), visited.end(), false);
+        std::fill(visited.begin(), visited.begin() + visited.capacity(), false);
         postorder_visit(root_node, &list, &visited);
         bool modified = false;
         while(!list.empty())
@@ -811,15 +811,15 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         if(!modified)
         {
             // delete everything
-//            int tot_nodes = bmap.size();
-//            for(int i = 0; i < tot_nodes; i++)
-//            {
-//                if(inherited.find(i) == inherited.end())
-//                {
-//                    delete bmap[i];
-//                }
-//                root_node = nullptr;
-//            }
+            int tot_nodes = bmap.size();
+            for(int i = 0; i < tot_nodes; i++)
+            {
+                if(inherited.find(i) == inherited.end())
+                {
+                    delete bmap[i];
+                }
+                root_node = nullptr;
+            }
             return false;
         }
     }
