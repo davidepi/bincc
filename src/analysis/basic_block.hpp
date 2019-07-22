@@ -36,6 +36,21 @@ public:
     ~BasicBlock() override = default;
 
     /**
+     * \brief Re-enable copy-costructory
+     * \warning Note that pointer will likely be broken
+     * \param[in] orig Object that will be copied
+     */
+    BasicBlock(const BasicBlock& orig);
+
+    /**
+     * \brief Re-enable copy-assignment operator
+     * \warning Note that pointer will likely be broken
+     * \param[in] orig Object that will be copied
+     * \return the current object after assigning the input one
+     */
+    BasicBlock& operator=(const BasicBlock& orig);
+
+    /**
      * \brief Getter the conditional jump
      *
      * If the basic block ends with a conditional jump, this is the block where

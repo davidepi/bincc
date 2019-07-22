@@ -11,6 +11,7 @@ stages:
     - build
     - test
     - memcheck
+    - coverage
 
 x86_syntax:
     stage: syntax
@@ -46,3 +47,10 @@ x86_memcheck:
         - mkdir build && cd build && cmake .. && make runTests && valgrind --trace-children=no --leak-check=full --error-exitcode=1 ./runTests
     tags:
         - x86_64
+
+x86_coverage:
+    stage: coverage
+    script:
+        - apt-get install -y wget build-essential g++ cmake radare2
+        - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz && tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
+        - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Coverage" .. && make runTests && make test && make coverage

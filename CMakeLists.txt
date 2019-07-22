@@ -53,6 +53,7 @@ SET(COVERAGE_FLAGS
   -w
   -g
   -O0
+  --coverage
   -fprofile-arcs
   -ftest-coverage
   )
@@ -108,12 +109,21 @@ IF(GTEST_FOUND)
                                TESTS_DIR="${PROJECT_SOURCE_DIR}/test/")
     LIST(APPEND TEST_REQUIRED_LIBS ${GTEST_BOTH_LIBRARIES})
     LIST(APPEND TEST_REQUIRED_LIBS ${CMAKE_THREAD_LIBS_INIT})
-    LIST(APPEND TEST_REQUIRED_LIBS $<$<CONFIG:Coverage>:"-lgcov">)
+    LIST(APPEND TEST_REQUIRED_LIBS $<$<CONFIG:Coverage>:gcov>)
     TARGET_INCLUDE_DIRECTORIES(runTests PUBLIC ${ALL_REQUIRED_INCLUDES})
     TARGET_COMPILE_DEFINITIONS(runTests PUBLIC ${ALL_REQUIRED_DEFS})
     TARGET_COMPILE_OPTIONS(runTests PUBLIC $<$<CONFIG:Coverage>:${COVERAGE_FLAGS}>)
     TARGET_LINK_LIBRARIES(runTests ${ALL_REQUIRED_LIBS} ${TEST_REQUIRED_LIBS})
     GTEST_DISCOVER_TESTS(runTests AUTO)
+ENDIF()
+
+FIND_PROGRAM(GCOVR NAMES "gcovr")
+IF(GCOVR)
+    ADD_CUSTOM_COMMAND(OUTPUT run_gcovr DEPENDS runTests
+                       POST_BUILD
+                       COMMAND ${GCOVR} -r ${PROJECT_SOURCE_DIR}/src --object-directory=${PROJECT_BINARY_DIR} -v --branches --exclude-unreachable-branches
+                       WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
+    ADD_CUSTOM_TARGET(coverage DEPENDS run_gcovr)
 ENDIF()
 
 #MAIN PROGRAM

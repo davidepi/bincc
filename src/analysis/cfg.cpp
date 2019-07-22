@@ -261,28 +261,38 @@ void ControlFlowGraph::finalize()
         }
         skipped[i] = skip_counter;
     }
-    /* TODO: finish implementation
+
     // realloc everything only if there are skipped nodes
     if(skip_counter != 0)
     {
-        void* begin = &(blocks[0]);
-        std::vector<BasicBlock> tmp = blocks;
         blocks.clear();
-        blocks.resize(nodes - skip_counter);
-        int new_index = 0;
-        int old_index = 0;
-        while(old_index < nodes)
+        nodes = nodes - skip_counter;
+        blocks.resize(nodes);
+        edges = 0;
+        const int SIZE = bbmap.size();
+        for(int old_id = 0; old_id < SIZE; old_id++)
         {
-            if(marked[old_index])
+            if(marked[old_id])
             {
-                blocks[new_index] = tmp[old_index];
-                blocks[new_index].set_id(new_index);
-                int left = tmp[old_index].g new_index++;
+                const int NEW_ID = old_id - skipped[old_id];
+                blocks[NEW_ID].set_id(NEW_ID);
+                if(bbmap[old_id].left_id != -1)
+                {
+                    edges++;
+                    const int LEFT_ID = bbmap[old_id].left_id;
+                    blocks[NEW_ID].set_next(
+                        &blocks[LEFT_ID - skipped[LEFT_ID]]);
+                }
+                if(bbmap[old_id].right_id != -1)
+                {
+                    edges++;
+                    const int RIGHT_ID = bbmap[old_id].right_id;
+                    blocks[NEW_ID].set_cond(
+                        &blocks[RIGHT_ID - skipped[RIGHT_ID]]);
+                }
             }
-            old_index++;
         }
     }
-     */
 }
 
 const BasicBlock* ControlFlowGraph::get_node(unsigned int id) const

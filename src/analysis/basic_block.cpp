@@ -8,6 +8,19 @@ BasicBlock::BasicBlock(int number) : AbstractBlock(number), cond(nullptr)
 {
 }
 
+BasicBlock::BasicBlock(const BasicBlock& orig)
+{
+    *this = orig;
+}
+
+BasicBlock& BasicBlock::operator=(const BasicBlock& orig)
+{
+    BasicBlock::id = orig.id;
+    BasicBlock::next = orig.next;
+    BasicBlock::cond = orig.cond;
+    return *this;
+}
+
 const AbstractBlock* BasicBlock::get_cond() const
 {
     return cond;
