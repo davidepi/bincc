@@ -73,3 +73,15 @@ std::ostream& AbstractBlock::print(std::ostream& ss) const
     ss << "label = \"" << this->get_name() << "\";\n}\n";
     return ss;
 }
+
+std::size_t AbstractBlock::structural_hash() const
+{
+    size_t hash = this->get_type();
+    const int SIZE = this->size();
+    for(int i = 0; i < SIZE; i++)
+    {
+        // combine hash
+        hash ^= (*this)[i]->structural_hash();
+    }
+    return hash;
+}

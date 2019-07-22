@@ -158,6 +158,15 @@ public:
      */
     virtual std::ostream& print(std::ostream& ss) const;
 
+    /**
+     * \brief Returns an hash representing this abstract block
+     * The hash involves only the structure of the block, so it will account for
+     * every block contained inside this, but not for the actual value of the
+     * basic blocks or the id of the contained block
+     * \return an hash representing the structure of the current block
+     */
+    std::size_t structural_hash() const;
+
 protected:
     // id of the BB
     int id{0};

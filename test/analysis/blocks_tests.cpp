@@ -107,6 +107,15 @@ TEST(BasicBlock, flow)
     EXPECT_EQ(b2.get_cond(), nullptr);
 }
 
+TEST(BasicBlock, hash)
+{
+    BasicBlock bb0;
+    bb0.set_id(0);
+    BasicBlock bb1;
+    bb1.set_id(1);
+    EXPECT_EQ(bb0.structural_hash(), bb1.structural_hash());
+}
+
 TEST(SequenceBlock, type)
 {
     BasicBlock* b0 = new BasicBlock(1);
