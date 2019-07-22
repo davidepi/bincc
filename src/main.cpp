@@ -2,6 +2,7 @@
 #include "disassembler/radare2/r2_disassembler.hpp"
 #include "multithreading/synchronized_queue.hpp"
 #include "unistd.h"
+#include <analysis/cfs.hpp>
 #include <iostream>
 #include <thread>
 

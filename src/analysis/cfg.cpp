@@ -244,7 +244,7 @@ void ControlFlowGraph::finalize()
 
     dfs(&(blocks[0]), marked);
     int skip_counter = 0;
-    for(int i = 0; i < nodes; i++)
+    for(unsigned int i = 0; i < nodes; i++)
     {
         bbmap[i].id = blocks[i].get_id();
         bbmap[i].left_id =

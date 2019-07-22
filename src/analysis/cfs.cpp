@@ -25,10 +25,7 @@ struct LoopHelpers
 
 ControlFlowStructure::~ControlFlowStructure()
 {
-    if(root_node != nullptr)
-    {
-        delete root_node;
-    }
+    delete root_node;
 }
 
 const AbstractBlock* ControlFlowStructure::root() const
@@ -136,7 +133,7 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
         const AbstractBlock* elseb = head->get_next();
         int preds_then = (*preds)[thenb->get_id()].size();
         int preds_else = (*preds)[elseb->get_id()].size();
-        int heads = 1;
+        unsigned int heads = 1;
         if(preds_then > 1)
         {
             if(preds_else > 1)
@@ -227,7 +224,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
                 return false;
             }
         }
-        else // do-while loop
+        else if(tail->get_out_edges() == 2) // do-while loop
         {
             const BasicBlock* tail_bb = (const BasicBlock*)(tail);
             next = tail->get_next();
@@ -244,6 +241,10 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             {
                 return false;
             }
+        }
+        else
+        {
+            return false;
         }
         (*created)->set_next(next);
 
