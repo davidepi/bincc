@@ -822,9 +822,9 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 }
 
                 // account for replacement of root
-                for(int i=0;i<created->size();i++)
+                for(int i = 0; i < created->size(); i++)
                 {
-                    if((*created)[i]==root_node)
+                    if((*created)[i] == root_node)
                     {
                         root_node = created;
                     }
