@@ -71,27 +71,68 @@ IfThenBlock::IfThenBlock(int id, const BasicBlock* ifb,
                          const AbstractBlock* thenb)
     : AbstractBlock(id), head(ifb), then(thenb)
 {
+    // resolve chained heads
+    std::stack<const BasicBlock*> chain_stack;
+    const BasicBlock* tmp_head = ifb;
+    const AbstractBlock* contd = thenb->get_next();
+    const AbstractBlock* next =
+        head->get_next() != contd ? head->get_next() : head->get_cond();
+    int chain_len = 0;
+    while(next != thenb)
+    {
+        chain_len++;
+        tmp_head = static_cast<const BasicBlock*>(next);
+        chain_stack.push(tmp_head);
+        next = tmp_head->get_next() != contd ? tmp_head->get_next() :
+                                               tmp_head->get_cond();
+    }
+
+    if(chain_len != 0)
+    {
+        // copy the stack into the more space_efficient array
+        chain.resize(chain_len);
+        for(int i = chain_len - 1; i >= 0; i--)
+        {
+            chain[i] = chain_stack.top();
+            chain_stack.pop();
+        }
+    }
 }
 
 IfThenBlock::~IfThenBlock()
 {
-    delete head;
     delete then;
+    delete head;
+    for(const BasicBlock* val : chain)
+    {
+        delete val;
+    }
 }
 
 int IfThenBlock::size() const
 {
-    return 2;
+    return chain.size() + 2;
 }
 
 const AbstractBlock* IfThenBlock::operator[](int index) const
 {
-    return index == 0 ? head : then;
+    if(index == 0)
+    {
+        return head;
+    }
+    else if(index == 1)
+    {
+        return then;
+    }
+    else
+    {
+        return chain[index - 2];
+    }
 }
 
 IfElseBlock::IfElseBlock(int id, const BasicBlock* ifb,
                          const AbstractBlock* thenb, const AbstractBlock* elseb)
-    : AbstractBlock(id), head(ifb), then(thenb), ellse(elseb)
+    : AbstractBlock(id), head(ifb), then(thenb), ellse(elseb), chain(0)
 {
     // resolve chained heads
     std::stack<const BasicBlock*> chain_stack;
@@ -99,6 +140,7 @@ IfElseBlock::IfElseBlock(int id, const BasicBlock* ifb,
     const AbstractBlock* next = tmp_head->get_next() != elseb ?
                                     tmp_head->get_next() :
                                     tmp_head->get_cond();
+    int chain_len = 0;
     while(next != thenb)
     {
         chain_len++;
@@ -111,17 +153,12 @@ IfElseBlock::IfElseBlock(int id, const BasicBlock* ifb,
     if(chain_len != 0)
     {
         // copy the stack into the more space_efficient array
-        chain =
-            (const BasicBlock**)malloc(sizeof(const BasicBlock*) * chain_len);
+        chain.resize(chain_len);
         for(int i = chain_len - 1; i >= 0; i--)
         {
             chain[i] = chain_stack.top();
             chain_stack.pop();
         }
-    }
-    else
-    {
-        chain = nullptr;
     }
 }
 
@@ -130,13 +167,9 @@ IfElseBlock::~IfElseBlock()
     delete ellse;
     delete then;
     delete head;
-    if(chain != nullptr)
+    for(const BasicBlock* val : chain)
     {
-        for(int i = 0; i < chain_len; i++)
-        {
-            delete chain[i];
-        }
-        free(chain);
+        delete val;
     }
 }
 
@@ -147,7 +180,7 @@ BlockType IfElseBlock::get_type() const
 
 int IfElseBlock::size() const
 {
-    return chain_len + 3;
+    return chain.size() + 3;
 }
 
 const AbstractBlock* IfElseBlock::operator[](int index) const

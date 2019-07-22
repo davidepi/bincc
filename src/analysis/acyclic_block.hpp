@@ -126,6 +126,8 @@ private:
     const BasicBlock* head;
     // then block
     const AbstractBlock* then;
+    // chained blocks
+    std::vector<const BasicBlock*> chain;
 };
 
 /**
@@ -186,9 +188,7 @@ private:
     // else block
     const AbstractBlock* ellse;
     // chained blocks
-    const BasicBlock** chain;
-    // total size of if-else
-    int chain_len{0};
+    std::vector<const BasicBlock*> chain;
 };
 
 #endif //__ACYCLIC_BLOCK_HPP__

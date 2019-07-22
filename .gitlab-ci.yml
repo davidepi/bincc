@@ -51,7 +51,7 @@ x86_memcheck:
 x86_coverage:
     stage: coverage
     script:
-        - apt-get install -y wget build-essential g++ cmake radare2
+        - apt-get install -y wget build-essential g++ cmake radare2 gcovr
         - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz && tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
         - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Coverage" .. && make runTests && make test && make coverage
     tags:

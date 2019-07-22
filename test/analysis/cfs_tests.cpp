@@ -157,6 +157,7 @@ TEST(ControlFlowStructure, if_chain)
     cfg.set_conditional(1, 3);
     ControlFlowStructure cfs;
     ASSERT_TRUE(cfs.build(cfg));
+    cfs.to_file("/home/davide/Desktop/test.dot", cfg);
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);
     ASSERT_EQ(structured->get_type(), BlockType::SEQUENCE);
@@ -164,16 +165,18 @@ TEST(ControlFlowStructure, if_chain)
     const AbstractBlock* head = (*structured)[0];
     const AbstractBlock* tail = (*structured)[1];
     ASSERT_EQ(head->get_type(), BlockType::IF_THEN);
-    ASSERT_EQ(head->size(), 2);
+    ASSERT_EQ(head->size(), 3);
     EXPECT_EQ(tail->get_type(), BlockType::BASIC);
     EXPECT_EQ(tail->get_id(), 3);
-    const AbstractBlock* if01 = (*head)[0];
-    const AbstractBlock* if12 = (*head)[1];
-    EXPECT_EQ(if01->get_type(), BASIC);
-    EXPECT_EQ(if01->get_id(), 0);
-    EXPECT_EQ(if12->get_type(), IF_THEN);
-    EXPECT_EQ((*if12)[0]->get_id(), 1);
-    EXPECT_EQ((*if12)[1]->get_id(), 2);
+    const AbstractBlock* if0 = (*head)[0];
+    const AbstractBlock* if2 = (*head)[1];
+    const AbstractBlock* if1 = (*head)[2];
+    EXPECT_EQ(if0->get_type(), BASIC);
+    EXPECT_EQ(if0->get_id(), 0);
+    EXPECT_EQ(if1->get_type(), BASIC);
+    EXPECT_EQ(if1->get_id(), 1);
+    EXPECT_EQ(if2->get_type(), BASIC);
+    EXPECT_EQ(if2->get_id(), 2);
 }
 
 TEST(ControlFlowStructure, if_else)
@@ -304,7 +307,8 @@ TEST(ControlFlowStructure, short_circuit_if_then)
     ControlFlowGraph cfg(7);
     cfg.set_conditional(0, 6);
     cfg.set_conditional(1, 6);
-    cfg.set_conditional(2, 6);
+    cfg.set_next(2, 6);
+    cfg.set_conditional(2, 3);
     cfg.set_conditional(3, 6);
     cfg.set_conditional(4, 6);
     cfg.set_conditional(5, 6);
@@ -312,16 +316,11 @@ TEST(ControlFlowStructure, short_circuit_if_then)
     ControlFlowStructure cfs;
     ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* head = cfs.root();
+    ASSERT_EQ(head->get_type(), SEQUENCE);
+    ASSERT_EQ(head->size(), 2);
     head = (*head)[0];
     EXPECT_EQ(head->get_type(), IF_THEN);
-    head = (*head)[1];
-    EXPECT_EQ(head->get_type(), IF_THEN);
-    head = (*head)[1];
-    EXPECT_EQ(head->get_type(), IF_THEN);
-    head = (*head)[1];
-    EXPECT_EQ(head->get_type(), IF_THEN);
-    head = (*head)[1];
-    EXPECT_EQ(head->get_type(), IF_THEN);
+    EXPECT_EQ(head->size(), 6);
 }
 
 // test implemented in order to replicate and fix a bug

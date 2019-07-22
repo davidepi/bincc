@@ -83,38 +83,59 @@ static bool reduce_sequence(const AbstractBlock* node, AbstractBlock** created,
 }
 
 static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
-                          int next_id,
-                          const std::vector<std::unordered_set<int>>* preds)
+                          int next_id, std::vector<AbstractBlock*>* bmap,
+                          std::vector<std::unordered_set<int>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
-        const BasicBlock* bb = static_cast<const BasicBlock*>(node);
-        const AbstractBlock* next = bb->get_next();
-        const AbstractBlock* cond = bb->get_cond();
-        if(next->get_next() == cond)
+        const BasicBlock* head = static_cast<const BasicBlock*>(node);
+        const AbstractBlock* thenb = head->get_next();
+        const AbstractBlock* contd = head->get_cond();
+        int thenb_preds = (*preds)[thenb->get_id()].size();
+        int contd_preds = (*preds)[contd->get_id()].size();
+        if(thenb->get_next() == contd && thenb->get_out_edges() == 1 &&
+           thenb_preds == 1)
         {
-            // variant 0: next is the "then"
-            if((next->get_out_edges() == 1) &&
-               ((*preds)[next->get_id()].size() == 1))
+            // variant 0: thenb is the then, cont is the next
+        }
+        else if(contd->get_next() == thenb && contd->get_out_edges() == 1 &&
+                contd_preds == 1)
+        {
+            // variant 1: contd and thenb are swapped
+            const AbstractBlock* tmp = contd;
+            contd = thenb;
+            thenb = tmp;
+        }
+        else
+        {
+            return false;
+        }
+
+        // try to ASCEND the if-then in order to discover short-circuit chains
+        while((*preds)[head->get_id()].size() == 1)
+        {
+            const AbstractBlock* tmp_head;
+            tmp_head = (*bmap)[*(*preds)[head->get_id()].begin()];
+            if(tmp_head->get_out_edges() == 2)
             {
-                *created = new IfThenBlock(
-                    next_id, static_cast<const BasicBlock*>(node), next);
-                (*created)->set_next(next->get_next());
-                return true;
+                const BasicBlock* bb = static_cast<const BasicBlock*>(tmp_head);
+                // one of the edges must point to the contd block.
+                // the other one obviously point to the current head
+                if(bb->get_next() == contd || bb->get_cond() == contd)
+                {
+                    head = bb;
+                }
+            }
+            else
+            {
+                break;
             }
         }
-        else if(cond->get_next() == next)
-        {
-            // variant 1: cond is the "then"
-            if((cond->get_out_edges() == 1) &&
-               ((*preds)[cond->get_id()].size() == 1))
-            {
-                *created = new IfThenBlock(
-                    next_id, static_cast<const BasicBlock*>(node), cond);
-                (*created)->set_next(cond->get_next());
-                return true;
-            }
-        }
+
+        // create the if-then
+        *created = new IfThenBlock(next_id, head, thenb);
+        (*created)->set_next(contd);
+        return true;
     }
     return false;
 }
@@ -753,7 +774,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 
             // exploit short-circuit eval
             modified = reduce_self_loop(node, &created, next_id) ||
-                       reduce_ifthen(node, &created, next_id, &preds) ||
+                       reduce_ifthen(node, &created, next_id, &bmap, &preds) ||
                        reduce_ifelse(node, &created, next_id, &preds) ||
                        reduce_sequence(node, &created, next_id, &preds);
             if(!modified && reduce_loop(node, &created, next_id, lh, &preds))
@@ -801,9 +822,12 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 }
 
                 // account for replacement of root
-                if(node == root_node)
+                for(int i=0;i<created->size();i++)
                 {
-                    root_node = created;
+                    if((*created)[i]==root_node)
+                    {
+                        root_node = created;
+                    }
                 }
                 break;
             }
