@@ -71,31 +71,40 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
             // TODO: the job is disasm-bounded for now. When the analysis will
             //       take more time, consider making a new thread that wait on a
             //       condition variable and performs the various analyses
-            for(const Function& func : names)
-            {
-                binary_no_folder = binary_no_folder.substr(
-                    binary_no_folder.find_last_of('/') + 1);
-                std::string output =
-                    binary_no_folder + "." + func.get_name() + ".dot";
-                std::cout << disasm->get_binary_name() << " : "
-                          << func.get_name() << std::endl;
-                Analysis anal(disasm->get_function_body(func.get_name()),
-                              disasm->get_arch());
-                if(anal.get_cfs() != nullptr)
-                {
-                    anal.get_cfs()->to_file(output.c_str(), *anal.get_cfg());
-                }
-                else
-                {
-                    anal.get_cfg()->to_file(output.c_str());
-                }
-            }
-            done->push(disasm);
+            Analysis anal(disasm->get_function_body("main"),
+                          disasm->get_arch());
+            //            for(const Function& func : names)
+            //            {
+            //                binary_no_folder = binary_no_folder.substr(
+            //                    binary_no_folder.find_last_of('/') + 1);
+            //                std::string output =
+            //                    binary_no_folder + "." + func.get_name() +
+            //                    ".dot";
+            //                std::cout << disasm->get_binary_name() << " : "
+            //                          << func.get_name() << std::endl;
+            //                Analysis
+            //                anal(disasm->get_function_body(func.get_name()),
+            //                              disasm->get_arch());
+            //                if(anal.get_cfg()->nodes_no() < 5)
+            //                {
+            //                    continue;
+            //                }
+            //                if(anal.get_cfs() != nullptr)
+            //                {
+            //                    anal.get_cfs()->to_file(output.c_str(),
+            //                    *anal.get_cfg());
+            //                }
+            //                else
+            //                {
+            //                    anal.get_cfg()->to_file(output.c_str());
+            //                }
+            //            }
+            //            done->push(disasm);
         }
         else
         {
-            // somebody stole the last job between the empty check and the job
-            // retrieval
+            // somebody stole the last job between the empty check and the
+            // job retrieval
             return;
         }
     }

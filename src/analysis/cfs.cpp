@@ -111,11 +111,17 @@ static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
             return false;
         }
 
+        // creating a full size array is not convenient in this situation
+        std::unordered_set<int> marked;
+        int tmp_id = head->get_id();
         // try to ASCEND the if-then in order to discover short-circuit chains
-        while((*preds)[head->get_id()].size() == 1)
+        while((*preds)[head->get_id()].size() == 1 &&
+              marked.find(tmp_id) == marked.end())
         {
+            marked.insert(tmp_id); // avoid looping infinitely
             const AbstractBlock* tmp_head;
-            tmp_head = (*bmap)[*(*preds)[head->get_id()].begin()];
+            tmp_head = (*bmap)[*(*preds)[tmp_id].begin()];
+            tmp_id = tmp_head->get_id();
             if(tmp_head->get_out_edges() == 2)
             {
                 const BasicBlock* bb = static_cast<const BasicBlock*>(tmp_head);
@@ -174,8 +180,13 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
         // iterative step: try to descend as much as possible with the then
         const AbstractBlock* next;
         const AbstractBlock* cond;
-        while(thenb->get_out_edges() == 2)
+        // creating a full size array is not convenient in this situation
+        std::unordered_set<int> marked;
+        int tnb_id = thenb->get_id();
+        while(thenb->get_out_edges() == 2 &&
+              marked.find(tnb_id) == marked.end())
         {
+            marked.insert(tnb_id);
             const BasicBlock* new_hd;
             new_hd = static_cast<const BasicBlock*>(thenb);
             next = new_hd->get_next();
@@ -184,11 +195,13 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
             {
                 heads++;
                 thenb = cond;
+                tnb_id = thenb->get_id(); // avoid looping forever
             }
             else if(cond == elseb && (*preds)[next->get_id()].size() == 1)
             {
                 heads++;
                 thenb = next;
+                tnb_id = thenb->get_id(); // avoid looping forever
             }
             else
             {
