@@ -23,6 +23,30 @@ TEST(Analysis, Analysis_constructor_null_vector)
     EXPECT_STREQ(ins.get_command().c_str(), "");
 }
 
+TEST(Analysis, cfs_getter)
+{
+    std::vector<Statement> stmts;
+    stmts.emplace_back(0x610, "test edi, edi");
+    stmts.emplace_back(0x612, "jmp 0x620");
+    stmts.emplace_back(0x620, "test esi, esi");
+    stmts.emplace_back(0x621, "mov eax, 5");
+    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    std::shared_ptr<ControlFlowStructure> cfs = anal.get_cfs();
+    EXPECT_NE(cfs->root(), nullptr);
+
+    // impossible
+    stmts.clear();
+    stmts.emplace_back(0x610, "test edi, edi");
+    stmts.emplace_back(0x612, "jne 0x621");
+    stmts.emplace_back(0x620, "jmp 0x621");
+    stmts.emplace_back(0x621, "jne 0x620");
+    stmts.emplace_back(0x622, "ret");
+    Analysis anal2(&stmts,
+                   std::shared_ptr<Architecture>{new ArchitectureX86()});
+    std::shared_ptr<ControlFlowStructure> cfs2 = anal2.get_cfs();
+    EXPECT_EQ(cfs2->root(), nullptr);
+}
+
 TEST(Analysis, Analysis_constructor_string)
 {
     // string
@@ -123,13 +147,13 @@ TEST(Analysis, cfg_conditional)
     const BasicBlock* end = next; // 2
     next = static_cast<const BasicBlock*>(end->get_next());
     cond = static_cast<const BasicBlock*>(end->get_cond());
-    EXPECT_EQ(next, nullptr);
+    EXPECT_NE(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 
     cfg = static_cast<const BasicBlock*>(cfg->get_cond()); // 3
     next = static_cast<const BasicBlock*>(cfg->get_next());
     cond = static_cast<const BasicBlock*>(cfg->get_cond());
-    EXPECT_EQ(next, nullptr);
+    EXPECT_NE(next, nullptr);
     EXPECT_EQ(cond, nullptr);
 }
 
@@ -209,7 +233,7 @@ TEST(Analysis, cfg_indirect)
     cfg = next; // 1
     next = static_cast<const BasicBlock*>(cfg->get_next());
     cond = static_cast<const BasicBlock*>(cfg->get_cond());
-    EXPECT_EQ(next, nullptr);
+    EXPECT_NE(next, nullptr); // finalize() created a new node
     EXPECT_EQ(cond, nullptr);
 }
 
@@ -252,7 +276,7 @@ TEST(Analysis, cfg_long_conditional_jmp)
     cfg = next; // 3
     next = static_cast<const BasicBlock*>(cfg->get_next());
     cond = static_cast<const BasicBlock*>(cfg->get_cond());
-    EXPECT_EQ(next, nullptr);
+    EXPECT_NE(next, nullptr); // again, finalize() created an exit node
     EXPECT_EQ(cond, nullptr);
 }
 
@@ -268,6 +292,7 @@ TEST(Analysis, cfg_long_unconditional_jump)
     stmts.emplace_back(0x615, "ret");
 
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    anal.get_cfg()->to_file("/home/davide/Desktop/test.dot");
     const BasicBlock* cfg = anal.get_cfg()->root();
     const BasicBlock* next;
     const BasicBlock* cond;
@@ -284,13 +309,13 @@ TEST(Analysis, cfg_long_unconditional_jump)
     cfg = next; // 1
     next = static_cast<const BasicBlock*>(cfg->get_next());
     cond = static_cast<const BasicBlock*>(cfg->get_cond());
-    EXPECT_EQ(next, nullptr);
+    EXPECT_NE(next, nullptr); // again, finalize() created an exit node
     EXPECT_EQ(cond, nullptr);
 
     cfg =
         static_cast<const BasicBlock*>(anal.get_cfg()->root()->get_cond()); // 2
     next = static_cast<const BasicBlock*>(cfg->get_next());
     cond = static_cast<const BasicBlock*>(cfg->get_cond());
-    EXPECT_EQ(next, nullptr);
+    EXPECT_NE(next, nullptr); // again, finalize() created an exit node
     EXPECT_EQ(cond, nullptr);
 }

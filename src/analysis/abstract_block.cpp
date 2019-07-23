@@ -74,14 +74,20 @@ std::ostream& AbstractBlock::print(std::ostream& ss) const
     return ss;
 }
 
-inline uint64_t rotl64(uint64_t x, int8_t r)
+/**
+ * \brief Rotate left
+ * \param[in] x Value to be shifted
+ * \param[in] r Shift magnitude
+ * \return the shifted and possibly rotated value
+ */
+static inline uint64_t rotl64(uint64_t x, int8_t r)
 {
     return (x << r) | (x >> (64 - r));
 }
 
 uint64_t AbstractBlock::structural_hash() const
 {
-    assert(BLOCK_TOTAL < 64);
+    static_assert(BLOCK_TOTAL < 64, "Hash func. supports max 64 block types");
     uint64_t hash = 1 << this->get_type();
     const int SIZE = this->size();
     for(int i = 0; i < SIZE; i++)

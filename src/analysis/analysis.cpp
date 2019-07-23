@@ -37,6 +37,9 @@ Analysis::Analysis(const std::vector<Statement>* stmts,
     if(!stmt_list.empty())
     {
         build_cfg();
+        cfg->finalize();
+        cfs = std::make_shared<ControlFlowStructure>();
+        cfs->build(*cfg);
     }
 }
 
@@ -66,12 +69,20 @@ Analysis::Analysis(const std::string& str, std::shared_ptr<Architecture> arch)
     if(!stmt_list.empty())
     {
         build_cfg();
+        cfg->finalize();
+        cfs = std::make_shared<ControlFlowStructure>();
+        cfs->build(*cfg);
     }
 }
 
 const std::shared_ptr<ControlFlowGraph> Analysis::get_cfg() const
 {
     return cfg;
+}
+
+const std::shared_ptr<ControlFlowStructure> Analysis::get_cfs() const
+{
+    return cfs;
 }
 
 /**

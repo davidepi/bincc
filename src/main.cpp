@@ -81,7 +81,14 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
                           << func.get_name() << std::endl;
                 Analysis anal(disasm->get_function_body(func.get_name()),
                               disasm->get_arch());
-                anal.get_cfg()->to_file(output.c_str());
+                if(anal.get_cfs() != nullptr)
+                {
+                    anal.get_cfs()->to_file(output.c_str(), *anal.get_cfg());
+                }
+                else
+                {
+                    anal.get_cfg()->to_file(output.c_str());
+                }
             }
             done->push(disasm);
         }

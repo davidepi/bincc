@@ -8,6 +8,7 @@
 #include "architectures/architecture.hpp"
 #include "basic_block.hpp"
 #include "cfg.hpp"
+#include "cfs.hpp"
 #include "disassembler/statement.hpp"
 #include <memory>
 #include <string>
@@ -17,7 +18,9 @@
 /**
  * \brief Class used to perform the analysis of the disassembled code
  *
- * //TODO: write doc
+ * This class process the result of the disassembled code and produces a
+ * ControlFlowGraph as output. It can be also used to perform structural
+ * analysis and store the ControlFlowStructure of the disassembled function
  */
 class Analysis
 {
@@ -86,6 +89,12 @@ public:
      */
     const std::shared_ptr<ControlFlowGraph> get_cfg() const;
 
+    /**
+     * \brief Return the control flow structure for this function
+     * \return the control flow structure of the function
+     */
+    const std::shared_ptr<ControlFlowStructure> get_cfs() const;
+
 private:
     // build a control flow graph in O(nlogn) time-complexity
     void build_cfg();
@@ -101,6 +110,9 @@ private:
 
     // control flow graph of the function
     std::shared_ptr<ControlFlowGraph> cfg;
+
+    // control flow structure of the function
+    std::shared_ptr<ControlFlowStructure> cfs;
 };
 
 #endif //__ANALYSIS_HPP__
