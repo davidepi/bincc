@@ -121,9 +121,15 @@ FIND_PROGRAM(GCOVR NAMES "gcovr")
 IF(GCOVR)
     ADD_CUSTOM_COMMAND(OUTPUT run_gcovr DEPENDS runTests
                        POST_BUILD
-                       COMMAND ${GCOVR} -r ${PROJECT_SOURCE_DIR}/src --object-directory=${PROJECT_BINARY_DIR} -v --branches --exclude-unreachable-branches
+                       COMMAND ${GCOVR} -r ${PROJECT_SOURCE_DIR}/src --object-directory=${PROJECT_BINARY_DIR}
+                       WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
+    ADD_CUSTOM_COMMAND(OUTPUT gcovr_html DEPENDS runTests
+                       POST_BUILD
+                       COMMAND mkdir -p ${PROJECT_BINARY_DIR}/coverage/
+                       COMMAND ${GCOVR} -r ${PROJECT_SOURCE_DIR}/src --object-directory=${PROJECT_BINARY_DIR} --branches --exclude-unreachable-branches --html --html-details -o ${PROJECT_BINARY_DIR}/coverage/coverage.html
                        WORKING_DIRECTORY ${PROJECT_BINARY_DIR})
     ADD_CUSTOM_TARGET(coverage DEPENDS run_gcovr)
+    ADD_CUSTOM_TARGET(report DEPENDS gcovr_html)
 ENDIF()
 
 #MAIN PROGRAM
