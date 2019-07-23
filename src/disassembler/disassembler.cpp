@@ -33,14 +33,11 @@ void Disassembler::set_binary(const char* bin_path)
 std::string Disassembler::get_function_as_string(const std::string& name) const
 {
     std::stringstream sstr;
-    std::unordered_map<std::string, std::vector<Statement>>::const_iterator
-        got = function_bodies.find(name);
-
-    if(got != function_bodies.end())
+    const std::vector<Statement>* stmts = this->get_function_body(name);
+    if(stmts != nullptr)
     {
         sstr << name;
-        const std::vector<Statement> stmts = got->second;
-        for(const Statement& stmt : stmts)
+        for(const Statement& stmt : *stmts)
         {
             sstr << stmt.get_offset() << " " << stmt.get_mnemonic() << '\n';
         }

@@ -139,6 +139,17 @@ TEST(ControlFlowGraph, dfst)
     }
 }
 
+TEST(ControlFlowGraph, get_node)
+{
+    ControlFlowGraph cfg(3);
+    cfg.set_next(2, 0);
+    cfg.set_conditional(0, 2);
+    cfg.finalize();
+    EXPECT_EQ(cfg.get_node(3), nullptr);
+    EXPECT_EQ(cfg.get_node(-1), nullptr);
+    EXPECT_EQ(cfg.get_node(1)->get_id(), 1);
+}
+
 TEST(ControlFlowGraph, unreachables)
 {
     ControlFlowGraph cfg(6);

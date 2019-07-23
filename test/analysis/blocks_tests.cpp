@@ -57,6 +57,14 @@ TEST(BasicBlock, replace_if_match)
     EXPECT_EQ(b2.get_cond(), &b1);
 }
 
+TEST(BasicBlock, size)
+{
+    BasicBlock b;
+    EXPECT_EQ(b.size(), 0);
+    EXPECT_EQ(b[0], &b);
+    EXPECT_EQ(b[1], &b);
+}
+
 TEST(BasicBlok, type)
 {
     BasicBlock b;
@@ -67,6 +75,19 @@ TEST(BasicBlok, name)
 {
     BasicBlock b;
     EXPECT_STREQ(b.get_name(), "Basic");
+}
+
+TEST(BasicBlock, copy)
+{
+    BasicBlock b0(10);
+    BasicBlock b1(11);
+    BasicBlock b2(12);
+    b0.set_next(&b1);
+    b0.set_cond(&b2);
+    BasicBlock btmp = b0;
+    EXPECT_EQ(btmp.get_id(), b0.get_id());
+    EXPECT_EQ(btmp.get_next(), b0.get_next());
+    EXPECT_EQ(btmp.get_cond(), b0.get_cond());
 }
 
 TEST(BasicBlock, flow)
@@ -172,6 +193,44 @@ TEST(SequenceBlock, ctor_sequences)
     EXPECT_EQ(a1->get_id(), 1);
     EXPECT_EQ(a2->get_id(), 14);
     EXPECT_EQ(a3->get_id(), 7);
+}
+
+TEST(SequenceBlock, hash)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b3 = new BasicBlock(3);
+    SequenceBlock sq1(4, b0, b1);
+    SequenceBlock sq2(5, b2, b3);
+    EXPECT_EQ(sq1.structural_hash(), sq2.structural_hash());
+
+    SequenceBlock* sq3 =
+        new SequenceBlock(6, new BasicBlock(7), new BasicBlock(8));
+    SequenceBlock sq4(9, new BasicBlock(9), sq3);
+    sq4.structural_hash();
+    EXPECT_NE(sq4.structural_hash(), sq1.structural_hash());
+}
+
+TEST(SequenceBlock, replace_if_match)
+{
+    BasicBlock* b0 = new BasicBlock(0);
+    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b3 = new BasicBlock(3);
+    BasicBlock* b4 = new BasicBlock(4);
+    BasicBlock* b5 = new BasicBlock(5);
+    SequenceBlock s0(7, b0, b1);
+    SequenceBlock s1(8, b2, b3);
+    SequenceBlock s2(9, b4, b5);
+    s0.set_next(&s1);
+
+    s0.replace_if_match(&s1, &s2);
+    EXPECT_EQ(s0.get_next(), &s2);
+    s0.replace_if_match(&s1, &s0);
+    EXPECT_EQ(s0.get_next(), &s2);
+    s0.replace_if_match(&s2, &s0);
+    EXPECT_EQ(s0.get_next(), &s0);
 }
 
 TEST(SelfLoopBlock, type)

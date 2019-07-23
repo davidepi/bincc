@@ -74,14 +74,20 @@ std::ostream& AbstractBlock::print(std::ostream& ss) const
     return ss;
 }
 
-std::size_t AbstractBlock::structural_hash() const
+inline uint64_t rotl64(uint64_t x, int8_t r)
 {
-    size_t hash = this->get_type();
+    return (x << r) | (x >> (64 - r));
+}
+
+uint64_t AbstractBlock::structural_hash() const
+{
+    assert(BLOCK_TOTAL < 64);
+    uint64_t hash = 1 << this->get_type();
     const int SIZE = this->size();
     for(int i = 0; i < SIZE; i++)
     {
         // combine hash
-        hash ^= (*this)[i]->structural_hash();
+        hash ^= rotl64((*this)[i]->structural_hash(), i);
     }
     return hash;
 }
