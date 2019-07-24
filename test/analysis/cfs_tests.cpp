@@ -357,6 +357,44 @@ TEST(ControlFlowStructure, structures_inside_loop)
     ASSERT_EQ(middle->get_type(), DO_WHILE);
 }
 
+TEST(ControlFlowStructure, nested_while)
+{
+    ControlFlowGraph cfg(5);
+    cfg.set_conditional(2, 1);
+    cfg.set_next(3, 2);
+    cfg.set_conditional(1, 2);
+    cfg.set_next(1, 4);
+    cfg.finalize();
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    const AbstractBlock* node = cfs.root();
+    EXPECT_EQ(node->get_type(), SEQUENCE);
+    ASSERT_EQ(node->size(), 3);
+    const AbstractBlock* middle = (*node)[1];
+    EXPECT_EQ(middle->get_type(), WHILE);
+    const AbstractBlock* nested = (*middle)[1];
+    EXPECT_EQ(nested->get_type(), WHILE);
+}
+
+TEST(ControlFlowStructure, nested_do_while)
+{
+    ControlFlowGraph cfg(5);
+    cfg.set_conditional(2, 1);
+    cfg.set_conditional(3, 2);
+    cfg.set_conditional(1, 2);
+    cfg.set_next_null(1);
+    cfg.finalize();
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    const AbstractBlock* node = cfs.root();
+    EXPECT_EQ(node->get_type(), SEQUENCE);
+    ASSERT_EQ(node->size(), 3);
+    const AbstractBlock* middle = (*node)[1];
+    EXPECT_EQ(middle->get_type(), DO_WHILE);
+    const AbstractBlock* nested = (*middle)[1];
+    EXPECT_EQ(nested->get_type(), DO_WHILE);
+}
+
 TEST(ControlFlowStructure, nested_loop)
 {
     //    ControlFlowGraph cfg(6);

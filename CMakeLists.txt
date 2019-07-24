@@ -41,6 +41,7 @@ SET(DEBUG_FLAGS
     -Wpedantic
     -Werror
     -Wfatal-errors
+    -Wno-unused-function
     )
 
 SET(RELEASE_FLAGS

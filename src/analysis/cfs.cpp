@@ -43,7 +43,12 @@ static bool reduce_self_loop(const AbstractBlock* node, AbstractBlock** created,
         {
             *created = new SelfLoopBlock(next_id,
                                          static_cast<const BasicBlock*>(node));
-            (*created)->set_next(node->get_next());
+            // avoid adding itself as loop. This is based on the fact that next
+            // and cond cannot have the same target and next is the preferred
+            // one if there is a single target, with cond defaulting to nullptr
+            const AbstractBlock* next =
+                bb->get_next() != bb ? bb->get_next() : bb->get_cond();
+            (*created)->set_next(next);
             return true;
         }
     }
@@ -130,6 +135,10 @@ static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
                 if(bb->get_next() == contd || bb->get_cond() == contd)
                 {
                     head = bb;
+                }
+                else
+                {
+                    break;
                 }
             }
             else
@@ -242,7 +251,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             const BasicBlock* head_bb = static_cast<const BasicBlock*>(head);
             const AbstractBlock* cond = head_bb->get_cond();
             tail = cond;
-            if(lh.scc[next->get_id()] == lh.scc[node_id])
+            if(next == tail)
             {
                 // next is the tail so swap them
                 tail = next;
@@ -262,7 +271,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
         {
             const BasicBlock* tail_bb = (const BasicBlock*)(tail);
             next = tail->get_next();
-            if(lh.scc[next->get_id()] == lh.scc[node_id])
+            if(next == head)
             {
                 next = tail_bb->get_cond();
             }
@@ -693,9 +702,11 @@ static std::vector<int> dominator(const BasicBlock** array, int nodes)
  * Replace value of old block composing an aggregator with the new aggregator
  * id, remove the predecessors of the aggregated nodes
  * \param[in] added The newly created aggregator
+ * \param[in,out] bmap The array containing every node of the CFS
  * \param[in,out] preds Predecessors map (but it is an array)
  */
 static void update_pred(const AbstractBlock* added,
+                        std::vector<AbstractBlock*>* bmap,
                         std::vector<std::unordered_set<int>>* preds)
 {
     // insert the entry point list as predecessor for the newly created node
@@ -709,11 +720,27 @@ static void update_pred(const AbstractBlock* added,
         next_preds = &((*preds)[added->get_next()->get_id()]);
     }
 
+    // record which nodes are contained in the created block
+    std::unordered_set<int> contained;
+    for(int i = 0; i < added->size(); i++)
+    {
+        contained.insert((*added)[i]->get_id());
+    }
+
     // for every member of the newly created abstract block
     for(int i = 0; i < added->size(); i++)
     {
-        // destroy its predecessor list (to avoid inconsistent states)
         int member_id = (*added)[i]->get_id();
+        // for every preds, yep O(n^2)
+        for(int pred : (*preds)[member_id])
+        {
+            // if pred is coming from outside the newly created block replace it
+            if(contained.find(pred) != contained.end())
+            {
+                (*bmap)[pred]->replace_if_match((*bmap)[member_id], added);
+            }
+        }
+        // destroy its predecessor list (to avoid inconsistent states)
         (*preds)[member_id].clear();
         // if in the predecessors of the next block there is the current member,
         // it is replaced it with the new block id.
@@ -781,6 +808,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         {
             const AbstractBlock* node = bmap[list.front()];
             int node_id = node->get_id();
+            std::cout << node_id << std::endl;
             list.pop();
             AbstractBlock* created = nullptr;
             bool loop_resolved = false;
@@ -817,7 +845,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 }
 
                 // udpate predecessor list
-                update_pred(created, &preds);
+                update_pred(created, &bmap, &preds);
                 std::cout << "Then:\n" << std::endl;
                 DEBUG_PREDS(&preds);
                 next_id++;
