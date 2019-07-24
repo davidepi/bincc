@@ -1,6 +1,5 @@
 run-clang-format.py
-build/
-builds/
+build*
 .idea/
 # Created by https://www.gitignore.io/api/c++,cmake,clion
 # Edit at https://www.gitignore.io/?templates=c++,cmake,clion
