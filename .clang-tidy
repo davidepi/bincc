@@ -1,6 +1,6 @@
 Checks: '*,
          -modernize-use-auto,
-         -cppcoreguidelines-*,
+         -cppcoreguidelines*,
          -fuchsia*,
          -hicpp*,
          -google-readability-*,
@@ -11,7 +11,3 @@ Checks: '*,
          -readability-named-parameter,
          -readability-else-after-return,
          '
-
-CheckOptions:
-    -   key: hicpp-special-member-functions.AllowSoleDefaultDtor
-        value: 1

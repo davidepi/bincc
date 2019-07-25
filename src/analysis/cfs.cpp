@@ -236,16 +236,32 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
     return false;
 }
 
+/**
+ * \brief Check if head is reachable from next in exactly 2 steps
+ * \param[in] head The starting node of the dfs
+ * \param[in] next The node reachable from head
+ * \return true if a path head->next->head exists. The connection head->next is
+ * not checked
+ */
+static bool dfs_2step(const AbstractBlock* head, const AbstractBlock* next)
+{
+    bool retval = next->get_next() == head;
+    if(next->get_out_edges() == 2)
+    {
+        const BasicBlock* bb = static_cast<const BasicBlock*>(next);
+        retval |= bb->get_cond() == head;
+    }
+    return retval;
+}
+
 static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
                         uint32_t next_id, const LoopHelpers& lh,
                         std::vector<std::unordered_set<uint32_t>>* preds)
 {
     uint32_t node_id = node->get_id();
-    // condition for the loop: being in a strong connected comp. (scc)
-    // and the dominator either is in a different scc or i'm the root
-    // (implies this node is the head of the cycle)
-    if(lh.is_loop[node_id] &&
-       (lh.scc[lh.dom[node_id]] != lh.scc[node_id] || node_id == 0))
+    // condition for the loop: being in a strong connected comp, and the head
+    // has more than 1 entry point
+    if(lh.is_loop[node_id] && (*preds)[node_id].size() > 1)
     {
         const AbstractBlock* head = node;
         const AbstractBlock* next = node->get_next();
@@ -255,11 +271,15 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             const BasicBlock* head_bb = static_cast<const BasicBlock*>(head);
             const AbstractBlock* cond = head_bb->get_cond();
             tail = cond;
-            if(lh.scc[next->get_id()] == lh.scc[node_id])
+            if(dfs_2step(head_bb, next))
             {
                 // next is the tail so swap them
                 tail = next;
                 next = cond;
+            }
+            else if(!dfs_2step(head_bb, tail))
+            {
+                return false;
             }
             // if not impossible loop, create the block
             if(lh.dom[node_id] != lh.dom[tail->get_id()])
@@ -356,32 +376,43 @@ static AbstractBlock* deep_copy(const BasicBlock* src,
 
 /**
  * \brief Recursive call of the post-order depth-first visit
+ * This call also calculate preds
  * \param[in] node the starting point of the dfs (recursive step)
  * \param[out] list the queue containing the post-order id of the visited nodes
  * \param[in, out] marked an array containing all the already-visited nodes. The
  * array index correspond to the node ID. This exploits the fact that IDs are
  * contiguous
+ * \param[out] preds The preds array that will be filled by the visit. This
  */
-static void postorder_visit(const AbstractBlock* node,
-                            std::queue<uint32_t>* list,
-                            std::vector<bool>* marked)
+static void postorder_visit_and_preds(
+    const AbstractBlock* node, std::queue<uint32_t>* list,
+    std::vector<bool>* marked, std::vector<std::unordered_set<uint32_t>>* preds)
 {
     (*marked)[node->get_id()] = true;
     // this get_next() force me to put everything const. Note to myself of the
     // future: don't attempt to remove constness just because this function is
     // private
+    uint32_t node_id = node->get_id();
     const AbstractBlock* next = node->get_next();
-    if(next != nullptr && !(*marked)[next->get_id()])
+    if(next != nullptr)
     {
-        postorder_visit(next, list, marked);
+        (*preds)[next->get_id()].insert(node_id);
+        if(!(*marked)[next->get_id()])
+        {
+            postorder_visit_and_preds(next, list, marked, preds);
+        }
     }
     if(node->get_type() == BASIC)
     {
         const BasicBlock* cond = static_cast<const BasicBlock*>(
             static_cast<const BasicBlock*>(node)->get_cond());
-        if(cond != nullptr && !(*marked)[cond->get_id()])
+        if(cond != nullptr)
         {
-            postorder_visit(cond, list, marked);
+            (*preds)[cond->get_id()].insert(node_id);
+            if(!(*marked)[cond->get_id()])
+            {
+                postorder_visit_and_preds(cond, list, marked, preds);
+            }
         }
     }
     list->push(node->get_id());
@@ -708,66 +739,6 @@ static std::vector<uint32_t> dominator(const BasicBlock** array, uint32_t nodes)
     return dom;
 }
 
-/**
- * \brief Update the predecessor list
- * Replace value of old block composing an aggregator with the new aggregator
- * id, remove the predecessors of the aggregated nodes
- * \param[in] added The newly created aggregator
- * \param[in,out] bmap The array containing every node of the CFS
- * \param[in,out] preds Predecessors map (but it is an array)
- */
-static void update_pred(const AbstractBlock* added,
-                        std::vector<AbstractBlock*>* bmap,
-                        std::vector<std::unordered_set<uint32_t>>* preds)
-{
-    // insert the entry point list as predecessor for the newly created node
-    const AbstractBlock* oep = (*added)[0];
-    preds->push_back(std::move((*preds)[oep->get_id()]));
-
-    // get predecessors list for the newly created abstract block
-    std::unordered_set<uint32_t>* next_preds = nullptr;
-    if(added->get_next() != nullptr)
-    {
-        next_preds = &((*preds)[added->get_next()->get_id()]);
-    }
-
-    // record which nodes are contained in the created block
-    std::unordered_set<int> contained;
-    for(uint32_t i = 0; i < added->size(); i++)
-    {
-        contained.insert((*added)[i]->get_id());
-    }
-
-    // for every member of the newly created abstract block
-    for(uint32_t i = 0; i < added->size(); i++)
-    {
-        uint32_t member_id = (*added)[i]->get_id();
-        // for every preds, yep O(n^2)
-        for(uint32_t pred : (*preds)[member_id])
-        {
-            // if pred is coming from outside the newly created block
-            // replace it
-            if(contained.find(pred) != contained.end())
-            {
-                (*bmap)[pred]->replace_if_match((*bmap)[member_id], added);
-            }
-        }
-        // destroy its predecessor list (to avoid inconsistent states)
-        (*preds)[member_id].clear();
-        // if in the predecessors of the next block there is the current
-        // member, it is replaced it with the new block id. i.e. if the
-        // situation was 1 -> 2 -> 3 and we replace 2 with 4, on the
-        // predecessors of the follower(3), the member (2) it is now
-        // replaced with 4
-        if(next_preds != nullptr &&
-           next_preds->find(member_id) != next_preds->end())
-        {
-            next_preds->erase(member_id);
-            next_preds->insert(added->get_id());
-        }
-    }
-}
-
 bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
@@ -814,7 +785,11 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         // update visited size if necessary (because it is accesed by index)
         visited.reserve(bmap.size());
         std::fill(visited.begin(), visited.begin() + visited.capacity(), false);
-        postorder_visit(root_node, &list, &visited);
+        for(auto& pred : preds)
+        {
+            pred.clear();
+        }
+        postorder_visit_and_preds(root_node, &list, &visited, &preds);
         bool modified = false;
         while(!list.empty())
         {
@@ -839,49 +814,36 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 // this always push at bmap[next_index], without
                 // undefined behaviour
                 bmap.push_back(created);
+                preds.emplace_back(std::unordered_set<uint32_t>());
+
                 lh.is_loop.push_back(loop_resolved ? false :
                                                      lh.is_loop[node_id]);
                 lh.scc.push_back(lh.scc[node_id]);
                 lh.dom.push_back(lh.dom[node_id]);
+                DEBUG_PREDS(&preds);
                 std::cout << "Adding " << created->get_id() << " as "
                           << created->get_name() << " \n";
-                DEBUG_PREDS(&preds);
 
-                // change edges of graph (remap predecessor to
-                // address new block instead of the old basic block)
-                for(uint32_t parent_index : preds[node->get_id()])
+                const uint32_t CREATED_SIZE = created->size();
+                for(uint32_t i = 0; i < CREATED_SIZE; i++)
                 {
-                    AbstractBlock* parent = bmap[parent_index];
-                    parent->replace_if_match(node, created);
-                }
-
-                // udpate predecessor list
-                update_pred(created, &bmap, &preds);
-                std::cout << "Then:\n" << std::endl;
-                DEBUG_PREDS(&preds);
-                next_id++;
-
-                // record which of the original nodes has been
-                // inherited to avoid leak in case of premature
-                // termination
-                int created_size = created->size();
-                for(int i = 0; i < created_size; i++)
-                {
-                    uint32_t id = (*created)[i]->get_id();
-                    if(id < NODES)
+                    uint32_t comp = (*created)[i]->get_id();
+                    // every node pointing to contained nodes now point to
+                    // container yep, up to O(n^2) but on average will be O(2n)
+                    for(uint32_t node_idx = 0; node_idx < next_id; node_idx++)
                     {
-                        inherited.insert(id);
+                        bmap[node_idx]->replace_if_match(bmap[comp], created);
                     }
                 }
-
                 // account for replacement of root
-                for(uint32_t i = 0; i < created->size(); i++)
+                for(uint32_t i = 0; i < CREATED_SIZE; i++)
                 {
                     if((*created)[i] == root_node)
                     {
                         root_node = created;
                     }
                 }
+                next_id++;
                 break;
             }
         }
@@ -889,15 +851,15 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         if(!modified)
         {
             // delete everything with preds (means not resolved), plus root
-            //            delete bmap[0];
-            //            root_node = nullptr;
-            //            for(ssize_t i = 0; i < preds.size(); i++)
-            //            {
-            //                if(!preds[i].empty())
-            //                {
-            //                    delete bmap[i];
-            //                }
-            //            }
+            delete bmap[0];
+            root_node = nullptr;
+            for(ssize_t i = 0; i < preds.size(); i++)
+            {
+                if(!preds[i].empty())
+                {
+                    delete bmap[i];
+                }
+            }
             return false;
         }
     }
