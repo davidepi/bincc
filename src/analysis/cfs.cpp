@@ -255,7 +255,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             const BasicBlock* head_bb = static_cast<const BasicBlock*>(head);
             const AbstractBlock* cond = head_bb->get_cond();
             tail = cond;
-            if(lh.scc[next->get_id()]==lh.scc[node_id])
+            if(lh.scc[next->get_id()] == lh.scc[node_id])
             {
                 // next is the tail so swap them
                 tail = next;
@@ -275,7 +275,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
         {
             const BasicBlock* tail_bb = static_cast<const BasicBlock*>(tail);
             next = tail->get_next();
-            if(lh.scc[next->get_id()]==lh.scc[node_id])
+            if(lh.scc[next->get_id()] == lh.scc[node_id])
             {
                 next = tail_bb->get_cond();
             }

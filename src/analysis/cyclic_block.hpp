@@ -87,8 +87,7 @@ public:
      * \param[in] tail BasicBlock representing the tail of the loop, a block
      * reachable only from the head and pointing only towards the head
      */
-    WhileBlock(uint32_t id, const BasicBlock* head,
-               const AbstractBlock* tail);
+    WhileBlock(uint32_t id, const BasicBlock* head, const AbstractBlock* tail);
 
     /**
      * \brief Destructor

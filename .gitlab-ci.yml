@@ -16,8 +16,9 @@ stages:
 x86_syntax:
     stage: syntax
     script:
-        - apt-get install -y python3 clang-format wget
+        - apt-get install -y python3 clang-format-8 wget
         - wget https://raw.githubusercontent.com/Sarcasm/run-clang-format/master/run-clang-format.py
+        - ln -s /usr/bin/clang-format-8 /usr/bin/clang-format
         - python3 run-clang-format.py -r src/ test/
     tags:
         - x86_64

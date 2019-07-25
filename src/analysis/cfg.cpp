@@ -48,8 +48,7 @@ void ControlFlowGraph::set_next_null(uint32_t id_src)
     }
 }
 
-void ControlFlowGraph::set_conditional(uint32_t id_src,
-                                       uint32_t id_target)
+void ControlFlowGraph::set_conditional(uint32_t id_src, uint32_t id_target)
 {
     if(id_src < nodes && id_target < nodes)
     {

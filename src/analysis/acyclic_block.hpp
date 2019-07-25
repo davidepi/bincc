@@ -93,8 +93,7 @@ public:
      * \param[in] ifb Pointer to the head block that will be inherited
      * \param[in] thenb Pointer to the then block that will be inherited
      */
-    IfThenBlock(uint32_t id, const BasicBlock* ifb,
-                const AbstractBlock* thenb);
+    IfThenBlock(uint32_t id, const BasicBlock* ifb, const AbstractBlock* thenb);
 
     /**
      * \brief Default destructor
@@ -151,8 +150,8 @@ public:
      * \param[in] thenb Pointer to the then block that will be inherited
      * \param[in] elseb Pointer the the else block that will be inherited
      */
-    IfElseBlock(uint32_t id, const BasicBlock* ifb,
-                const AbstractBlock* thenb, const AbstractBlock* elseb);
+    IfElseBlock(uint32_t id, const BasicBlock* ifb, const AbstractBlock* thenb,
+                const AbstractBlock* elseb);
 
     /**
      * \brief Default destructor
