@@ -4,7 +4,8 @@
 
 #include "cyclic_block.hpp"
 
-SelfLoopBlock::SelfLoopBlock(int id, const BasicBlock* loop) : AbstractBlock(id)
+SelfLoopBlock::SelfLoopBlock(uint32_t id, const BasicBlock* loop)
+    : AbstractBlock(id)
 {
     looping_block = loop;
 }
@@ -19,17 +20,17 @@ BlockType SelfLoopBlock::get_type() const
     return SELF_LOOP;
 }
 
-int SelfLoopBlock::size() const
+uint32_t SelfLoopBlock::size() const
 {
     return 1;
 }
 
-const AbstractBlock* SelfLoopBlock::operator[](int) const
+const AbstractBlock* SelfLoopBlock::operator[](uint32_t) const
 {
     return looping_block;
 }
 
-WhileBlock::WhileBlock(int id, const BasicBlock* head,
+WhileBlock::WhileBlock(uint32_t id, const BasicBlock* head,
                        const AbstractBlock* tail)
     : AbstractBlock(id), head(head), tail(tail)
 {
@@ -46,17 +47,17 @@ BlockType WhileBlock::get_type() const
     return WHILE;
 }
 
-int WhileBlock::size() const
+uint32_t WhileBlock::size() const
 {
     return 2;
 }
 
-const AbstractBlock* WhileBlock::operator[](int index) const
+const AbstractBlock* WhileBlock::operator[](uint32_t index) const
 {
     return index == 0 ? head : tail;
 }
 
-DoWhileBlock::DoWhileBlock(int id, const AbstractBlock* head,
+DoWhileBlock::DoWhileBlock(uint32_t id, const AbstractBlock* head,
                            const BasicBlock* tail)
     : AbstractBlock(id), head(head), tail(tail)
 {
@@ -73,12 +74,12 @@ BlockType DoWhileBlock::get_type() const
     return DO_WHILE;
 }
 
-int DoWhileBlock::size() const
+uint32_t DoWhileBlock::size() const
 {
     return 2;
 }
 
-const AbstractBlock* DoWhileBlock::operator[](int index) const
+const AbstractBlock* DoWhileBlock::operator[](uint32_t index) const
 {
     return index == 0 ? head : tail;
 }

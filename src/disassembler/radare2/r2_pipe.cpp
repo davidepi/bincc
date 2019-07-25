@@ -1,10 +1,9 @@
 #include "r2_pipe.hpp"
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <signal.h>
 #include <sstream>
-#include <sys/stat.h>
 #include <unistd.h>
 
 #define READ_END 0

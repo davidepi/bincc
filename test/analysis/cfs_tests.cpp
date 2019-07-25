@@ -220,6 +220,7 @@ TEST(ControlFlowStructure, whileb)
     cfg.set_next(2, 1);
     cfg.set_conditional(1, 3);
     ControlFlowStructure cfs;
+    cfg.to_file("/home/davide/Desktop/test.dot");
     ASSERT_TRUE(cfs.build(cfg));
     const AbstractBlock* structured = cfs.root();
     ASSERT_NE(structured, nullptr);

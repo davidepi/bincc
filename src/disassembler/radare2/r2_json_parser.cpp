@@ -98,7 +98,7 @@ Statement R2JsonParser::parse_statement(const std::string& json_string)
 }
 
 std::shared_ptr<Architecture>
-R2JsonParser::parse_architecture(const std::string& json_string)
+    R2JsonParser::parse_architecture(const std::string& json_string)
 {
     std::shared_ptr<Architecture> arch;
     if(!json_string.empty())

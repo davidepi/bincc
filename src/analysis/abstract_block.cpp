@@ -9,7 +9,7 @@ const char* AbstractBlock::block_names[BLOCK_TOTAL] = {
     "Basic",   "Self-loop", "Sequence", "If-then",
     "If-else", "While",     "Do-While"};
 
-AbstractBlock::AbstractBlock(int number) : id(number), next(nullptr)
+AbstractBlock::AbstractBlock(uint32_t number) : id(number), next(nullptr)
 {
 }
 
@@ -18,12 +18,12 @@ const AbstractBlock* AbstractBlock::get_next() const
     return next;
 }
 
-int AbstractBlock::get_id() const
+uint32_t AbstractBlock::get_id() const
 {
     return id;
 }
 
-void AbstractBlock::set_id(int number)
+void AbstractBlock::set_id(uint32_t number)
 {
     AbstractBlock::id = number;
 }
@@ -33,12 +33,12 @@ void AbstractBlock::set_next(const AbstractBlock* nxt)
     AbstractBlock::next = nxt;
 }
 
-int AbstractBlock::size() const
+uint32_t AbstractBlock::size() const
 {
     return 0;
 }
 
-const AbstractBlock* AbstractBlock::operator[](int) const
+const AbstractBlock* AbstractBlock::operator[](uint32_t) const
 {
     return this;
 }
@@ -65,8 +65,8 @@ const char* AbstractBlock::get_name() const
 std::ostream& AbstractBlock::print(std::ostream& ss) const
 {
     ss << "subgraph cluster_" << this->get_id() << " {\n";
-    int size = this->size();
-    for(int i = 0; i < size; i++)
+    uint32_t size = this->size();
+    for(uint32_t i = 0; i < size; i++)
     {
         (*this)[i]->print(ss);
     }
@@ -89,8 +89,8 @@ uint64_t AbstractBlock::structural_hash() const
 {
     static_assert(BLOCK_TOTAL < 64, "Hash func. supports max 64 block types");
     uint64_t hash = 1 << this->get_type();
-    const int SIZE = this->size();
-    for(int i = 0; i < SIZE; i++)
+    const uint32_t SIZE = this->size();
+    for(uint32_t i = 0; i < SIZE; i++)
     {
         // combine hash
         hash ^= rotl64((*this)[i]->structural_hash(), i);

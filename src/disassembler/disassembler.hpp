@@ -99,7 +99,7 @@ public:
      * \return A pointer to the body of the function
      */
     const std::vector<Statement>*
-    get_function_body(const std::string& name) const;
+        get_function_body(const std::string& name) const;
 
     /**
      * \brief Returns a function in form of a string

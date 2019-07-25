@@ -6,9 +6,8 @@
 
 #include "analysis.hpp"
 #include <set>
-#include <sstream>
 
-Statement Analysis::operator[](unsigned int value) const
+Statement Analysis::operator[](uint32_t value) const
 {
     if(value < stmt_list.size())
     {
@@ -89,10 +88,10 @@ const std::shared_ptr<ControlFlowStructure> Analysis::get_cfs() const
  * Resolve the block ID given a particular offset. This function is coupled with
  * build_cfg()
  */
-static unsigned int
-resolve_block_id(uint64_t offset,
-                 const std::unordered_map<uint64_t, int>& blocks_map,
-                 const std::set<uint64_t>& targets)
+static uint32_t
+    resolve_block_id(uint64_t offset,
+                     const std::unordered_map<uint64_t, int>& blocks_map,
+                     const std::set<uint64_t>& targets)
 {
     // resolve the current block by finding the next id in the set higher
     // than the current offset, and decreasing the id by 1

@@ -11,7 +11,6 @@
 #include <fstream>
 #include <iostream>
 #include <queue>
-#include <sstream>
 #include <stack>
 #include <unordered_set>
 #include <vector>
@@ -19,8 +18,8 @@
 struct LoopHelpers
 {
     std::vector<bool> is_loop;
-    std::vector<int> scc;
-    std::vector<int> dom;
+    std::vector<uint32_t> scc;
+    std::vector<uint32_t> dom;
 };
 
 ControlFlowStructure::~ControlFlowStructure()
@@ -34,7 +33,7 @@ const AbstractBlock* ControlFlowStructure::root() const
 }
 
 static bool reduce_self_loop(const AbstractBlock* node, AbstractBlock** created,
-                             int next_id)
+                             uint32_t next_id)
 {
     if(node->get_type() == BlockType::BASIC)
     {
@@ -43,9 +42,10 @@ static bool reduce_self_loop(const AbstractBlock* node, AbstractBlock** created,
         {
             *created = new SelfLoopBlock(next_id,
                                          static_cast<const BasicBlock*>(node));
-            // avoid adding itself as loop. This is based on the fact that next
-            // and cond cannot have the same target and next is the preferred
-            // one if there is a single target, with cond defaulting to nullptr
+            // avoid adding itself as loop. This is based on the fact
+            // that next and cond cannot have the same target and next
+            // is the preferred one if there is a single target, with
+            // cond defaulting to nullptr
             const AbstractBlock* next =
                 bb->get_next() != bb ? bb->get_next() : bb->get_cond();
             (*created)->set_next(next);
@@ -55,9 +55,10 @@ static bool reduce_self_loop(const AbstractBlock* node, AbstractBlock** created,
     return false;
 }
 
-static bool reduce_sequence(const AbstractBlock* node, AbstractBlock** created,
-                            int next_id,
-                            const std::vector<std::unordered_set<int>>* preds)
+static bool
+    reduce_sequence(const AbstractBlock* node, AbstractBlock** created,
+                    uint32_t next_id,
+                    const std::vector<std::unordered_set<uint32_t>>* preds)
 {
     // conditions for a sequence:
     // - current node has only one successor node
@@ -75,9 +76,9 @@ static bool reduce_sequence(const AbstractBlock* node, AbstractBlock** created,
         // return the number of parents for the next node
         if((*preds)[next->get_id()].size() == 1 && next->get_out_edges() < 2)
         {
-            // the sequence cannot be conditional: the cfg finalize() step
-            // take care of that. In any other case anything else with more
-            // than one exit has already been resolved
+            // the sequence cannot be conditional: the cfg finalize()
+            // step take care of that. In any other case anything else
+            // with more than one exit has already been resolved
             *created = new SequenceBlock(next_id, node, next);
             next = next->get_next();
             (*created)->set_next(next);
@@ -88,8 +89,8 @@ static bool reduce_sequence(const AbstractBlock* node, AbstractBlock** created,
 }
 
 static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
-                          int next_id, std::vector<AbstractBlock*>* bmap,
-                          std::vector<std::unordered_set<int>>* preds)
+                          uint32_t next_id, std::vector<AbstractBlock*>* bmap,
+                          std::vector<std::unordered_set<uint32_t>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
@@ -118,8 +119,9 @@ static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
 
         // creating a full size array is not convenient in this situation
         std::unordered_set<int> marked;
-        int tmp_id = head->get_id();
-        // try to ASCEND the if-then in order to discover short-circuit chains
+        uint32_t tmp_id = head->get_id();
+        // try to ASCEND the if-then in order to discover short-circuit
+        // chains
         while((*preds)[head->get_id()].size() == 1 &&
               marked.find(tmp_id) == marked.end())
         {
@@ -156,8 +158,8 @@ static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
 }
 
 static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
-                          int next_id,
-                          std::vector<std::unordered_set<int>>* preds)
+                          uint32_t next_id,
+                          std::vector<std::unordered_set<uint32_t>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
@@ -169,7 +171,7 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
         const AbstractBlock* elseb = head->get_next();
         int preds_then = (*preds)[thenb->get_id()].size();
         int preds_else = (*preds)[elseb->get_id()].size();
-        unsigned int heads = 1;
+        uint32_t heads = 1;
         if(preds_then > 1)
         {
             if(preds_else > 1)
@@ -179,7 +181,8 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
             }
             else if(preds_else == 1)
             {
-                // could be an if-else but the then and else blocks are swapped
+                // could be an if-else but the then and else blocks
+                // are swapped
                 const AbstractBlock* tmp = thenb;
                 thenb = elseb;
                 elseb = tmp;
@@ -191,7 +194,7 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
         const AbstractBlock* cond;
         // creating a full size array is not convenient in this situation
         std::unordered_set<int> marked;
-        int tnb_id = thenb->get_id();
+        uint32_t tnb_id = thenb->get_id();
         while(thenb->get_out_edges() == 2 &&
               marked.find(tnb_id) == marked.end())
         {
@@ -219,7 +222,8 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
         }
 
         // last check: then and else should merge to the same block and the
-        // number of entries to the else must be equal to the number of heads
+        // number of entries to the else must be equal to the number of
+        // heads
         if(elseb->get_out_edges() == 1 && thenb->get_out_edges() == 1 &&
            elseb->get_next() == thenb->get_next() &&
            (*preds)[elseb->get_id()].size() == heads)
@@ -233,10 +237,10 @@ static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
 }
 
 static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
-                        int next_id, const LoopHelpers& lh,
-                        std::vector<std::unordered_set<int>>* preds)
+                        uint32_t next_id, const LoopHelpers& lh,
+                        std::vector<std::unordered_set<uint32_t>>* preds)
 {
-    int node_id = node->get_id();
+    uint32_t node_id = node->get_id();
     // condition for the loop: being in a strong connected comp. (scc)
     // and the dominator either is in a different scc or i'm the root
     // (implies this node is the head of the cycle)
@@ -251,7 +255,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             const BasicBlock* head_bb = static_cast<const BasicBlock*>(head);
             const AbstractBlock* cond = head_bb->get_cond();
             tail = cond;
-            if(next == tail)
+            if(lh.scc[next->get_id()]==lh.scc[node_id])
             {
                 // next is the tail so swap them
                 tail = next;
@@ -269,9 +273,9 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
         }
         else if(tail->get_out_edges() == 2) // do-while loop
         {
-            const BasicBlock* tail_bb = (const BasicBlock*)(tail);
+            const BasicBlock* tail_bb = static_cast<const BasicBlock*>(tail);
             next = tail->get_next();
-            if(next == head)
+            if(lh.scc[next->get_id()]==lh.scc[node_id])
             {
                 next = tail_bb->get_cond();
             }
@@ -315,21 +319,21 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
  */
 static AbstractBlock* deep_copy(const BasicBlock* src,
                                 std::vector<AbstractBlock*>* bmap,
-                                std::vector<std::unordered_set<int>>* pred,
+                                std::vector<std::unordered_set<uint32_t>>* pred,
                                 std::vector<bool>* visited)
 {
     // create the node
-    int current_id = src->get_id();
+    uint32_t current_id = src->get_id();
     (*visited)[current_id] = true;
     BasicBlock* created = new BasicBlock(current_id);
     (*bmap)[current_id] = created;
-    (*pred)[current_id] = std::unordered_set<int>();
+    (*pred)[current_id] = std::unordered_set<uint32_t>();
     // resolve the children
     const BasicBlock* next = static_cast<const BasicBlock*>(src->get_next());
     const BasicBlock* cond = static_cast<const BasicBlock*>(src->get_cond());
     if(next != nullptr)
     {
-        int next_id = next->get_id();
+        uint32_t next_id = next->get_id();
         if(!(*visited)[next_id])
         {
             deep_copy(next, bmap, pred, visited);
@@ -339,7 +343,7 @@ static AbstractBlock* deep_copy(const BasicBlock* src,
     }
     if(cond != nullptr)
     {
-        int cond_id = cond->get_id();
+        uint32_t cond_id = cond->get_id();
         if(!(*visited)[cond_id])
         {
             deep_copy(cond, bmap, pred, visited);
@@ -358,7 +362,8 @@ static AbstractBlock* deep_copy(const BasicBlock* src,
  * array index correspond to the node ID. This exploits the fact that IDs are
  * contiguous
  */
-static void postorder_visit(const AbstractBlock* node, std::queue<int>* list,
+static void postorder_visit(const AbstractBlock* node,
+                            std::queue<uint32_t>* list,
                             std::vector<bool>* marked)
 {
     (*marked)[node->get_id()] = true;
@@ -382,7 +387,7 @@ static void postorder_visit(const AbstractBlock* node, std::queue<int>* list,
     list->push(node->get_id());
 }
 
-static void DEBUG_PREDS(std::vector<std::unordered_set<int>>* preds)
+static void DEBUG_PREDS(const std::vector<std::unordered_set<uint32_t>>* preds)
 {
     // TODO: REMOVEME LATER
 #ifndef DNEBUG
@@ -413,14 +418,14 @@ static void DEBUG_PREDS(std::vector<std::unordered_set<int>>* preds)
  * \param[in,out] next_scc The next index that will be assigned to an scc
  * \param[out] scc array reporting the scc index for every node
  */
-void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
-            std::stack<int>* stack, int* next_index, int* next_scc,
-            std::vector<int>* scc)
+void s_conn(const BasicBlock* root, uint32_t* index, uint32_t* lowlink,
+            bool* onstack, std::stack<uint32_t>* stack, uint32_t* next_index,
+            uint32_t* next_scc, std::vector<uint32_t>* scc)
 {
     // in the pseudocode of the tarjan paper is written v.index and v.lowlink...
     // I don't want to change the class so arrays are used and this syntax with
     // index[array] is exploited to get a similar wording as the paper
-    int v = root->get_id();
+    uint32_t v = root->get_id();
     index[v] = *next_index;
     lowlink[v] = *next_index;
     *next_index = (*next_index) + 1;
@@ -437,8 +442,8 @@ void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
             continue;
         }
 
-        int w = successor->get_id();
-        if(index[w] == -1)
+        uint32_t w = successor->get_id();
+        if(index[w] == UINT32_MAX)
         {
             s_conn(successor, index, lowlink, onstack, stack, next_index,
                    next_scc, scc);
@@ -452,7 +457,7 @@ void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
 
     if(index[v] == lowlink[v])
     {
-        int x;
+        uint32_t x;
         do
         {
             x = stack->top();
@@ -473,21 +478,22 @@ void s_conn(const BasicBlock* root, int* index, int* lowlink, bool* onstack,
  * \return an array where each index correpond to the graph id and the value is
  * a boolean representing whether that node is in a cycle or not
  */
-static std::vector<int> find_cycles(const BasicBlock** array, int nodes)
+static std::vector<uint32_t> find_cycles(const BasicBlock** array,
+                                         uint32_t nodes)
 {
-    std::stack<int> stack;
-    int* index = (int*)malloc(sizeof(int) * nodes);
-    memset(index, 0xFF, sizeof(int) * nodes); // set everything to -1
-    int* lowlink = (int*)malloc(sizeof(int) * nodes);
+    std::stack<uint32_t> stack;
+    uint32_t* index = (uint32_t*)malloc(sizeof(uint32_t) * nodes);
+    memset(index, 0xFF, sizeof(uint32_t) * nodes); // set everything to -1
+    uint32_t* lowlink = (uint32_t*)malloc(sizeof(uint32_t) * nodes);
     bool* onstack = (bool*)malloc(sizeof(bool) * nodes);
     memset(onstack, 0, sizeof(bool) * nodes);
-    std::vector<int> scc(nodes);
-    int next_scc = 0;
-    int next_int = 0;
-    for(int i = 0; i < nodes; i++)
+    std::vector<uint32_t> scc(nodes);
+    uint32_t next_scc = 0;
+    uint32_t next_int = 0;
+    for(uint32_t i = 0; i < nodes; i++)
     {
-        int v = array[i]->get_id();
-        if(index[v] == -1)
+        uint32_t v = array[i]->get_id();
+        if(index[v] == UINT32_MAX)
         {
             s_conn(array[i], index, lowlink, onstack, &stack, &next_int,
                    &next_scc, &scc);
@@ -512,11 +518,12 @@ static std::vector<int> find_cycles(const BasicBlock** array, int nodes)
  * \param[in, out] pred array of predecessors in the original graph
  * \param[in, out] next_num next number that will be assigned to a node
  */
-static void preorder_visit(const BasicBlock* node, int* semi, int* vertex,
-                           int* parent, std::unordered_set<int>* pred,
-                           int* next_num)
+static void preorder_visit(const BasicBlock* node, uint32_t* semi,
+                           uint32_t* vertex, uint32_t* parent,
+                           std::unordered_set<uint32_t>* pred,
+                           uint32_t* next_num)
 {
-    int v = node->get_id();
+    uint32_t v = node->get_id();
     semi[v] = *next_num;
     vertex[semi[v]] = v;
     (*next_num) = (*next_num) + 1;
@@ -529,7 +536,7 @@ static void preorder_visit(const BasicBlock* node, int* semi, int* vertex,
         {
             continue;
         }
-        int w = successor->get_id();
+        uint32_t w = successor->get_id();
         if(semi[w] == 0)
         {
             parent[w] = v;
@@ -542,7 +549,8 @@ static void preorder_visit(const BasicBlock* node, int* semi, int* vertex,
 /**
  * \brief COMPRESS function as presented in the Tarjan's dominator algorithm
  */
-static void compress(int v, int* ancestor, int* semi, int* label)
+static void compress(uint32_t v, uint32_t* ancestor, uint32_t* semi,
+                     uint32_t* label)
 {
     if(ancestor[ancestor[v]] != 0)
     {
@@ -558,7 +566,7 @@ static void compress(int v, int* ancestor, int* semi, int* label)
 /**
  * \brief EVAL function as presented in the Tarjan's dominator algorithm
  */
-static int eval(int v, int* ancestor, int* semi, int* label)
+static int eval(uint32_t v, uint32_t* ancestor, uint32_t* semi, uint32_t* label)
 {
     if(ancestor[v] == 0)
     {
@@ -581,8 +589,8 @@ static int eval(int v, int* ancestor, int* semi, int* label)
 /**
  * \brief LINK function as presented in the Tarjan's dominator algorithm
  */
-static void link(int v, int w, int* size, int* label, const int* semi,
-                 int* child, int* ancestor)
+static void link(uint32_t v, uint32_t w, uint32_t* size, uint32_t* label,
+                 const uint32_t* semi, uint32_t* child, uint32_t* ancestor)
 {
     int s = w;
     while(semi[label[w]] < semi[label[child[s]]])
@@ -625,28 +633,31 @@ static void link(int v, int w, int* size, int* label, const int* semi,
  * \param[in] array The CFG for which the dominator tree will be calculated
  * \param[in] nodes The total number of nodes in the CFG
  */
-static std::vector<int> dominator(const BasicBlock** array, int nodes)
+static std::vector<uint32_t> dominator(const BasicBlock** array, uint32_t nodes)
 {
     // super big contiguous array
-    int* cache_friendly_array = (int*)malloc(sizeof(int) * nodes * 7);
+    uint32_t* cache_friendly_array =
+        (uint32_t*)malloc(sizeof(uint32_t) * nodes * 7);
     // other array extracted as part of the big one
-    int* parent = cache_friendly_array + (nodes * 0);
-    int* semi = cache_friendly_array + (nodes * 1);
-    int* vertex = cache_friendly_array + (nodes * 2);
-    int* ancestor = cache_friendly_array + (nodes * 3);
-    int* label = cache_friendly_array + (nodes * 4);
-    int* size = cache_friendly_array + (nodes * 5);
-    int* child = cache_friendly_array + (nodes * 6);
-    std::unordered_set<int>* pred = new std::unordered_set<int>[nodes];
-    std::unordered_set<int>* bucket = new std::unordered_set<int>[nodes];
-    std::vector<int> dom(nodes);
+    uint32_t* parent = cache_friendly_array + (nodes * 0);
+    uint32_t* semi = cache_friendly_array + (nodes * 1);
+    uint32_t* vertex = cache_friendly_array + (nodes * 2);
+    uint32_t* ancestor = cache_friendly_array + (nodes * 3);
+    uint32_t* label = cache_friendly_array + (nodes * 4);
+    uint32_t* size = cache_friendly_array + (nodes * 5);
+    uint32_t* child = cache_friendly_array + (nodes * 6);
+    std::unordered_set<uint32_t>* pred =
+        new std::unordered_set<uint32_t>[nodes];
+    std::unordered_set<uint32_t>* bucket =
+        new std::unordered_set<uint32_t>[nodes];
+    std::vector<uint32_t> dom(nodes);
 
     // step 1
-    int next_num = 0;
-    memset(semi, 0, sizeof(int) * nodes);
-    memset(ancestor, 0, sizeof(int) * nodes);
-    memset(child, 0, sizeof(int) * nodes);
-    for(int i = 0; i < nodes; i++)
+    uint32_t next_num = 0;
+    memset(semi, 0, sizeof(uint32_t) * nodes);
+    memset(ancestor, 0, sizeof(uint32_t) * nodes);
+    memset(child, 0, sizeof(uint32_t) * nodes);
+    for(uint32_t i = 0; i < nodes; i++)
     {
         label[i] = i;
         size[i] = 1;
@@ -656,13 +667,13 @@ static std::vector<int> dominator(const BasicBlock** array, int nodes)
     label[0] = 0;
     semi[0] = 0;
 
-    for(int n = nodes - 1; n > 0; n--)
+    for(uint32_t n = nodes - 1; n > 0; n--)
     {
-        int w = vertex[n];
+        uint32_t w = vertex[n];
         // step 2
-        for(int v : pred[w])
+        for(uint32_t v : pred[w])
         {
-            int u = eval(v, ancestor, semi, label);
+            uint32_t u = eval(v, ancestor, semi, label);
             semi[w] = semi[u] < semi[w] ? semi[u] : semi[w];
         }
         bucket[vertex[semi[w]]].insert(w);
@@ -672,18 +683,18 @@ static std::vector<int> dominator(const BasicBlock** array, int nodes)
         auto it = bucket[parent[w]].begin();
         while(it != bucket[parent[w]].end())
         {
-            int v = *it;
+            uint32_t v = *it;
             it = bucket[parent[w]].erase(it);
             bucket[parent[w]].erase(v);
-            int u = eval(v, ancestor, semi, label);
+            uint32_t u = eval(v, ancestor, semi, label);
             dom[v] = semi[u] < semi[v] ? u : parent[w];
         }
     }
 
     // step 4
-    for(int i = 1; i < nodes; i++)
+    for(uint32_t i = 1; i < nodes; i++)
     {
-        int w = vertex[i];
+        uint32_t w = vertex[i];
         if(dom[w] != vertex[semi[w]])
         {
             dom[w] = dom[dom[w]];
@@ -707,14 +718,14 @@ static std::vector<int> dominator(const BasicBlock** array, int nodes)
  */
 static void update_pred(const AbstractBlock* added,
                         std::vector<AbstractBlock*>* bmap,
-                        std::vector<std::unordered_set<int>>* preds)
+                        std::vector<std::unordered_set<uint32_t>>* preds)
 {
     // insert the entry point list as predecessor for the newly created node
     const AbstractBlock* oep = (*added)[0];
     preds->push_back(std::move((*preds)[oep->get_id()]));
 
     // get predecessors list for the newly created abstract block
-    std::unordered_set<int>* next_preds = nullptr;
+    std::unordered_set<uint32_t>* next_preds = nullptr;
     if(added->get_next() != nullptr)
     {
         next_preds = &((*preds)[added->get_next()->get_id()]);
@@ -722,19 +733,20 @@ static void update_pred(const AbstractBlock* added,
 
     // record which nodes are contained in the created block
     std::unordered_set<int> contained;
-    for(int i = 0; i < added->size(); i++)
+    for(uint32_t i = 0; i < added->size(); i++)
     {
         contained.insert((*added)[i]->get_id());
     }
 
     // for every member of the newly created abstract block
-    for(int i = 0; i < added->size(); i++)
+    for(uint32_t i = 0; i < added->size(); i++)
     {
-        int member_id = (*added)[i]->get_id();
+        uint32_t member_id = (*added)[i]->get_id();
         // for every preds, yep O(n^2)
-        for(int pred : (*preds)[member_id])
+        for(uint32_t pred : (*preds)[member_id])
         {
-            // if pred is coming from outside the newly created block replace it
+            // if pred is coming from outside the newly created block
+            // replace it
             if(contained.find(pred) != contained.end())
             {
                 (*bmap)[pred]->replace_if_match((*bmap)[member_id], added);
@@ -742,11 +754,11 @@ static void update_pred(const AbstractBlock* added,
         }
         // destroy its predecessor list (to avoid inconsistent states)
         (*preds)[member_id].clear();
-        // if in the predecessors of the next block there is the current member,
-        // it is replaced it with the new block id.
-        // i.e. if the situation was 1 -> 2 -> 3 and we replace 2 with 4, on the
-        // predecessors of the follower(3), the member (2) it is now replaced
-        // with 4
+        // if in the predecessors of the next block there is the current
+        // member, it is replaced it with the new block id. i.e. if the
+        // situation was 1 -> 2 -> 3 and we replace 2 with 4, on the
+        // predecessors of the follower(3), the member (2) it is now
+        // replaced with 4
         if(next_preds != nullptr &&
            next_preds->find(member_id) != next_preds->end())
         {
@@ -759,12 +771,12 @@ static void update_pred(const AbstractBlock* added,
 bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
-    const int NODES = cfg.nodes_no();
-    std::vector<AbstractBlock*> bmap(NODES);           //[id] = block>
-    std::vector<std::unordered_set<int>> preds(NODES); // [id] = preds
+    const uint32_t NODES = cfg.nodes_no();
+    std::vector<AbstractBlock*> bmap(NODES);                //[id] = block>
+    std::vector<std::unordered_set<uint32_t>> preds(NODES); // [id] = preds
     std::vector<bool> visited(NODES, false);
     deep_copy(cfg.root(), &bmap, &preds, &visited);
-    int next_id = NODES;
+    uint32_t next_id = NODES;
     root_node = bmap[0];
     // nodes that should NOT be deleted in case of failure
     std::unordered_set<int> inherited(NODES);
@@ -775,14 +787,14 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     lh.dom = dominator((const BasicBlock**)&bmap[0], NODES);
     lh.is_loop.resize(NODES);
     // array containing how many times an scc appears
-    int* scc_count = (int*)malloc(sizeof(int) * NODES);
+    uint32_t* scc_count = (uint32_t*)malloc(sizeof(uint32_t) * NODES);
     memset(scc_count, 0, sizeof(int) * NODES);
-    for(int i = 0; i < NODES; i++)
+    for(uint32_t i = 0; i < NODES; i++)
     {
         scc_count[lh.scc[i]]++;
     }
     // now writes down the results in the array indexed by node
-    for(int i = 0; i < NODES; i++)
+    for(uint32_t i = 0; i < NODES; i++)
     {
         lh.is_loop[i] = scc_count[lh.scc[i]] > 1;
     }
@@ -790,7 +802,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 
     // remove self loops from predecessors, otherwise a new back link will be
     // added every time when replacing the parents while resolving a self-loop
-    for(int i = 0; i < NODES; i++)
+    for(uint32_t i = 0; i < NODES; i++)
     {
         preds[i].erase(i);
     }
@@ -798,7 +810,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     // iterate and resolve
     while(root_node->get_out_edges() != 0)
     {
-        std::queue<int> list;
+        std::queue<uint32_t> list;
         // update visited size if necessary (because it is accesed by index)
         visited.reserve(bmap.size());
         std::fill(visited.begin(), visited.begin() + visited.capacity(), false);
@@ -807,8 +819,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         while(!list.empty())
         {
             const AbstractBlock* node = bmap[list.front()];
-            int node_id = node->get_id();
-            std::cout << node_id << std::endl;
+            uint32_t node_id = node->get_id();
             list.pop();
             AbstractBlock* created = nullptr;
             bool loop_resolved = false;
@@ -825,8 +836,8 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             }
             if(modified)
             {
-                // this always push at bmap[next_index], without undefined
-                // behaviour
+                // this always push at bmap[next_index], without
+                // undefined behaviour
                 bmap.push_back(created);
                 lh.is_loop.push_back(loop_resolved ? false :
                                                      lh.is_loop[node_id]);
@@ -836,9 +847,9 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                           << created->get_name() << " \n";
                 DEBUG_PREDS(&preds);
 
-                // change edges of graph (remap predecessor to address new block
-                // instead of the old basic block)
-                for(int parent_index : preds[node->get_id()])
+                // change edges of graph (remap predecessor to
+                // address new block instead of the old basic block)
+                for(uint32_t parent_index : preds[node->get_id()])
                 {
                     AbstractBlock* parent = bmap[parent_index];
                     parent->replace_if_match(node, created);
@@ -850,12 +861,13 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 DEBUG_PREDS(&preds);
                 next_id++;
 
-                // record which of the original nodes has been inherited
-                // to avoid leak in case of premature termination
+                // record which of the original nodes has been
+                // inherited to avoid leak in case of premature
+                // termination
                 int created_size = created->size();
                 for(int i = 0; i < created_size; i++)
                 {
-                    int id = (*created)[i]->get_id();
+                    uint32_t id = (*created)[i]->get_id();
                     if(id < NODES)
                     {
                         inherited.insert(id);
@@ -863,7 +875,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 }
 
                 // account for replacement of root
-                for(int i = 0; i < created->size(); i++)
+                for(uint32_t i = 0; i < created->size(); i++)
                 {
                     if((*created)[i] == root_node)
                     {
@@ -876,16 +888,16 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         // irreducible point
         if(!modified)
         {
-            // delete everything
-            int tot_nodes = bmap.size();
-            for(int i = 0; i < tot_nodes; i++)
-            {
-                if(inherited.find(i) == inherited.end())
-                {
-                    delete bmap[i];
-                }
-                root_node = nullptr;
-            }
+            // delete everything with preds (means not resolved), plus root
+            //            delete bmap[0];
+            //            root_node = nullptr;
+            //            for(ssize_t i = 0; i < preds.size(); i++)
+            //            {
+            //                if(!preds[i].empty())
+            //                {
+            //                    delete bmap[i];
+            //                }
+            //            }
             return false;
         }
     }

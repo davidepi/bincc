@@ -29,7 +29,7 @@ public:
      * BasicBlock) will always have one edge and thus a self-looping one-edged
      * block is a degenerate situation.
      */
-    SelfLoopBlock(int id, const BasicBlock* loop);
+    SelfLoopBlock(uint32_t id, const BasicBlock* loop);
 
     /**
      * \brief Default destructor
@@ -49,7 +49,7 @@ public:
      * function will always return one.
      * \return The number 1
      */
-    int size() const override;
+    uint32_t size() const override;
 
     /**
      * \brief Returns the i-th element contained in the self-loop
@@ -60,7 +60,7 @@ public:
      * \param[in] index IGNORED
      * \return The BasicBlock composing the self-loop.
      */
-    const AbstractBlock* operator[](int index) const override;
+    const AbstractBlock* operator[](uint32_t index) const override;
 
 private:
     // the looping block
@@ -87,7 +87,8 @@ public:
      * \param[in] tail BasicBlock representing the tail of the loop, a block
      * reachable only from the head and pointing only towards the head
      */
-    WhileBlock(int id, const BasicBlock* head, const AbstractBlock* tail);
+    WhileBlock(uint32_t id, const BasicBlock* head,
+               const AbstractBlock* tail);
 
     /**
      * \brief Destructor
@@ -104,7 +105,7 @@ public:
      * \brief Returns the number of elements composing the while (always 2)
      * \return The number 2
      */
-    int size() const override;
+    uint32_t size() const override;
 
     /**
      * \brief Returns the i-th element contained in the loop
@@ -112,7 +113,7 @@ public:
      * \param[in] index
      * \return The loop head if index is 0, the tail otherwise
      */
-    const AbstractBlock* operator[](int index) const override;
+    const AbstractBlock* operator[](uint32_t index) const override;
 
 private:
     // entry and exit point of the loop
@@ -142,7 +143,8 @@ public:
      * \param[in] tail BasicBlock representing the tail of the loop, a block
      * reachable only from the head and pointing only towards the head
      */
-    DoWhileBlock(int id, const AbstractBlock* head, const BasicBlock* tail);
+    DoWhileBlock(uint32_t id, const AbstractBlock* head,
+                 const BasicBlock* tail);
 
     /**
      * \brief Destructor
@@ -159,7 +161,7 @@ public:
      * \brief Returns the number of elements composing the while (always 2)
      * \return The number 2
      */
-    int size() const override;
+    uint32_t size() const override;
 
     /**
      * \brief Returns the i-th element contained in the loop
@@ -167,7 +169,7 @@ public:
      * \param[in] index
      * \return The loop head if index is 0, the tail otherwise
      */
-    const AbstractBlock* operator[](int index) const override;
+    const AbstractBlock* operator[](uint32_t index) const override;
 
 private:
     // entry and exit point of the loop

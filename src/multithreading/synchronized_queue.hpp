@@ -16,7 +16,7 @@
  * this additional constraint, it is not possible to just lookup the first
  * element: as soon as an element is retrieved it is also popped from the queue
  */
-template <typename T>
+template<typename T>
 class SynchronizedQueue
 {
 public:
@@ -89,7 +89,7 @@ public:
      * arguments for its constructor
      * \param[in] args the arguments of the constructor
      */
-    template <class... Args>
+    template<class... Args>
     void emplace(Args&&... args)
     {
         spin.lock();

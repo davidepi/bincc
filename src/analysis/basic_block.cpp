@@ -4,7 +4,8 @@
 
 #include "basic_block.hpp"
 
-BasicBlock::BasicBlock(int number) : AbstractBlock(number), cond(nullptr)
+BasicBlock::BasicBlock(uint32_t number)
+    : AbstractBlock(number), cond(nullptr)
 {
 }
 

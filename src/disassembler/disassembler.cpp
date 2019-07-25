@@ -50,7 +50,7 @@ std::string Disassembler::get_function_as_string(const std::string& name) const
 }
 
 const std::vector<Statement>*
-Disassembler::get_function_body(const std::string& name) const
+    Disassembler::get_function_body(const std::string& name) const
 {
     std::unordered_map<std::string, std::vector<Statement>>::const_iterator
         got = function_bodies.find(name);
@@ -88,7 +88,7 @@ std::ostream& operator<<(std::ostream& stream, const Disassembler& disasm)
         stream << ';' << endline << endline;
     }
     stream << "----";
-    for(unsigned int i = 0; i < disasm.binary.length(); i++)
+    for(size_t i = 0; i < disasm.binary.length(); i++)
     {
         stream << '-';
     }

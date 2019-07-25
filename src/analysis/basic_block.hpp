@@ -23,7 +23,7 @@ public:
      * \brief Parametrized constructor, given the block id
      * \param[in] number The id of this basic block
      */
-    BasicBlock(int number);
+    explicit BasicBlock(uint32_t number);
 
     /**
      * \brief Default constructor

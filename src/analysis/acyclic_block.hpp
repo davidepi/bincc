@@ -34,7 +34,7 @@ public:
      * that will compose this sequence. If the element is a sequence itself, it
      * will be flattened. Note that the pointer ownership will be inherited!
      */
-    SequenceBlock(int id, const AbstractBlock* first,
+    SequenceBlock(uint32_t id, const AbstractBlock* first,
                   const AbstractBlock* second);
 
     /**
@@ -55,7 +55,7 @@ public:
      * content.
      * \return The total number of elements contained in this sequence
      */
-    int size() const override;
+    uint32_t size() const override;
 
     /**
      * \brief Returns the i-th element contained in the sequence
@@ -64,7 +64,7 @@ public:
      * \param[in] index The index of the element that will be returned
      * \return A const pointer to the retrieved element
      */
-    const AbstractBlock* operator[](int index) const override;
+    const AbstractBlock* operator[](uint32_t index) const override;
 
 private:
     // components of the queue
@@ -93,7 +93,8 @@ public:
      * \param[in] ifb Pointer to the head block that will be inherited
      * \param[in] thenb Pointer to the then block that will be inherited
      */
-    IfThenBlock(int id, const BasicBlock* ifb, const AbstractBlock* thenb);
+    IfThenBlock(uint32_t id, const BasicBlock* ifb,
+                const AbstractBlock* thenb);
 
     /**
      * \brief Default destructor
@@ -104,7 +105,7 @@ public:
      * \brief Returns the number of elements composing the if-then
      * \return always 2
      */
-    int size() const override;
+    uint32_t size() const override;
 
     /**
      * \brief Returns the i-th element contained in the if-then block
@@ -113,7 +114,7 @@ public:
      * \param[in] index The index of the element that will be returned
      * \return the head when index equals zero, the `then` block otherwise
      */
-    const AbstractBlock* operator[](int index) const override;
+    const AbstractBlock* operator[](uint32_t index) const override;
 
     /**
      * \brief Returns the type of this block
@@ -150,8 +151,8 @@ public:
      * \param[in] thenb Pointer to the then block that will be inherited
      * \param[in] elseb Pointer the the else block that will be inherited
      */
-    IfElseBlock(int id, const BasicBlock* ifb, const AbstractBlock* thenb,
-                const AbstractBlock* elseb);
+    IfElseBlock(uint32_t id, const BasicBlock* ifb,
+                const AbstractBlock* thenb, const AbstractBlock* elseb);
 
     /**
      * \brief Default destructor
@@ -162,7 +163,7 @@ public:
      * \brief Returns the number of elements composing the if-else
      * \return always 3
      */
-    int size() const override;
+    uint32_t size() const override;
 
     /**
      * \brief Returns the i-th element contained in the if-then block
@@ -172,7 +173,7 @@ public:
      * \return the head when index equals zero, the `then` block when index
      * equals 1, the `else` block otherwise
      */
-    const AbstractBlock* operator[](int index) const override;
+    const AbstractBlock* operator[](uint32_t index) const override;
 
     /**
      * \brief Returns the type of this block

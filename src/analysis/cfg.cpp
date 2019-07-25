@@ -3,17 +3,15 @@
 //
 
 #include "cfg.hpp"
-#include <climits>
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <stack>
 #include <unordered_set>
 
-ControlFlowGraph::ControlFlowGraph(unsigned int size)
+ControlFlowGraph::ControlFlowGraph(uint32_t size)
     : nodes(size), edges(0), blocks(size + 1)
 {
-    for(unsigned int i = 0; i < size - 1; i++)
+    for(uint32_t i = 0; i < size - 1; i++)
     {
         blocks[i].set_id(i);
         blocks[i].set_next(&(blocks[i + 1]));
@@ -32,39 +30,39 @@ std::string ControlFlowGraph::to_dot() const
     return stream.str();
 }
 
-void ControlFlowGraph::set_next(unsigned int id_src, unsigned int id_target)
+void ControlFlowGraph::set_next(uint32_t id_src, uint32_t id_target)
 {
     if(id_src < nodes && id_target < nodes)
     {
-        edges += (unsigned int)(blocks[id_src].get_next() == nullptr);
+        edges += (uint32_t)(blocks[id_src].get_next() == nullptr);
         blocks[id_src].set_next(&(blocks[id_target]));
     }
 }
 
-void ControlFlowGraph::set_next_null(unsigned int id_src)
+void ControlFlowGraph::set_next_null(uint32_t id_src)
 {
     if(id_src < nodes)
     {
-        edges -= (unsigned int)(blocks[id_src].get_next() != nullptr);
+        edges -= (uint32_t)(blocks[id_src].get_next() != nullptr);
         blocks[id_src].set_next(nullptr);
     }
 }
 
-void ControlFlowGraph::set_conditional(unsigned int id_src,
-                                       unsigned int id_target)
+void ControlFlowGraph::set_conditional(uint32_t id_src,
+                                       uint32_t id_target)
 {
     if(id_src < nodes && id_target < nodes)
     {
-        edges += (unsigned int)(blocks[id_src].get_cond() == nullptr);
+        edges += (uint32_t)(blocks[id_src].get_cond() == nullptr);
         blocks[id_src].set_cond(&(blocks[id_target]));
     }
 }
 
-void ControlFlowGraph::set_conditional_null(unsigned int id_src)
+void ControlFlowGraph::set_conditional_null(uint32_t id_src)
 {
     if(id_src < nodes)
     {
-        edges -= (unsigned int)(blocks[id_src].get_cond() != nullptr);
+        edges -= (uint32_t)(blocks[id_src].get_cond() != nullptr);
         blocks[id_src].set_cond(nullptr);
     }
 }
@@ -74,12 +72,12 @@ const BasicBlock* ControlFlowGraph::root() const
     return &(blocks[0]);
 }
 
-unsigned int ControlFlowGraph::nodes_no() const
+uint32_t ControlFlowGraph::nodes_no() const
 {
     return nodes;
 }
 
-unsigned int ControlFlowGraph::edges_no() const
+uint32_t ControlFlowGraph::edges_no() const
 {
     return edges;
 }
@@ -173,16 +171,16 @@ std::queue<const BasicBlock*> ControlFlowGraph::dfst() const
  * \param[in] root The root node
  * \param[in] visited The already visited nodes
  */
-static void dfs(const BasicBlock* root, std::vector<bool>& visited)
+static void dfs(const BasicBlock* root, std::vector<bool>* visited)
 {
-    visited[root->get_id()] = true;
+    (*visited)[root->get_id()] = true;
     const BasicBlock* left = static_cast<const BasicBlock*>(root->get_next());
     const BasicBlock* right = static_cast<const BasicBlock*>(root->get_cond());
-    if(left != nullptr && !visited[left->get_id()])
+    if(left != nullptr && !(*visited)[left->get_id()])
     {
         dfs(left, visited);
     }
-    if(right != nullptr && !visited[right->get_id()])
+    if(right != nullptr && !(*visited)[right->get_id()])
     {
         dfs(right, visited);
     }
@@ -192,7 +190,7 @@ void ControlFlowGraph::finalize()
 {
     // check for single exit
     std::unordered_set<int> exit_nodes;
-    for(unsigned int i = 0; i < nodes; i++)
+    for(uint32_t i = 0; i < nodes; i++)
     {
         if(blocks[i].get_next() == nullptr)
         {
@@ -230,31 +228,31 @@ void ControlFlowGraph::finalize()
 
     struct BBCopy
     {
-        int id;
-        int left_id;
-        int right_id;
+        uint32_t id;
+        uint32_t left_id;
+        uint32_t right_id;
     };
 
     // at this point perform a deep copy and keep only reachable nodes
     std::vector<bool> marked(nodes, false);
     // how many skipped nodes prior to the indexed one
-    std::vector<int> skipped(nodes, 0);
+    std::vector<uint32_t> skipped(nodes, 0);
     // old cfg representation using only ids, in case a realloc is needed
     std::vector<BBCopy> bbmap(nodes);
 
-    dfs(&(blocks[0]), marked);
+    dfs(&(blocks[0]), &marked);
     int skip_counter = 0;
-    for(unsigned int i = 0; i < nodes; i++)
+    for(uint32_t i = 0; i < nodes; i++)
     {
         bbmap[i].id = blocks[i].get_id();
         bbmap[i].left_id =
             blocks[i].get_next() != nullptr ?
                 (const BasicBlock*)(blocks[i].get_next()) - &(blocks[0]) :
-                -1;
+                UINT32_MAX;
         bbmap[i].right_id =
             blocks[i].get_cond() != nullptr ?
                 (const BasicBlock*)(blocks[i].get_cond()) - &(blocks[0]) :
-                -1;
+                UINT32_MAX;
         if(!marked[i])
         {
             skip_counter++;
@@ -274,19 +272,19 @@ void ControlFlowGraph::finalize()
         {
             if(marked[old_id])
             {
-                const int NEW_ID = old_id - skipped[old_id];
+                const uint32_t NEW_ID = old_id - skipped[old_id];
                 blocks[NEW_ID].set_id(NEW_ID);
-                if(bbmap[old_id].left_id != -1)
+                if(bbmap[old_id].left_id != UINT32_MAX)
                 {
                     edges++;
-                    const int LEFT_ID = bbmap[old_id].left_id;
+                    const uint32_t LEFT_ID = bbmap[old_id].left_id;
                     blocks[NEW_ID].set_next(
                         &blocks[LEFT_ID - skipped[LEFT_ID]]);
                 }
-                if(bbmap[old_id].right_id != -1)
+                if(bbmap[old_id].right_id != UINT32_MAX)
                 {
                     edges++;
-                    const int RIGHT_ID = bbmap[old_id].right_id;
+                    const uint32_t RIGHT_ID = bbmap[old_id].right_id;
                     blocks[NEW_ID].set_cond(
                         &blocks[RIGHT_ID - skipped[RIGHT_ID]]);
                 }
@@ -295,7 +293,7 @@ void ControlFlowGraph::finalize()
     }
 }
 
-const BasicBlock* ControlFlowGraph::get_node(unsigned int id) const
+const BasicBlock* ControlFlowGraph::get_node(uint32_t id) const
 {
     if(id < nodes - 1)
     {

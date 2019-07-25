@@ -35,7 +35,7 @@ public:
      *
      * \param[in] size number of blocks of the CFG
      */
-    ControlFlowGraph(unsigned int size);
+    explicit ControlFlowGraph(uint32_t size);
 
     /**
      * \brief Default destructor
@@ -59,7 +59,7 @@ public:
      * \param[in] id_src block ID of the jump source
      * \param[in] id_target block ID of the jump target
      */
-    void set_next(unsigned int id_src, unsigned int id_target);
+    void set_next(uint32_t id_src, uint32_t id_target);
 
     /**
      * \brief Remove an unconditional jump for this block
@@ -69,7 +69,7 @@ public:
      *
      * \param[in] id_src block ID of the jump that will be removed
      */
-    void set_next_null(unsigned int id_src);
+    void set_next_null(uint32_t id_src);
 
     /**
      * \brief Sets a conditional jump for this block
@@ -80,7 +80,7 @@ public:
      * \param[in] id_src block ID of the jump source
      * \param[in] id_target block ID of the jump target
      */
-    void set_conditional(unsigned int id_src, unsigned int id_target);
+    void set_conditional(uint32_t id_src, uint32_t id_target);
 
     /**
      * \brief Remove a conditional jump for this block
@@ -90,7 +90,7 @@ public:
      *
      * \param[in] id_src block ID of the jump that will be removed
      */
-    void set_conditional_null(unsigned int id_src);
+    void set_conditional_null(uint32_t id_src);
 
     /**
      * \brief Retrieves the root of the CFG
@@ -102,13 +102,13 @@ public:
      * \brief Returns the number of blocks in the CFG
      * \return the number of blocks of the CFG
      */
-    unsigned int nodes_no() const;
+    uint32_t nodes_no() const;
 
     /**
      * \brief Returns the number of edges of the CFG
      * \return the number of edges of the CFG
      */
-    unsigned int edges_no() const;
+    uint32_t edges_no() const;
 
     /**
      * \brief Return a Graphviz dot representation of this CFG
@@ -143,16 +143,24 @@ public:
      * \param[in] id The id of the node
      * \return the node with the given id
      */
-    const BasicBlock* get_node(unsigned int id) const;
+    const BasicBlock* get_node(uint32_t id) const;
 
-    ControlFlowGraph(ControlFlowGraph&) = delete;
-    ControlFlowGraph& operator=(ControlFlowGraph&) = delete;
+    /**
+     * \brief Deleted copy-constructor
+     */
+    ControlFlowGraph(const ControlFlowGraph&) = delete;
+
+    /**
+     * \brief Deleted copy-assignment operator
+     * \return NA
+     */
+    ControlFlowGraph& operator=(const ControlFlowGraph&) = delete;
 
 private:
     // number of nodes of the CFG
-    unsigned int nodes;
+    uint32_t nodes;
     // number of edges of the CFG
-    unsigned int edges;
+    uint32_t edges;
     // root of the nodes
     std::vector<BasicBlock> blocks;
 };

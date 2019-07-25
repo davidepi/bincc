@@ -81,7 +81,7 @@ public:
      * \param[in] value The index of the instruction. Not the offset!
      * \return The instruction found at the given index
      */
-    Statement operator[](unsigned int value) const;
+    Statement operator[](uint32_t value) const;
 
     /**
      * \brief Return the control flow graph for this function

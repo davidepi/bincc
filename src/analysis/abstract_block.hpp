@@ -45,7 +45,7 @@ public:
      * \brief Parametrized constructor, given the block id
      * \param[in] number The id of this abstract block
      */
-    AbstractBlock(int number);
+    explicit AbstractBlock(uint32_t number);
 
     /**
      * \brief Default constructor
@@ -61,13 +61,13 @@ public:
      * \brief Getter for the block id
      * \return the id of the block
      */
-    int get_id() const;
+    uint32_t get_id() const;
 
     /**
      * \brief Setter for the block id
      * \param[in] number the id of the block
      */
-    void set_id(int number);
+    void set_id(uint32_t number);
 
     /**
      * \brief Getter for the next block
@@ -108,7 +108,7 @@ public:
      * If not overriden, this method returns 0
      * \return 0, in this implementation
      */
-    virtual int size() const;
+    virtual uint32_t size() const;
 
     /**
      * \brief Returns the i-th element contained in this abstract block
@@ -117,7 +117,7 @@ public:
      * \param[in] index UNUSED in this implementation
      * \return this, in this implementation
      */
-    virtual const AbstractBlock* operator[](int index) const;
+    virtual const AbstractBlock* operator[](uint32_t index) const;
 
     /**
      * \brief Returns the number of outgoing edges from this class
@@ -169,7 +169,7 @@ public:
 
 protected:
     // id of the BB
-    int id{0};
+    uint32_t id{0};
     // block following the current one (unconditional jump or unsatisfied
     // conditional one)
     const AbstractBlock* next{nullptr};

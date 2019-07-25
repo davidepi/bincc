@@ -14,7 +14,7 @@
 // elements and I cannot remove the ownership without violating the const-ness
 // (thus modifying the flattened sequence).
 
-SequenceBlock::SequenceBlock(int id, const AbstractBlock* fst,
+SequenceBlock::SequenceBlock(uint32_t id, const AbstractBlock* fst,
                              const AbstractBlock* snd)
     : AbstractBlock(id)
 {
@@ -22,8 +22,8 @@ SequenceBlock::SequenceBlock(int id, const AbstractBlock* fst,
         // merge all the internals of a sequence, and destroy the sequence
         if(p->get_type() == BlockType::SEQUENCE)
         {
-            int size = p->size();
-            for(int i = 0; i < size; i++)
+            uint32_t size = p->size();
+            for(uint32_t i = 0; i < size; i++)
             {
                 components.push_back((*p)[i]);
             }
@@ -52,12 +52,12 @@ SequenceBlock::~SequenceBlock()
     }
 }
 
-int SequenceBlock::size() const
+uint32_t SequenceBlock::size() const
 {
     return components.size();
 }
 
-const AbstractBlock* SequenceBlock::operator[](int index) const
+const AbstractBlock* SequenceBlock::operator[](uint32_t index) const
 {
     return components[index];
 }
@@ -67,13 +67,12 @@ BlockType IfThenBlock::get_type() const
     return IF_THEN;
 }
 
-IfThenBlock::IfThenBlock(int id, const BasicBlock* ifb,
+IfThenBlock::IfThenBlock(uint32_t id, const BasicBlock* ifb,
                          const AbstractBlock* thenb)
     : AbstractBlock(id), head(ifb), then(thenb)
 {
     // resolve chained heads
     std::stack<const BasicBlock*> chain_stack;
-    const BasicBlock* tmp_head = ifb;
     const AbstractBlock* contd = thenb->get_next();
     const AbstractBlock* next =
         head->get_next() != contd ? head->get_next() : head->get_cond();
@@ -81,7 +80,7 @@ IfThenBlock::IfThenBlock(int id, const BasicBlock* ifb,
     while(next != thenb)
     {
         chain_len++;
-        tmp_head = static_cast<const BasicBlock*>(next);
+        const BasicBlock* tmp_head = static_cast<const BasicBlock*>(next);
         chain_stack.push(tmp_head);
         next = tmp_head->get_next() != contd ? tmp_head->get_next() :
                                                tmp_head->get_cond();
@@ -109,12 +108,12 @@ IfThenBlock::~IfThenBlock()
     }
 }
 
-int IfThenBlock::size() const
+uint32_t IfThenBlock::size() const
 {
     return chain.size() + 2;
 }
 
-const AbstractBlock* IfThenBlock::operator[](int index) const
+const AbstractBlock* IfThenBlock::operator[](uint32_t index) const
 {
     if(index == 0)
     {
@@ -130,7 +129,7 @@ const AbstractBlock* IfThenBlock::operator[](int index) const
     }
 }
 
-IfElseBlock::IfElseBlock(int id, const BasicBlock* ifb,
+IfElseBlock::IfElseBlock(uint32_t id, const BasicBlock* ifb,
                          const AbstractBlock* thenb, const AbstractBlock* elseb)
     : AbstractBlock(id), head(ifb), then(thenb), ellse(elseb), chain(0)
 {
@@ -178,12 +177,12 @@ BlockType IfElseBlock::get_type() const
     return BlockType::IF_ELSE;
 }
 
-int IfElseBlock::size() const
+uint32_t IfElseBlock::size() const
 {
     return chain.size() + 3;
 }
 
-const AbstractBlock* IfElseBlock::operator[](int index) const
+const AbstractBlock* IfElseBlock::operator[](uint32_t index) const
 {
     if(index == 0)
     {

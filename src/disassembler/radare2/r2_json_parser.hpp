@@ -72,7 +72,7 @@ namespace R2JsonParser
      * occured
      */
     std::shared_ptr<Architecture>
-    parse_architecture(const std::string& json_string);
+        parse_architecture(const std::string& json_string);
 
 } // namespace R2JsonParser
 
