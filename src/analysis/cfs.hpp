@@ -17,6 +17,8 @@ public:
     ~ControlFlowStructure();
     bool build(const ControlFlowGraph& cfg);
     const AbstractBlock* root() const;
+    const AbstractBlock* get_node(uint32_t id) const;
+    uint32_t nodes_no() const;
     ControlFlowStructure(const ControlFlowStructure&) = delete;
     ControlFlowStructure& operator=(const ControlFlowStructure&) = delete;
 
@@ -41,6 +43,7 @@ public:
     void to_file(const char* filename, const ControlFlowGraph& cfg) const;
 
 private:
+    std::vector<AbstractBlock*> bmap;
     AbstractBlock* root_node{nullptr};
 };
 

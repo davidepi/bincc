@@ -27,6 +27,15 @@ ControlFlowStructure::~ControlFlowStructure()
     delete root_node;
 }
 
+const AbstractBlock* ControlFlowStructure::get_node(uint32_t id) const
+{
+    return bmap[id];
+}
+uint32_t ControlFlowStructure::nodes_no() const
+{
+    return bmap.size();
+}
+
 const AbstractBlock* ControlFlowStructure::root() const
 {
     return root_node;
@@ -743,7 +752,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
     const uint32_t NODES = cfg.nodes_no();
-    std::vector<AbstractBlock*> bmap(NODES);                //[id] = block>
+    bmap = std::vector<AbstractBlock*>(NODES);              // [id] = block
     std::vector<std::unordered_set<uint32_t>> preds(NODES); // [id] = preds
     std::vector<bool> visited(NODES, false);
     deep_copy(cfg.root(), &bmap, &preds, &visited);
@@ -853,7 +862,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             // delete everything with preds (means not resolved), plus root
             delete bmap[0];
             root_node = nullptr;
-            for(ssize_t i = 0; i < preds.size(); i++)
+            for(size_t i = 0; i < preds.size(); i++)
             {
                 if(!preds[i].empty())
                 {
