@@ -52,7 +52,11 @@ TEST(Disassembler, stream_operator)
     DisassemblerR2 disasm(name.c_str());
     std::stringstream expected;
     expected << "--- " << TESTS_DIR << "resources/add_arm ---\n"
-             << "-----------------------------------------------------";
+             << "--------";
+    for(size_t i = 0; i < disasm.get_binary_name().length(); i++)
+    {
+        expected << '-';
+    }
     std::stringstream res;
     res << disasm;
     EXPECT_STREQ(res.str().c_str(), expected.str().c_str());
