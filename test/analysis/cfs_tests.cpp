@@ -396,11 +396,26 @@ TEST(ControlFlowStructure, nested_do_while)
 
 TEST(ControlFlowStructure, nested_loop)
 {
-    //    ControlFlowGraph cfg(6);
-    //    cfg.set_conditional(3, 2);
-    //    cfg.set_conditional(4, 1);
-    //    cfg.finalize();
+    //        ControlFlowGraph cfg(6);
+    //        cfg.set_conditional(3, 2);
+    //        cfg.set_conditional(4, 1);
+    //        cfg.finalize();
+    //        ControlFlowStructure cfs;
+    //        ASSERT_TRUE(cfs.build(cfg));
+    //        cfg.to_file("/home/davide/Desktop/test.dot");
+}
+
+TEST(ControlFLowStructure, get_node)
+{
     //    ControlFlowStructure cfs;
+    //    EXPECT_EQ(cfs.nodes_no(), 0);
+    //    ControlFlowGraph cfg(5);
+    //    cfg.set_next(1, 3);
+    //    cfg.set_conditional(1, 2);
     //    ASSERT_TRUE(cfs.build(cfg));
-    //    cfg.to_file("/home/davide/Desktop/test.dot");
+    //    const AbstractBlock* node = cfs.get_node(1);
+    //    EXPECT_EQ(node->get_id(), 1);
+    //    node = cfs.get_node(6);
+    //    EXPECT_EQ(node->get_id(), 6);
+    //    EXPECT_EQ(cfs.nodes_no(), 8);
 }

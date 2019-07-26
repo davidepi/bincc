@@ -55,7 +55,7 @@ bool Comparison::cloned(uint32_t* clone_a, uint32_t* clone_b) const
             if((uint32_t)hash_a[idx] == hash_b[*clone_b])
             {
                 *clone_a = idx;
-                if(hash_a[idx]!=1) //avoid trivial basic block comparison
+                if(hash_a[idx] != 1) // avoid trivial basic block comparison
                 {
                     return true;
                 }

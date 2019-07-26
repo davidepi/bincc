@@ -290,6 +290,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             const BasicBlock* head_bb = static_cast<const BasicBlock*>(head);
             const AbstractBlock* cond = head_bb->get_cond();
             tail = cond;
+            // assert that next and cond are set correctly
             if(dfs_2step(head_bb, next))
             {
                 // next is the tail so swap them
@@ -303,7 +304,15 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             // if not impossible loop, create the block
             if(lh.dom[node_id] != lh.dom[tail->get_id()])
             {
-                *created = new WhileBlock(next_id, head_bb, tail);
+                if(tail->get_out_edges() == 1)
+                {
+                    *created = new WhileBlock(next_id, head_bb, tail);
+                }
+                else
+                {
+                    // TODO: insert last resort here
+                    return false;
+                }
             }
             else
             {
@@ -314,14 +323,27 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
         {
             const BasicBlock* tail_bb = static_cast<const BasicBlock*>(tail);
             next = tail->get_next();
-            if(lh.scc[next->get_id()] == lh.scc[node_id])
+            // assert that next and cond are set correctly
+            if(next == head)
             {
                 next = tail_bb->get_cond();
+            }
+            else if(!dfs_2step(tail_bb, next))
+            {
+                return false;
             }
             // if not impossible loop, create the block
             if(lh.dom[node_id] != lh.dom[tail->get_id()])
             {
-                *created = new DoWhileBlock(next_id, head, tail_bb);
+                if(head->get_out_edges() == 1)
+                {
+                    *created = new DoWhileBlock(next_id, head, tail_bb);
+                }
+                else
+                {
+                    // TODO: insert last resort here
+                    return false;
+                }
             }
             else
             {
@@ -840,10 +862,8 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                                                      lh.is_loop[node_id]);
                 lh.scc.push_back(lh.scc[node_id]);
                 lh.dom.push_back(lh.dom[node_id]);
-                //                DEBUG_PREDS(&preds);
-                //                std::cout << "Adding " << created->get_id() <<
-                //                " as "
-                //                          << created->get_name() << " \n";
+                std::cout << "Adding " << created->get_id() << " as "
+                          << created->get_name() << " \n";
 
                 const uint32_t CREATED_SIZE = created->size();
                 for(uint32_t i = 0; i < CREATED_SIZE; i++)

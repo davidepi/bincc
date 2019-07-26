@@ -9,19 +9,60 @@
 #include "basic_block.hpp"
 #include "cfg.hpp"
 
-// TODO: write doc
+/**
+ * \brief Class used to recognized the high level structure of a CFG
+ *
+ * This class takes a ControlFlowGraph as input an generates the high level
+ * structure. This structure is composed of members of the BLOCK_TYPE enum, and
+ * is represented as a tree where the root node wraps all its children
+ * recursively. The CFS build must be called manually with the
+ * ControlFlowStructure::build() function and is NOT guaranteed to succeed.
+ */
 class ControlFlowStructure
 {
 public:
+    /**
+     * \brief Default constructor: actually does nothing
+     */
     ControlFlowStructure() = default;
+
+    /**
+     * \brief Destructor
+     */
     ~ControlFlowStructure();
+
+    /**
+     * \brief Build the CFS starting from the CFG
+     * Starting from a ControlFlowGraph, this function reconstruct the
+     * high-level structures of the code, ultimately generating a single
+     * AbstractBlock node wrapping everything. Note that this is not guaranteed
+     * to succed, hence the reason of the bool return type.
+     * \param[in] cfg The input CFG that will be used to build the CFS
+     * \return true if the CFS was built successfully, false otherwise
+     */
     bool build(const ControlFlowGraph& cfg);
+
+    /**
+     * \brief Return the root node of the generated CFS, nullptr if not built
+     * \return The root node of the CFS, or null if the generation has not been
+     * performed or failed
+     */
     const AbstractBlock* root() const;
+
+    /**
+     * \brief Returns a specific node of the CFS
+     * \note No checks are performed in order to ensure that the node actually
+     * exists: ControlFlowStructure::nodes_no() should be used!
+     * \param[in] id The id of the node that will be returned
+     * \return The node with the requested id
+     */
     const AbstractBlock* get_node(uint32_t id) const;
-    uint64_t get_hash(uint32_t id) const;
+
+    /**
+     * \brief Returns the total number of nodes of this CFS
+     * \return The total number of nodes of the CFS
+     */
     uint32_t nodes_no() const;
-    ControlFlowStructure(const ControlFlowStructure&) = delete;
-    ControlFlowStructure& operator=(const ControlFlowStructure&) = delete;
 
     /**
      * \brief Return a Graphviz dot representation of this CFS
@@ -43,8 +84,22 @@ public:
      */
     void to_file(const char* filename, const ControlFlowGraph& cfg) const;
 
+    /**
+     * \brief Delete copy-constructor
+     */
+    ControlFlowStructure(const ControlFlowStructure&) = delete;
+
+    /**
+     * \brief Delete copy-assignment operator
+     * \return NA
+     */
+    ControlFlowStructure& operator=(const ControlFlowStructure&) = delete;
+
 private:
+    // array of every block (basic and reconstructed) used by this class
     std::vector<AbstractBlock*> bmap;
+    // array containing the hash of every block (consider that non-basic blocks
+    // can be seen as subtrees)
     std::vector<uint64_t> hash;
 };
 
