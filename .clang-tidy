@@ -4,7 +4,7 @@ Checks: '*,
          -fuchsia*,
          -hicpp*,
          -google-readability-*,
-         -misc-non-private-member-variable-in-classes,
+         -misc-non-private-member-variables-in-classes,
          -readability-magic-numbers,
          -modernize-avoid-c-arrays,
          -readability-else-after-return

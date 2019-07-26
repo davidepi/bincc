@@ -18,6 +18,7 @@ public:
     bool build(const ControlFlowGraph& cfg);
     const AbstractBlock* root() const;
     const AbstractBlock* get_node(uint32_t id) const;
+    uint64_t get_hash(uint32_t id) const;
     uint32_t nodes_no() const;
     ControlFlowStructure(const ControlFlowStructure&) = delete;
     ControlFlowStructure& operator=(const ControlFlowStructure&) = delete;
@@ -44,7 +45,7 @@ public:
 
 private:
     std::vector<AbstractBlock*> bmap;
-    AbstractBlock* root_node{nullptr};
+    std::vector<uint64_t> hash;
 };
 
 #endif //__CFS_HPP__

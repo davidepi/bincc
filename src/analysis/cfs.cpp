@@ -24,7 +24,10 @@ struct LoopHelpers
 
 ControlFlowStructure::~ControlFlowStructure()
 {
-    delete root_node;
+    if(!bmap.empty())
+    {
+        delete bmap[bmap.size() - 1];
+    }
 }
 
 const AbstractBlock* ControlFlowStructure::get_node(uint32_t id) const
@@ -38,7 +41,14 @@ uint32_t ControlFlowStructure::nodes_no() const
 
 const AbstractBlock* ControlFlowStructure::root() const
 {
-    return root_node;
+    if(!bmap.empty())
+    {
+        return bmap[bmap.size() - 1];
+    }
+    else
+    {
+        return nullptr;
+    }
 }
 
 static bool reduce_self_loop(const AbstractBlock* node, AbstractBlock** created,
@@ -757,9 +767,9 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     std::vector<bool> visited(NODES, false);
     deep_copy(cfg.root(), &bmap, &preds, &visited);
     uint32_t next_id = NODES;
-    root_node = bmap[0];
+    const AbstractBlock* root_node = bmap[0];
     // nodes that should NOT be deleted in case of failure
-    std::unordered_set<int> inherited(NODES);
+    std::vector<bool> inherited(NODES, false);
 
     // prepare data for the loop resolution
     LoopHelpers lh;
@@ -824,19 +834,22 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 // undefined behaviour
                 bmap.push_back(created);
                 preds.emplace_back(std::unordered_set<uint32_t>());
+                inherited.push_back(false);
 
                 lh.is_loop.push_back(loop_resolved ? false :
                                                      lh.is_loop[node_id]);
                 lh.scc.push_back(lh.scc[node_id]);
                 lh.dom.push_back(lh.dom[node_id]);
-                DEBUG_PREDS(&preds);
-                std::cout << "Adding " << created->get_id() << " as "
-                          << created->get_name() << " \n";
+                //                DEBUG_PREDS(&preds);
+                //                std::cout << "Adding " << created->get_id() <<
+                //                " as "
+                //                          << created->get_name() << " \n";
 
                 const uint32_t CREATED_SIZE = created->size();
                 for(uint32_t i = 0; i < CREATED_SIZE; i++)
                 {
                     uint32_t comp = (*created)[i]->get_id();
+                    inherited[i] = true;
                     // every node pointing to contained nodes now point to
                     // container yep, up to O(n^2) but on average will be O(2n)
                     for(uint32_t node_idx = 0; node_idx < next_id; node_idx++)
@@ -853,6 +866,10 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                     }
                 }
                 next_id++;
+                if(next_id > 1000)
+                {
+                    modified = false;
+                }
                 break;
             }
         }
@@ -860,15 +877,14 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         if(!modified)
         {
             // delete everything with preds (means not resolved), plus root
-            delete bmap[0];
-            root_node = nullptr;
-            for(size_t i = 0; i < preds.size(); i++)
+            for(size_t i = 0; i < inherited.size(); i++)
             {
-                if(!preds[i].empty())
+                if(!inherited[i])
                 {
                     delete bmap[i];
                 }
             }
+            bmap.clear();
             return false;
         }
     }
@@ -896,7 +912,10 @@ std::string ControlFlowStructure::to_dot(const ControlFlowGraph& cfg) const
     std::stringstream ss;
     std::string cfg_dot = cfg.to_dot();
     ss << cfg_dot.substr(0, cfg_dot.find_last_of('}'));
-    root_node->print(ss);
+    if(!bmap.empty())
+    {
+        bmap[bmap.size() - 1]->print(ss);
+    }
     ss << "}";
     return ss.str();
 }

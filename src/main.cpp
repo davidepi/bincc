@@ -1,8 +1,8 @@
 #include "analysis/analysis.hpp"
 #include "disassembler/radare2/r2_disassembler.hpp"
+#include "multithreading/synchronized_cout.hpp"
 #include "multithreading/synchronized_queue.hpp"
 #include "unistd.h"
-#include <analysis/cfs.hpp>
 #include <iostream>
 #include <thread>
 
@@ -12,7 +12,6 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
                    SynchronizedQueue<Disassembler*>* done);
 int main(int argc, const char* argv[])
 {
-    printf("%lu\n", sizeof(std::vector<void*>));
     return run(argc, argv);
 }
 
@@ -60,12 +59,23 @@ int run(int argc, const char* argv[])
 static void disasm(SynchronizedQueue<Disassembler*>* jobs,
                    SynchronizedQueue<Disassembler*>* done)
 {
+    std::chrono::steady_clock::time_point start;
+    std::chrono::steady_clock::time_point end;
+    uint32_t skipped = 0;
     while(!jobs->empty())
     {
         Disassembler* disasm = jobs->front();
         if(disasm != nullptr)
         {
+
+            start = std::chrono::steady_clock::now();
             disasm->analyse();
+            end = std::chrono::steady_clock::now();
+            auto elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(end -
+                                                                      start);
+            sout << "Disassembled: " << disasm->get_binary_name() << " ("
+                 << elapsed.count() << "ms)" << std::endl;
             std::set<Function> names = disasm->get_function_names();
             std::string binary_no_folder = disasm->get_binary_name();
             // TODO: the job is disasm-bounded for now. When the analysis will
@@ -78,23 +88,29 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
                     binary_no_folder.find_last_of('/') + 1);
                 std::string output =
                     binary_no_folder + "." + func.get_name() + ".dot";
-                std::cerr << disasm->get_binary_name() << " : "
-                          << func.get_name() << std::endl;
+                start = std::chrono::steady_clock::now();
                 Analysis anal(disasm->get_function_body(func.get_name()),
                               disasm->get_arch());
+                end = std::chrono::steady_clock::now();
                 if(anal.get_cfg()->nodes_no() < 5)
                 {
+                    skipped++;
                     continue;
                 }
                 if(anal.get_cfs() != nullptr)
                 {
+                    sout << "Analysed: " << output.c_str() << " ("
+                         << elapsed.count() << "ms)" << std::endl;
                     anal.get_cfs()->to_file(output.c_str(), *anal.get_cfg());
                 }
                 else
                 {
-                    anal.get_cfg()->to_file(output.c_str());
+                    serr << "Fail: " << output.c_str() << std::endl;
+                    // anal.get_cfg()->to_file(output.c_str());
                 }
             }
+            sout << "Skipped " << skipped << " functions (too shorts)"
+                 << std::endl;
             done->push(disasm);
         }
         else
