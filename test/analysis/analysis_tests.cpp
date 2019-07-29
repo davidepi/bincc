@@ -33,18 +33,6 @@ TEST(Analysis, cfs_getter)
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
     std::shared_ptr<ControlFlowStructure> cfs = anal.get_cfs();
     EXPECT_NE(cfs->root(), nullptr);
-
-    // impossible
-    stmts.clear();
-    stmts.emplace_back(0x610, "test edi, edi");
-    stmts.emplace_back(0x612, "jne 0x621");
-    stmts.emplace_back(0x620, "jmp 0x621");
-    stmts.emplace_back(0x621, "jne 0x620");
-    stmts.emplace_back(0x622, "ret");
-    Analysis anal2(&stmts,
-                   std::shared_ptr<Architecture>{new ArchitectureX86()});
-    std::shared_ptr<ControlFlowStructure> cfs2 = anal2.get_cfs();
-    EXPECT_EQ(cfs2->root(), nullptr);
 }
 
 TEST(Analysis, Analysis_constructor_string)

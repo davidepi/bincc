@@ -15,10 +15,16 @@
 #include <unordered_set>
 #include <vector>
 
+/**
+ * Struct containing information about loops
+ */
 struct LoopHelpers
 {
+    // true if the ith node is part of a loop (calculated with recompute_loops)
     std::vector<bool> is_loop;
+    // the scc index of the ith node (calculated with recompute_loops)
     std::vector<uint32_t> scc;
+    // the dominator ID of the ith node (calculated with dominator)
     std::vector<uint32_t> dom;
 };
 
@@ -51,6 +57,14 @@ const AbstractBlock* ControlFlowStructure::root() const
     }
 }
 
+/**
+ * \brief Detect and transform a BasicBlock into a SelfLoopBlock
+ * \complexity O(1)
+ * \param[in] node The node that will be checked
+ * \param[out] created The new SelfLoopBlock that will be heap-allocated
+ * \param[in] next_id The ID that will be assigned to the new block
+ * \return true if a block has been created, false otherwise
+ */
 static bool reduce_self_loop(const AbstractBlock* node, AbstractBlock** created,
                              uint32_t next_id)
 {
@@ -74,6 +88,15 @@ static bool reduce_self_loop(const AbstractBlock* node, AbstractBlock** created,
     return false;
 }
 
+/**
+ * \brief Detect and transform multiple blocks into a SequenceBlock
+ * \complexity O(1)
+ * \param[in] node The node that will be checked, along with its follower
+ * \param[out] created The new SequenceBlock that will be heap-allocated
+ * \param[in] next_id The ID that will be assigned to the new block
+ * \param[in] preds The predecessors list
+ * \return true if a block has been created, false otherwise
+ */
 static bool
     reduce_sequence(const AbstractBlock* node, AbstractBlock** created,
                     uint32_t next_id,
@@ -107,9 +130,21 @@ static bool
     return false;
 }
 
-static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
-                          uint32_t next_id, std::vector<AbstractBlock*>* bmap,
-                          std::vector<std::unordered_set<uint32_t>>* preds)
+/**
+ * \brief Detect and transform blocks into an IfThenBlock
+ * Also If-then chains are resolved (short circuit evaluation)
+ * \complexity O(n)
+ * \param[in] node The node that will be checked
+ * \param[out] created The new IfThenBlock that will be heap-allocated
+ * \param[in] next_id The ID that will be assigned to the new block
+ * \param[in] bmap The vector containing every node
+ * \param[in] preds The predecessors array
+ * \return true if a block has been created, false otherwise
+ */
+static bool
+    reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
+                  uint32_t next_id, std::vector<AbstractBlock*>* bmap,
+                  const std::vector<std::unordered_set<uint32_t>>* preds)
 {
     if(node->get_out_edges() == 2)
     {
@@ -176,6 +211,16 @@ static bool reduce_ifthen(const AbstractBlock* node, AbstractBlock** created,
     return false;
 }
 
+/**
+ * \brief Detect and transform blocks into an IfElseBlock
+ * Also If-else chains are resolved (short circuit evaluation)
+ * \complexity O(n)
+ * \param[in] node The node that will be checked
+ * \param[out] created The new IfElseBlock that will be heap-allocated
+ * \param[in] next_id The ID that will be assigned to the new block
+ * \param[in] preds The predecessors array
+ * \return true if a block has been created, false otherwise
+ */
 static bool reduce_ifelse(const AbstractBlock* node, AbstractBlock** created,
                           uint32_t next_id,
                           std::vector<std::unordered_set<uint32_t>>* preds)
@@ -273,9 +318,22 @@ static bool dfs_2step(const AbstractBlock* head, const AbstractBlock* next)
     return retval;
 }
 
+/**
+ * \brief Detect and transform a block into a WhileBlock or DoWhileBlock
+ * The loop are ALWAYS composed of two nodes. In the other cases other
+ * reductions must be performed before
+ * \complexity O(1)
+ * \param[in] node The node that will be checked
+ * \param[out] created The new block that will be heap-allocated
+ * \param[in] next_id The ID that will be assigned to the new block
+ * \param[in] lh A structure composed of helpers for detecting loops. Check the
+ * structure documentation for more info
+ * \param[in] preds The predecessors array
+ * \return true if a block has been created, false otherwise
+ */
 static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
                         uint32_t next_id, const LoopHelpers& lh,
-                        std::vector<std::unordered_set<uint32_t>>* preds)
+                        const std::vector<std::unordered_set<uint32_t>>* preds)
 {
     uint32_t node_id = node->get_id();
     // condition for the loop: being in a strong connected comp, and the head
@@ -297,25 +355,19 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
                 tail = next;
                 next = cond;
             }
+            // assert that it is really a loop
             else if(!dfs_2step(head_bb, tail))
             {
                 return false;
             }
-            // if not impossible loop, create the block
-            if(lh.dom[node_id] != lh.dom[tail->get_id()])
+            if(tail->get_out_edges() == 1)
             {
-                if(tail->get_out_edges() == 1)
-                {
-                    *created = new WhileBlock(next_id, head_bb, tail);
-                }
-                else
-                {
-                    // TODO: insert last resort here
-                    return false;
-                }
+                *created = new WhileBlock(next_id, head_bb, tail);
             }
             else
             {
+                // NATURAL LOOP
+                // TODO: insert last resort here
                 return false;
             }
         }
@@ -328,25 +380,19 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             {
                 next = tail_bb->get_cond();
             }
-            else if(!dfs_2step(tail_bb, next))
+            // assert that it is really a loop
+            if(!dfs_2step(head, head->get_next()))
             {
                 return false;
             }
-            // if not impossible loop, create the block
-            if(lh.dom[node_id] != lh.dom[tail->get_id()])
+            if(head->get_out_edges() == 1)
             {
-                if(head->get_out_edges() == 1)
-                {
-                    *created = new DoWhileBlock(next_id, head, tail_bb);
-                }
-                else
-                {
-                    // TODO: insert last resort here
-                    return false;
-                }
+                *created = new DoWhileBlock(next_id, head, tail_bb);
             }
             else
             {
+                // NATURAL LOOP
+                // TODO: insert last resort here
                 return false;
             }
         }
@@ -355,9 +401,6 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
             return false;
         }
         (*created)->set_next(next);
-
-        // remove tail from predecessors or they will propagate wrongly
-        (*preds)[node_id].erase(tail->get_id());
         return true;
     }
     return false;
@@ -459,25 +502,6 @@ static void postorder_visit_and_preds(
     list->push(node->get_id());
 }
 
-static void DEBUG_PREDS(const std::vector<std::unordered_set<uint32_t>>* preds)
-{
-    // TODO: REMOVEME LATER
-#ifndef DNEBUG
-    std::cout << "Predecessor list: \n";
-    int size = preds->size();
-    for(int i = 0; i < size; i++)
-    {
-        std::cout << "\t" << i << " -> [";
-        for(int parent : (*preds)[i])
-        {
-            std::cout << parent << ",";
-        }
-        std::cout << "]\n";
-    }
-    std::cout << std::flush;
-#endif
-}
-
 /**
  * \brief Strong connected components, recursive step
  * For every array the array index is the node id
@@ -490,7 +514,7 @@ static void DEBUG_PREDS(const std::vector<std::unordered_set<uint32_t>>* preds)
  * \param[in,out] next_scc The next index that will be assigned to an scc
  * \param[out] scc array reporting the scc index for every node
  */
-void s_conn(const BasicBlock* root, uint32_t* index, uint32_t* lowlink,
+void s_conn(const AbstractBlock* root, uint32_t* index, uint32_t* lowlink,
             bool* onstack, std::stack<uint32_t>* stack, uint32_t* next_index,
             uint32_t* next_scc, std::vector<uint32_t>* scc)
 {
@@ -504,10 +528,13 @@ void s_conn(const BasicBlock* root, uint32_t* index, uint32_t* lowlink,
     stack->push(v);
     onstack[v] = true;
 
-    const BasicBlock* successors[2];
-    successors[0] = static_cast<const BasicBlock*>(root->get_next());
-    successors[1] = static_cast<const BasicBlock*>(root->get_cond());
-    for(const BasicBlock* successor : successors)
+    const AbstractBlock* successors[2]{nullptr, nullptr};
+    successors[0] = root->get_next();
+    if(root->get_out_edges() > 1)
+    {
+        successors[1] = static_cast<const BasicBlock*>(root)->get_cond();
+    }
+    for(const AbstractBlock* successor : successors)
     {
         if(successor == nullptr)
         {
@@ -542,16 +569,15 @@ void s_conn(const BasicBlock* root, uint32_t* index, uint32_t* lowlink,
 }
 
 /**
- * \brief Return a bool array where every index represent if a node is a cycle
- * The Tarjan's SCC algorithm is used underneath
+ * \brief Return the index of the Strongly Connected Component for every node
  * \complexity linear: O(v+e) where v are vertices and e edges of the CFG
  * \param[in] array The array containing all the graph nodes
  * \param[in] nodes The number of nodes in the graph
  * \return an array where each index correpond to the graph id and the value is
  * a boolean representing whether that node is in a cycle or not
  */
-static std::vector<uint32_t> find_cycles(const BasicBlock** array,
-                                         uint32_t nodes)
+static std::vector<uint32_t> find_sccs(const AbstractBlock* const* array,
+                                       uint32_t nodes)
 {
     std::stack<uint32_t> stack;
     uint32_t* index = (uint32_t*)malloc(sizeof(uint32_t) * nodes);
@@ -590,7 +616,7 @@ static std::vector<uint32_t> find_cycles(const BasicBlock** array,
  * \param[in, out] pred array of predecessors in the original graph
  * \param[in, out] next_num next number that will be assigned to a node
  */
-static void preorder_visit(const BasicBlock* node, uint32_t* semi,
+static void preorder_visit(const AbstractBlock* node, uint32_t* semi,
                            uint32_t* vertex, uint32_t* parent,
                            std::unordered_set<uint32_t>* pred,
                            uint32_t* next_num)
@@ -599,10 +625,13 @@ static void preorder_visit(const BasicBlock* node, uint32_t* semi,
     semi[v] = *next_num;
     vertex[semi[v]] = v;
     (*next_num) = (*next_num) + 1;
-    const BasicBlock* successors[2];
-    successors[0] = static_cast<const BasicBlock*>(node->get_next());
-    successors[1] = static_cast<const BasicBlock*>(node->get_cond());
-    for(const BasicBlock* successor : successors)
+    const AbstractBlock* successors[2]{nullptr, nullptr};
+    successors[0] = node->get_next();
+    if(node->get_out_edges() > 1)
+    {
+        successors[1] = static_cast<const BasicBlock*>(node)->get_cond();
+    }
+    for(const AbstractBlock* successor : successors)
     {
         if(successor == nullptr)
         {
@@ -701,11 +730,13 @@ static void link(uint32_t v, uint32_t w, uint32_t* size, uint32_t* label,
  * A full version of the pseudocode implemented here can be found in the paper
  * by T.Lengauer and R.E.Tarjan named "A Fast Algorithm for Finding Dominators
  * in a Flowgraph". The array used in this implementation as well as the
- * variables names reflect the ones in the aforementioned paper
+ * variables names reflect the ones in the aforementioned paper.
+ * \warning Appearently this algorithm works only if the root node has index 0
  * \param[in] array The CFG for which the dominator tree will be calculated
  * \param[in] nodes The total number of nodes in the CFG
  */
-static std::vector<uint32_t> dominator(const BasicBlock** array, uint32_t nodes)
+static std::vector<uint32_t> dominator(const AbstractBlock* const* array,
+                                       uint32_t nodes)
 {
     // super big contiguous array
     uint32_t* cache_friendly_array =
@@ -780,6 +811,83 @@ static std::vector<uint32_t> dominator(const BasicBlock** array, uint32_t nodes)
     return dom;
 }
 
+/**
+ * \brief Calculate the sccs and the bool array marking if each node is in a
+ * cycle or not
+ * \param[out] lh The struct containing the dominators and cycles
+ * \param[in] nodes Array of nodes
+ * \param nodes_len
+ */
+static void recompute_loops(LoopHelpers* lh, const AbstractBlock* const* nodes,
+                            uint32_t nodes_len)
+{
+    lh->scc = find_sccs(nodes, nodes_len);
+    lh->is_loop.clear();
+    lh->is_loop.reserve(nodes_len);
+    std::vector<int> scc_count(nodes_len, 0);
+    for(uint32_t i = 0; i < nodes_len; i++)
+    {
+        scc_count[lh->scc[i]]++;
+    }
+    // now writes down the results in the array indexed by node
+    for(uint32_t i = 0; i < nodes_len; i++)
+    {
+        lh->is_loop[i] = scc_count[lh->scc[i]] > 1;
+    }
+}
+
+/**
+ * \brief Remap every block pointing to the content of created, to created
+ * The `created` block is an aggregate of blocks, however blocks outside this
+ * aggregation will still point to the aggregated ones instead of `created`.
+ * This method iterates them and remap them so they will point to `created`
+ * instead of its content
+ * \complexity O(n^2) in the worst case, O(2n) in the average case, given that
+ * most structure are composed by only two nodes, except if-then and if-else
+ * chains
+ * \param[in] created The newly created block
+ * \param[in,out] bmap The vector containing every block
+ */
+static void remap_nodes(const AbstractBlock* created,
+                        std::vector<AbstractBlock*>* bmap)
+{
+    const uint32_t CREATED_SIZE = created->size();
+    const uint32_t BMAP_SIZE = bmap->size();
+    for(uint32_t i = 0; i < CREATED_SIZE; i++)
+    {
+        uint32_t comp = (*created)[i]->get_id();
+        // every node pointing to contained nodes now point to
+        // container yep, up to O(n^2) but on average will be O(2n)
+        for(uint32_t node_idx = 0; node_idx < BMAP_SIZE; node_idx++)
+        {
+            (*bmap)[node_idx]->replace_if_match((*bmap)[comp], created);
+        }
+    }
+}
+
+/**
+ * \brief Return the dominator for the newly created node
+ * \complexity O(1)
+ * \param[in] created The newly created aggregated node
+ * \param[in] preds Predecessors set
+ * \param[in] dominators current dominator tree for the graph
+ * \return An integer representing the dominator for the newly created node
+ */
+static int
+    compute_dominator(const AbstractBlock* created,
+                      const std::vector<std::unordered_set<uint32_t>>& preds,
+                      const std::vector<uint32_t>& dominators)
+{
+    int dom = 0;
+    const std::unordered_set<uint32_t>& cur_preds =
+        preds[(*created)[0]->get_id()];
+    if(!cur_preds.empty())
+    {
+        dom = dominators[*cur_preds.begin()];
+    }
+    return dom;
+}
+
 bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
@@ -792,32 +900,8 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     const AbstractBlock* root_node = bmap[0];
     // nodes that should NOT be deleted in case of failure
     std::vector<bool> inherited(NODES, false);
-
-    // prepare data for the loop resolution
     LoopHelpers lh;
-    lh.scc = find_cycles((const BasicBlock**)&bmap[0], NODES);
-    lh.dom = dominator((const BasicBlock**)&bmap[0], NODES);
-    lh.is_loop.resize(NODES);
-    // array containing how many times an scc appears
-    uint32_t* scc_count = (uint32_t*)malloc(sizeof(uint32_t) * NODES);
-    memset(scc_count, 0, sizeof(int) * NODES);
-    for(uint32_t i = 0; i < NODES; i++)
-    {
-        scc_count[lh.scc[i]]++;
-    }
-    // now writes down the results in the array indexed by node
-    for(uint32_t i = 0; i < NODES; i++)
-    {
-        lh.is_loop[i] = scc_count[lh.scc[i]] > 1;
-    }
-    free(scc_count);
-
-    // remove self loops from predecessors, otherwise a new back link will be
-    // added every time when replacing the parents while resolving a self-loop
-    for(uint32_t i = 0; i < NODES; i++)
-    {
-        preds[i].erase(i);
-    }
+    lh.dom = dominator(&bmap[0], NODES);
 
     // iterate and resolve
     while(root_node->get_out_edges() != 0)
@@ -831,53 +915,30 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             pred.clear();
         }
         postorder_visit_and_preds(root_node, &list, &visited, &preds);
+        recompute_loops(&lh, &bmap[0], bmap.size());
         bool modified = false;
         while(!list.empty())
         {
             const AbstractBlock* node = bmap[list.front()];
-            uint32_t node_id = node->get_id();
             list.pop();
             AbstractBlock* created = nullptr;
-            bool loop_resolved = false;
 
             // exploit short-circuit eval
             modified = reduce_self_loop(node, &created, next_id) ||
                        reduce_ifthen(node, &created, next_id, &bmap, &preds) ||
                        reduce_ifelse(node, &created, next_id, &preds) ||
-                       reduce_sequence(node, &created, next_id, &preds);
-            if(!modified && reduce_loop(node, &created, next_id, lh, &preds))
-            {
-                modified = true;
-                loop_resolved = true;
-            }
+                       reduce_sequence(node, &created, next_id, &preds) ||
+                       reduce_loop(node, &created, next_id, lh, &preds);
             if(modified)
             {
                 // this always push at bmap[next_index], without
                 // undefined behaviour
                 bmap.push_back(created);
+                lh.dom.push_back(compute_dominator(created, preds, lh.dom));
                 preds.emplace_back(std::unordered_set<uint32_t>());
-                inherited.push_back(false);
-
-                lh.is_loop.push_back(loop_resolved ? false :
-                                                     lh.is_loop[node_id]);
-                lh.scc.push_back(lh.scc[node_id]);
-                lh.dom.push_back(lh.dom[node_id]);
-                std::cout << "Adding " << created->get_id() << " as "
-                          << created->get_name() << " \n";
-
-                const uint32_t CREATED_SIZE = created->size();
-                for(uint32_t i = 0; i < CREATED_SIZE; i++)
-                {
-                    uint32_t comp = (*created)[i]->get_id();
-                    inherited[i] = true;
-                    // every node pointing to contained nodes now point to
-                    // container yep, up to O(n^2) but on average will be O(2n)
-                    for(uint32_t node_idx = 0; node_idx < next_id; node_idx++)
-                    {
-                        bmap[node_idx]->replace_if_match(bmap[comp], created);
-                    }
-                }
+                remap_nodes(created, &bmap);
                 // account for replacement of root
+                const uint32_t CREATED_SIZE = created->size();
                 for(uint32_t i = 0; i < CREATED_SIZE; i++)
                 {
                     if((*created)[i] == root_node)

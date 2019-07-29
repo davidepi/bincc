@@ -377,32 +377,39 @@ TEST(ControlFlowStructure, nested_while)
 
 TEST(ControlFlowStructure, nested_do_while)
 {
-    //    ControlFlowGraph cfg(5);
-    //    cfg.set_conditional(2, 1);
-    //    cfg.set_conditional(3, 2);
-    //    cfg.set_conditional(1, 2);
-    //    cfg.set_next_null(1);
-    //    cfg.finalize();
-    //    ControlFlowStructure cfs;
-    //    ASSERT_TRUE(cfs.build(cfg));
-    //    const AbstractBlock* node = cfs.root();
-    //    EXPECT_EQ(node->get_type(), SEQUENCE);
-    //    ASSERT_EQ(node->size(), 3);
-    //    const AbstractBlock* middle = (*node)[1];
-    //    EXPECT_EQ(middle->get_type(), DO_WHILE);
-    //    const AbstractBlock* nested = (*middle)[1];
-    //    EXPECT_EQ(nested->get_type(), DO_WHILE);
+    ControlFlowGraph cfg(5);
+    cfg.set_conditional(2, 1);
+    cfg.set_conditional(3, 2);
+    cfg.set_conditional(1, 2);
+    cfg.set_next_null(1);
+    cfg.finalize();
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    const AbstractBlock* node = cfs.root();
+    EXPECT_EQ(node->get_type(), SEQUENCE);
+    ASSERT_EQ(node->size(), 3);
+    const AbstractBlock* middle = (*node)[1];
+    EXPECT_EQ(middle->get_type(), DO_WHILE);
+    const AbstractBlock* nested = (*middle)[0];
+    EXPECT_EQ(nested->get_type(), DO_WHILE);
 }
 
 TEST(ControlFlowStructure, nested_loop)
 {
-    //        ControlFlowGraph cfg(6);
-    //        cfg.set_conditional(3, 2);
-    //        cfg.set_conditional(4, 1);
-    //        cfg.finalize();
-    //        ControlFlowStructure cfs;
-    //        ASSERT_TRUE(cfs.build(cfg));
-    //        cfg.to_file("/home/davide/Desktop/test.dot");
+    ControlFlowGraph cfg(6);
+    cfg.set_conditional(3, 2);
+    cfg.set_conditional(4, 1);
+    cfg.finalize();
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    const AbstractBlock* root = cfs.root();
+    EXPECT_EQ(root->get_type(), SEQUENCE);
+    ASSERT_EQ(root->size(), 3);
+    const AbstractBlock* outer_loop = (*root)[1];
+    EXPECT_EQ(outer_loop->get_type(), DO_WHILE);
+    ASSERT_EQ((*outer_loop)[0]->size(), 2);
+    const AbstractBlock* inner_loop = (*(*outer_loop)[0])[1];
+    EXPECT_EQ(inner_loop->get_type(), DO_WHILE);
 }
 
 TEST(ControlFLowStructure, get_node)
