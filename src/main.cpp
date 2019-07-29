@@ -14,6 +14,9 @@ int main(int argc, const char* argv[])
 {
     return run(argc, argv);
 }
+int a(){return 0;};
+int b(){return 1;};
+int c(){return 2;};
 
 int run(int argc, const char* argv[])
 {
@@ -48,6 +51,7 @@ int run(int argc, const char* argv[])
     {
         threads[i].join();
     }
+    delete[] threads;
     while(!disasmed.empty())
     {
         Disassembler* disasm = disasmed.front();
@@ -62,20 +66,19 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
     std::chrono::steady_clock::time_point start;
     std::chrono::steady_clock::time_point end;
     uint32_t skipped = 0;
+    uint32_t success = 0;
+    uint32_t failed = 0;
     while(!jobs->empty())
     {
         Disassembler* disasm = jobs->front();
         if(disasm != nullptr)
         {
-
             start = std::chrono::steady_clock::now();
             disasm->analyse();
             end = std::chrono::steady_clock::now();
             auto elapsed =
                 std::chrono::duration_cast<std::chrono::milliseconds>(end -
                                                                       start);
-            sout << "Disassembled: " << disasm->get_binary_name() << " ("
-                 << elapsed.count() << "ms)" << std::endl;
             std::set<Function> names = disasm->get_function_names();
             std::string binary_no_folder = disasm->get_binary_name();
             // TODO: the job is disasm-bounded for now. When the analysis will
@@ -97,20 +100,21 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
                     skipped++;
                     continue;
                 }
-                if(anal.get_cfs() != nullptr)
+                if(anal.get_cfs()->root() != nullptr)
                 {
-                    sout << "Analysed: " << output.c_str() << " ("
-                         << elapsed.count() << "ms)" << std::endl;
+                    elapsed =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            end - start);
                     anal.get_cfs()->to_file(output.c_str(), *anal.get_cfg());
+                    success++;
                 }
                 else
                 {
-                    serr << "Fail: " << output.c_str() << std::endl;
-                    // anal.get_cfg()->to_file(output.c_str());
+                    failed++;
                 }
             }
-            sout << "Skipped " << skipped << " functions (too shorts)"
-                 << std::endl;
+            sout << binary_no_folder << "," << success << "," << failed << ","
+                 << skipped << std::endl;
             done->push(disasm);
         }
         else

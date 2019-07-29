@@ -47,7 +47,7 @@ uint32_t ControlFlowStructure::nodes_no() const
 
 const AbstractBlock* ControlFlowStructure::root() const
 {
-    if(!bmap.empty())
+    if(!bmap.empty() && bmap[bmap.size() - 1]->get_out_edges() == 0)
     {
         return bmap[bmap.size() - 1];
     }
@@ -949,25 +949,33 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 next_id++;
                 if(next_id > 1000)
                 {
+                    std::cerr << "Killing at 1000 nodes" << std::endl;
                     modified = false;
                 }
                 break;
             }
         }
-        // irreducible point
+        // irreducible point, cleanup memory
         if(!modified)
         {
-            // delete everything with preds (means not resolved), plus root
-            for(size_t i = 0; i < inherited.size(); i++)
+            std::fill(visited.begin(), visited.begin() + visited.capacity(),
+                      false);
+            postorder_visit_and_preds(root_node, &list, &visited, &preds);
+            while(!list.empty())
             {
-                if(!inherited[i])
-                {
-                    delete bmap[i];
-                }
+                delete bmap[list.front()];
+                list.pop();
             }
             bmap.clear();
             return false;
         }
+    }
+    // calculate hahes for the subtrees
+    const int BMAP_SIZE = bmap.size();
+    hash.resize(BMAP_SIZE);
+    for(int i = 0; i < BMAP_SIZE; i++)
+    {
+        hash[i] = bmap[i]->structural_hash();
     }
     return true;
 }
