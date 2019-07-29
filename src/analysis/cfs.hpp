@@ -60,6 +60,8 @@ public:
 
     /**
      * \brief Returns the total number of nodes of this CFS
+     * This includes structural nodes (otherwise the count would be equal to the
+     * ControlFlowGraph::nodes_no())
      * \return The total number of nodes of the CFS
      */
     uint32_t nodes_no() const;

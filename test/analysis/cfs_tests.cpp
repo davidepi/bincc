@@ -414,15 +414,15 @@ TEST(ControlFlowStructure, nested_loop)
 
 TEST(ControlFLowStructure, get_node)
 {
-    //    ControlFlowStructure cfs;
-    //    EXPECT_EQ(cfs.nodes_no(), 0);
-    //    ControlFlowGraph cfg(5);
-    //    cfg.set_next(1, 3);
-    //    cfg.set_conditional(1, 2);
-    //    ASSERT_TRUE(cfs.build(cfg));
-    //    const AbstractBlock* node = cfs.get_node(1);
-    //    EXPECT_EQ(node->get_id(), 1);
-    //    node = cfs.get_node(6);
-    //    EXPECT_EQ(node->get_id(), 6);
-    //    EXPECT_EQ(cfs.nodes_no(), 8);
+    ControlFlowStructure cfs;
+    EXPECT_EQ(cfs.nodes_no(), 0);
+    ControlFlowGraph cfg(5);
+    cfg.set_next(1, 3);
+    cfg.set_conditional(1, 2);
+    ASSERT_TRUE(cfs.build(cfg));
+    const AbstractBlock* node = cfs.get_node(1);
+    EXPECT_EQ(node->get_id(), 1);
+    node = cfs.get_node(6);
+    EXPECT_EQ(node->get_id(), 6);
+    EXPECT_EQ(cfs.nodes_no(), 7);
 }

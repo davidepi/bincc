@@ -888,6 +888,54 @@ static int
     return dom;
 }
 
+/**
+ * \brief Compress a bmap and remove dead blocks
+ * Dead blocks refers to the sequences that have been merged into other
+ * sequences. For this reason they are unreachable and points nowhere,
+ * furthermore they are already inherited by another block
+ * \param[in] bmap original bmap, assuming the build is completed
+ * \return a new bmap without dead blocks
+ */
+static std::vector<AbstractBlock*>
+    shrink_bmap(const std::vector<AbstractBlock*>& bmap)
+{
+    std::vector<bool> visited(bmap.size(), false);
+    std::stack<const AbstractBlock*> stack;
+    const AbstractBlock* root = bmap[bmap.size() - 1];
+    stack.push(root);
+    uint32_t size = 0;
+    // iterative visit of the tree
+    while(!stack.empty())
+    {
+        const AbstractBlock* current = stack.top();
+        stack.pop();
+        visited[current->get_id()] = true;
+        size++;
+        const int CHILDREN_NO = current->size();
+        for(int i = 0; i < CHILDREN_NO; i++)
+        {
+            const AbstractBlock* child = (*current)[i];
+            if(!visited[child->get_id()])
+            {
+                stack.push(child);
+            }
+        }
+    }
+    // the actual shrink
+    std::vector<AbstractBlock*> new_bmap;
+    new_bmap.reserve(size);
+    uint32_t id = 0;
+    for(AbstractBlock* block : bmap)
+    {
+        if(visited[block->get_id()])
+        {
+            new_bmap.push_back(block);
+            block->set_id(id++);
+        }
+    }
+    return new_bmap;
+}
+
 bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
 {
     // first lets start clean and deepcopy
@@ -949,6 +997,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
                 next_id++;
                 if(next_id > 1000)
                 {
+                    // TODO: should never enter here! remove after validation
                     std::cerr << "Killing at 1000 nodes" << std::endl;
                     modified = false;
                 }
@@ -970,6 +1019,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             return false;
         }
     }
+    bmap = shrink_bmap(bmap);
 
     // calculate hahes for the subtrees
     const int BMAP_SIZE = bmap.size();
