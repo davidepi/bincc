@@ -970,6 +970,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
             return false;
         }
     }
+
     // calculate hahes for the subtrees
     const int BMAP_SIZE = bmap.size();
     hash.resize(BMAP_SIZE);
