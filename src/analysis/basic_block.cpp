@@ -54,6 +54,11 @@ void BasicBlock::replace_if_match(const AbstractBlock* match,
     }
 }
 
+uint32_t BasicBlock::get_depth() const
+{
+    return 0;
+}
+
 std::ostream& BasicBlock::print(std::ostream& ss) const
 {
     ss << id << ";\n";

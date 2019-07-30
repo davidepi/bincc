@@ -81,6 +81,15 @@ public:
     unsigned char get_out_edges() const override;
 
     /**
+     * \brief Returns the depth of this basic block
+     * The depth refers to the maximum amount of nested nodes contained in this
+     * tree. However given that a basic block is always the leaf, this method
+     * always returns 0
+     * \return 0
+     */
+    uint32_t get_depth() const override;
+
+    /**
      * \brief Replace an edge in the block with a new one.
      * This happens only if the class has a matching edge
      * \param[in] match The target that will be looked for matching

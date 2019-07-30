@@ -18,6 +18,7 @@ SequenceBlock::SequenceBlock(uint32_t id, const AbstractBlock* fst,
                              const AbstractBlock* snd)
     : AbstractBlock(id)
 {
+    depth = 0;
     auto merge_blocks = [this](const AbstractBlock* p) -> void {
         // merge all the internals of a sequence, and destroy the sequence
         if(p->get_type() == BlockType::SEQUENCE)
@@ -26,17 +27,20 @@ SequenceBlock::SequenceBlock(uint32_t id, const AbstractBlock* fst,
             for(uint32_t i = 0; i < size; i++)
             {
                 components.push_back((*p)[i]);
+                depth = std::max(depth, (*p)[i]->get_depth());
             }
         }
         // if it was a single node just add the node
         else
         {
+            depth = std::max(depth, p->get_depth());
             components.push_back(p);
         }
         delete_list.push_back(p);
     };
     merge_blocks(fst);
     merge_blocks(snd);
+    depth++;
 }
 
 BlockType SequenceBlock::get_type() const
@@ -85,7 +89,7 @@ IfThenBlock::IfThenBlock(uint32_t id, const BasicBlock* ifb,
         next = tmp_head->get_next() != contd ? tmp_head->get_next() :
                                                tmp_head->get_cond();
     }
-
+    depth = std::max(head->get_depth(), thenb->get_depth());
     if(chain_len != 0)
     {
         // copy the stack into the more space_efficient array
@@ -93,9 +97,11 @@ IfThenBlock::IfThenBlock(uint32_t id, const BasicBlock* ifb,
         for(int i = chain_len - 1; i >= 0; i--)
         {
             chain[i] = chain_stack.top();
+            depth = std::max(depth, chain[i]->get_depth());
             chain_stack.pop();
         }
     }
+    depth++;
 }
 
 IfThenBlock::~IfThenBlock()
@@ -148,7 +154,8 @@ IfElseBlock::IfElseBlock(uint32_t id, const BasicBlock* ifb,
         next = tmp_head->get_next() != elseb ? tmp_head->get_next() :
                                                tmp_head->get_cond();
     }
-
+    depth = std::max(head->get_depth(), thenb->get_depth());
+    depth = std::max(depth, ellse->get_depth());
     if(chain_len != 0)
     {
         // copy the stack into the more space_efficient array
@@ -156,9 +163,11 @@ IfElseBlock::IfElseBlock(uint32_t id, const BasicBlock* ifb,
         for(int i = chain_len - 1; i >= 0; i--)
         {
             chain[i] = chain_stack.top();
+            depth = std::max(depth, chain[i]->get_depth());
             chain_stack.pop();
         }
     }
+    depth++;
 }
 
 IfElseBlock::~IfElseBlock()

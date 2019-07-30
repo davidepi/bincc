@@ -159,6 +159,14 @@ public:
     virtual std::ostream& print(std::ostream& ss) const;
 
     /**
+     * \brief Returns the depth of this abstract block
+     * The depth refers to the maximum amount of nested nodes contained in this
+     * tree
+     * \return The maximum depth of the tree rooted in this node
+     */
+    virtual uint32_t get_depth() const;
+
+    /**
      * \brief Returns an hash representing this abstract block
      * The hash involves only the structure of the block, so it will account for
      * every block contained inside this, but not for the actual value of the
@@ -170,6 +178,8 @@ public:
 protected:
     // id of the BB
     uint32_t id{0};
+    // depth of the tree generating from the abstract block
+    uint32_t depth;
     // block following the current one (unconditional jump or unsatisfied
     // conditional one)
     const AbstractBlock* next{nullptr};

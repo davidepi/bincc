@@ -17,6 +17,12 @@ TEST(BasicBlock, id)
     EXPECT_EQ(b2.get_id(), -13);
 }
 
+TEST(BasicBlock, depth)
+{
+    BasicBlock b0;
+    EXPECT_EQ(b0.get_depth(), 0);
+}
+
 TEST(BasicBlock, outgoing_edges)
 {
     BasicBlock b0(0);
@@ -231,6 +237,40 @@ TEST(SequenceBlock, replace_if_match)
     EXPECT_EQ(s0.get_next(), &s2);
     s0.replace_if_match(&s2, &s0);
     EXPECT_EQ(s0.get_next(), &s0);
+}
+
+TEST(SequenceBlock, depth)
+{
+    uint32_t id = 0;
+    BasicBlock* b0 = new BasicBlock(id++);
+    BasicBlock* b1 = new BasicBlock(id++);
+    SequenceBlock* s1 = new SequenceBlock(id++, b0, b1);
+    EXPECT_EQ(s1->get_depth(), 1);
+    BasicBlock* b2 = new BasicBlock(id++);
+    SequenceBlock* s2 = new SequenceBlock(id++, s1, b2);
+    EXPECT_EQ(s2->get_depth(), 1);
+    BasicBlock* b3 = new BasicBlock(id++);
+    BasicBlock b4(id++);
+    b3->set_cond(s2);
+    s2->set_next(&b4);
+    b3->set_next(&b4);
+    IfThenBlock* ifb = new IfThenBlock(id++, b3, s2);
+    EXPECT_EQ(ifb->get_depth(), 2);
+    BasicBlock* b5 = new BasicBlock(id++);
+    BasicBlock* b6 = new BasicBlock(id++);
+    BasicBlock b7(id++);
+    b5->set_next(ifb);
+    b5->set_cond(b6);
+    ifb->set_next(&b7);
+    b6->set_cond(&b7);
+    IfElseBlock* ife = new IfElseBlock(id++, b5, b6, ifb);
+    EXPECT_EQ(ife->get_depth(), 3);
+    BasicBlock* b8 = new BasicBlock(id++);
+    WhileBlock* wb = new WhileBlock(id++, b8, ife);
+    EXPECT_EQ(wb->get_depth(), 4);
+    BasicBlock* b9 = new BasicBlock(id++);
+    DoWhileBlock dwb(id, wb, b9);
+    EXPECT_EQ(dwb.get_depth(), 5);
 }
 
 TEST(SelfLoopBlock, type)

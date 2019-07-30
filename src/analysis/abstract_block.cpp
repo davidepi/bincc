@@ -74,6 +74,11 @@ std::ostream& AbstractBlock::print(std::ostream& ss) const
     return ss;
 }
 
+uint32_t AbstractBlock::get_depth() const
+{
+    return depth;
+}
+
 /**
  * \brief Rotate left
  * \param[in] x Value to be shifted

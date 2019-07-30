@@ -8,6 +8,7 @@ SelfLoopBlock::SelfLoopBlock(uint32_t id, const BasicBlock* loop)
     : AbstractBlock(id)
 {
     looping_block = loop;
+    depth = 1;
 }
 
 SelfLoopBlock::~SelfLoopBlock()
@@ -34,6 +35,7 @@ WhileBlock::WhileBlock(uint32_t id, const BasicBlock* head,
                        const AbstractBlock* tail)
     : AbstractBlock(id), head(head), tail(tail)
 {
+    depth = std::max(head->get_depth(), tail->get_depth())+1;
 }
 
 WhileBlock::~WhileBlock()
@@ -61,6 +63,7 @@ DoWhileBlock::DoWhileBlock(uint32_t id, const AbstractBlock* head,
                            const BasicBlock* tail)
     : AbstractBlock(id), head(head), tail(tail)
 {
+    depth = std::max(head->get_depth(), tail->get_depth())+1;
 }
 
 DoWhileBlock::~DoWhileBlock()
