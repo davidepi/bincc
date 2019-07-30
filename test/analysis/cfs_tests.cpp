@@ -5,6 +5,7 @@
 #include "analysis/abstract_block.hpp"
 #include "analysis/cfs.hpp"
 #include <analysis/cfg.hpp>
+#include <fstream>
 #include <gtest/gtest.h>
 
 TEST(ControlFlowStructure, build_uncalled)
@@ -323,7 +324,6 @@ TEST(ControlFlowStructure, short_circuit_if_then)
 }
 
 // test implemented in order to replicate and fix a bug
-
 TEST(ControlFlowStructure, if_else_abstract)
 {
     ControlFlowGraph cfg(4);
@@ -425,4 +425,72 @@ TEST(ControlFLowStructure, get_node)
     node = cfs.get_node(6);
     EXPECT_EQ(node->get_id(), 6);
     EXPECT_EQ(cfs.nodes_no(), 7);
+}
+
+TEST(ControlFlowStructure, print_cfg)
+{
+    ControlFlowGraph cfg(7);
+    cfg.set_conditional(2, 4);
+    cfg.set_next(3, 5);
+    cfg.set_conditional(3, 3);
+    cfg.set_next(5, 1);
+    cfg.set_conditional(5, 6);
+    cfg.finalize();
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    cfs.to_file("/tmp/test.dot", cfg);
+    std::ifstream read("/tmp/test.dot");
+    read.seekg(0, std::ios::end);
+    std::string str;
+    str.reserve(read.tellg());
+    read.seekg(0, std::ios::beg);
+    str.assign((std::istreambuf_iterator<char>(read)),
+               std::istreambuf_iterator<char>());
+    std::string expected;
+    expected = "digraph "
+               "{\n0->1\n1->2\n2->3\n2->4[arrowhead=\"empty\"];\n4->5\n5->1\n5-"
+               ">6[arrowhead=\"empty\"];\n3->5\n3->3[arrowhead=\"empty\"];"
+               "\nsubgraph cluster_11 {\n0;\nsubgraph cluster_10 {\nsubgraph "
+               "cluster_9 {\n1;\nsubgraph cluster_8 {\n2;\n4;\nsubgraph "
+               "cluster_7 {\n3;\nlabel = \"Self-loop\";\n}\nlabel = "
+               "\"If-else\";\n}\nlabel = \"Sequence\";\n}\n5;\nlabel = "
+               "\"Do-While\";\n}\n6;\nlabel = \"Sequence\";\n}\n}";
+    EXPECT_STREQ(str.c_str(), expected.c_str());
+    read.close();
+    unlink("/tmp/test.dot");
+}
+
+TEST(ControlFlowStructure, print_tree)
+{
+    ControlFlowGraph cfg(7);
+    cfg.set_conditional(2, 4);
+    cfg.set_next(3, 5);
+    cfg.set_conditional(3, 3);
+    cfg.set_next(5, 1);
+    cfg.set_conditional(5, 6);
+    cfg.finalize();
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    cfs.to_file("/tmp/test.dot");
+    std::ifstream read("/tmp/test.dot");
+    read.seekg(0, std::ios::end);
+    std::string str;
+    str.reserve(read.tellg());
+    read.seekg(0, std::ios::beg);
+    str.assign((std::istreambuf_iterator<char>(read)),
+               std::istreambuf_iterator<char>());
+    std::string expected;
+    expected =
+        "digraph {\n11[label=\"Sequence\"];\n11 -> 0\n11 -> 10\n11 -> "
+        "6\n6[label=\"Basic\" shape=\"box\"];\n10[label=\"Do-While\"];\n10 -> "
+        "9\n10 -> 5\n5[label=\"Basic\" "
+        "shape=\"box\"];\n9[label=\"Sequence\"];\n9 -> 1\n9 -> "
+        "8\n8[label=\"If-else\"];\n8 -> 2\n8 -> 4\n8 -> "
+        "7\n7[label=\"Self-loop\"];\n7 -> 3\n3[label=\"Basic\" "
+        "shape=\"box\"];\n4[label=\"Basic\" shape=\"box\"];\n2[label=\"Basic\" "
+        "shape=\"box\"];\n1[label=\"Basic\" shape=\"box\"];\n0[label=\"Basic\" "
+        "shape=\"box\"];\n}\n";
+    EXPECT_STREQ(str.c_str(), expected.c_str());
+    read.close();
+    unlink("/tmp/test.dot");
 }
