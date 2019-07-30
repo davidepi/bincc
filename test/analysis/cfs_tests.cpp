@@ -494,3 +494,41 @@ TEST(ControlFlowStructure, print_tree)
     read.close();
     unlink("/tmp/test.dot");
 }
+
+TEST(ControlFlowStructure, offset_retained)
+{
+    ControlFlowGraph cfg(7);
+    cfg.set_offsets(0, 0x630, 0x634);
+    cfg.set_offsets(1, 0x634, 0x638);
+    cfg.set_offsets(2, 0x638, 0x63C);
+    cfg.set_offsets(3, 0x63C, 0x640);
+    cfg.set_offsets(4, 0x640, 0x644);
+    cfg.set_offsets(5, 0x644, 0x648);
+    cfg.set_offsets(6, 0x648, 0x64C);
+    cfg.set_next(1, 4);
+    cfg.set_conditional(1, 6);
+    cfg.set_conditional(2, 5);
+    cfg.set_next(5, 1);
+    cfg.set_conditional(5, 4);
+    cfg.finalize();
+    ControlFlowStructure cfs;
+    ASSERT_TRUE(cfs.build(cfg));
+    uint64_t start;
+    uint64_t end;
+    const AbstractBlock* root = cfs.root();
+    EXPECT_EQ(root->get_type(), SEQUENCE);
+    EXPECT_EQ(root->size(), 3);
+    const AbstractBlock* node = (*root)[0];
+    const BasicBlock* leaf;
+    ASSERT_EQ(node->get_type(), BASIC);
+    leaf = static_cast<const BasicBlock*>(node);
+    leaf->get_offset(&start, &end);
+    EXPECT_EQ(start, 0x630);
+    EXPECT_EQ(end, 0x634);
+    node = (*root)[2];
+    ASSERT_EQ(node->get_type(), BASIC);
+    leaf = static_cast<const BasicBlock*>(node);
+    leaf->get_offset(&start, &end);
+    EXPECT_EQ(start, 0x648);
+    EXPECT_EQ(end, 0x64C);
+}

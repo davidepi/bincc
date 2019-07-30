@@ -11,10 +11,52 @@ TEST(BasicBlock, id)
 {
     BasicBlock b;
     EXPECT_EQ(b.get_id(), 0);
-    BasicBlock b2(15);
+    BasicBlock b2(15, 0, 0);
     EXPECT_EQ(b2.get_id(), 15);
     b2.set_id(-13);
     EXPECT_EQ(b2.get_id(), -13);
+}
+
+TEST(BasicBlock, get_offset)
+{
+    BasicBlock bb0(0, 0x630, 0x67D);
+    uint64_t start;
+    uint64_t end;
+    bb0.get_offset(&start, &end);
+    EXPECT_EQ(start, 0x630);
+    EXPECT_EQ(end, 0x67D);
+}
+
+TEST(BasicBlock, get_offset_swapped)
+{
+    BasicBlock bb0(0, 0x67D, 0x630);
+    uint64_t start;
+    uint64_t end;
+    bb0.get_offset(&start, &end);
+    EXPECT_EQ(start, 0x630);
+    EXPECT_EQ(end, 0x67D);
+}
+
+TEST(BasicBlock, set_offset)
+{
+    BasicBlock bb0;
+    bb0.set_offset(0x630, 0x67D);
+    uint64_t start;
+    uint64_t end;
+    bb0.get_offset(&start, &end);
+    EXPECT_EQ(start, 0x630);
+    EXPECT_EQ(end, 0x67D);
+}
+
+TEST(BasicBlock, set_offset_swapped)
+{
+    BasicBlock bb0;
+    bb0.set_offset(0x67D, 0x630);
+    uint64_t start;
+    uint64_t end;
+    bb0.get_offset(&start, &end);
+    EXPECT_EQ(start, 0x630);
+    EXPECT_EQ(end, 0x67D);
 }
 
 TEST(BasicBlock, depth)
@@ -25,10 +67,10 @@ TEST(BasicBlock, depth)
 
 TEST(BasicBlock, outgoing_edges)
 {
-    BasicBlock b0(0);
-    BasicBlock b1(1);
-    BasicBlock b2(2);
-    BasicBlock balone(3);
+    BasicBlock b0(0, 0, 0);
+    BasicBlock b1(1, 0, 0);
+    BasicBlock b2(2, 0, 0);
+    BasicBlock balone(3, 0, 0);
     b0.set_next(&b1);
     b1.set_cond(&b2);
     b2.set_next(&b0);
@@ -42,10 +84,10 @@ TEST(BasicBlock, outgoing_edges)
 
 TEST(BasicBlock, replace_if_match)
 {
-    BasicBlock b0(0);
-    BasicBlock b1(1);
-    BasicBlock b2(2);
-    BasicBlock b4(4);
+    BasicBlock b0(0, 0, 0);
+    BasicBlock b1(1, 0, 0);
+    BasicBlock b2(2, 0, 0);
+    BasicBlock b4(4, 0, 0);
 
     b0.set_next(&b1);
     b1.set_cond(&b2);
@@ -85,9 +127,9 @@ TEST(BasicBlok, name)
 
 TEST(BasicBlock, copy)
 {
-    BasicBlock b0(10);
-    BasicBlock b1(11);
-    BasicBlock b2(12);
+    BasicBlock b0(10, 0, 0);
+    BasicBlock b1(11, 0, 0);
+    BasicBlock b2(12, 0, 0);
     b0.set_next(&b1);
     b0.set_cond(&b2);
     BasicBlock btmp = b0;
@@ -98,10 +140,10 @@ TEST(BasicBlock, copy)
 
 TEST(BasicBlock, flow)
 {
-    BasicBlock b0(0);
-    BasicBlock b1(1);
-    BasicBlock b2(2);
-    BasicBlock b3(3);
+    BasicBlock b0(0, 0, 0);
+    BasicBlock b1(1, 0, 0);
+    BasicBlock b2(2, 0, 0);
+    BasicBlock b3(3, 0, 0);
 
     EXPECT_EQ(b0.get_next(), nullptr);
     EXPECT_EQ(b0.get_cond(), nullptr);
@@ -145,8 +187,8 @@ TEST(BasicBlock, hash)
 
 TEST(SequenceBlock, type)
 {
-    BasicBlock* b0 = new BasicBlock(1);
-    BasicBlock* b1 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(1, 0, 0);
+    BasicBlock* b1 = new BasicBlock(2, 0, 0);
     b0->set_next(b1);
     SequenceBlock seq(0, b0, b1);
     EXPECT_EQ(seq.get_type(), BlockType::SEQUENCE);
@@ -154,8 +196,8 @@ TEST(SequenceBlock, type)
 
 TEST(SequenceBlock, name)
 {
-    BasicBlock* b0 = new BasicBlock(1);
-    BasicBlock* b1 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(1, 0, 0);
+    BasicBlock* b1 = new BasicBlock(2, 0, 0);
     b0->set_next(b1);
     SequenceBlock seq(0, b0, b1);
     EXPECT_STREQ(seq.get_name(), "Sequence");
@@ -164,8 +206,8 @@ TEST(SequenceBlock, name)
 TEST(SequenceBlock, ctor_no_sequences)
 {
     // sequence is next
-    BasicBlock* b0 = new BasicBlock(1);
-    BasicBlock* b1 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(1, 0, 0);
+    BasicBlock* b1 = new BasicBlock(2, 0, 0);
     b0->set_next(b1);
     SequenceBlock seq(0, b0, b1);
     ASSERT_EQ(seq.size(), 2);
@@ -177,13 +219,13 @@ TEST(SequenceBlock, ctor_no_sequences)
 
 TEST(SequenceBlock, ctor_sequences)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     AbstractBlock* s0 = new SequenceBlock(4, b0, b1);
 
-    BasicBlock* b2 = new BasicBlock(14);
-    BasicBlock* b3 = new BasicBlock(7);
+    BasicBlock* b2 = new BasicBlock(14, 0, 0);
+    BasicBlock* b3 = new BasicBlock(7, 0, 0);
     b2->set_next(b3);
     AbstractBlock* s1 = new SequenceBlock(5, b2, b3);
     s0->set_next(s1);
@@ -203,29 +245,29 @@ TEST(SequenceBlock, ctor_sequences)
 
 TEST(SequenceBlock, hash)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
-    BasicBlock* b3 = new BasicBlock(3);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
+    BasicBlock* b3 = new BasicBlock(3, 0, 0);
     SequenceBlock sq1(4, b0, b1);
     SequenceBlock sq2(5, b2, b3);
     EXPECT_EQ(sq1.structural_hash(), sq2.structural_hash());
 
     SequenceBlock* sq3 =
-        new SequenceBlock(6, new BasicBlock(7), new BasicBlock(8));
-    SequenceBlock sq4(9, new BasicBlock(9), sq3);
+        new SequenceBlock(6, new BasicBlock(7, 0, 0), new BasicBlock(8, 0, 0));
+    SequenceBlock sq4(9, new BasicBlock(9, 0, 0), sq3);
     sq4.structural_hash();
     EXPECT_NE(sq4.structural_hash(), sq1.structural_hash());
 }
 
 TEST(SequenceBlock, replace_if_match)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
-    BasicBlock* b3 = new BasicBlock(3);
-    BasicBlock* b4 = new BasicBlock(4);
-    BasicBlock* b5 = new BasicBlock(5);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
+    BasicBlock* b3 = new BasicBlock(3, 0, 0);
+    BasicBlock* b4 = new BasicBlock(4, 0, 0);
+    BasicBlock* b5 = new BasicBlock(5, 0, 0);
     SequenceBlock s0(7, b0, b1);
     SequenceBlock s1(8, b2, b3);
     SequenceBlock s2(9, b4, b5);
@@ -242,40 +284,40 @@ TEST(SequenceBlock, replace_if_match)
 TEST(SequenceBlock, depth)
 {
     uint32_t id = 0;
-    BasicBlock* b0 = new BasicBlock(id++);
-    BasicBlock* b1 = new BasicBlock(id++);
+    BasicBlock* b0 = new BasicBlock(id++, 0, 0);
+    BasicBlock* b1 = new BasicBlock(id++, 0, 0);
     SequenceBlock* s1 = new SequenceBlock(id++, b0, b1);
     EXPECT_EQ(s1->get_depth(), 1);
-    BasicBlock* b2 = new BasicBlock(id++);
+    BasicBlock* b2 = new BasicBlock(id++, 0, 0);
     SequenceBlock* s2 = new SequenceBlock(id++, s1, b2);
     EXPECT_EQ(s2->get_depth(), 1);
-    BasicBlock* b3 = new BasicBlock(id++);
-    BasicBlock b4(id++);
+    BasicBlock* b3 = new BasicBlock(id++, 0, 0);
+    BasicBlock b4(id++, 0, 0);
     b3->set_cond(s2);
     s2->set_next(&b4);
     b3->set_next(&b4);
     IfThenBlock* ifb = new IfThenBlock(id++, b3, s2);
     EXPECT_EQ(ifb->get_depth(), 2);
-    BasicBlock* b5 = new BasicBlock(id++);
-    BasicBlock* b6 = new BasicBlock(id++);
-    BasicBlock b7(id++);
+    BasicBlock* b5 = new BasicBlock(id++, 0, 0);
+    BasicBlock* b6 = new BasicBlock(id++, 0, 0);
+    BasicBlock b7(id++, 0, 0);
     b5->set_next(ifb);
     b5->set_cond(b6);
     ifb->set_next(&b7);
     b6->set_cond(&b7);
     IfElseBlock* ife = new IfElseBlock(id++, b5, b6, ifb);
     EXPECT_EQ(ife->get_depth(), 3);
-    BasicBlock* b8 = new BasicBlock(id++);
+    BasicBlock* b8 = new BasicBlock(id++, 0, 0);
     WhileBlock* wb = new WhileBlock(id++, b8, ife);
     EXPECT_EQ(wb->get_depth(), 4);
-    BasicBlock* b9 = new BasicBlock(id++);
+    BasicBlock* b9 = new BasicBlock(id++, 0, 0);
     DoWhileBlock dwb(id, wb, b9);
     EXPECT_EQ(dwb.get_depth(), 5);
 }
 
 TEST(SelfLoopBlock, type)
 {
-    BasicBlock* b0 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(1, 0, 0);
     b0->set_cond(b0);
     SelfLoopBlock slb(2, b0);
     EXPECT_EQ(slb.get_type(), BlockType::SELF_LOOP);
@@ -283,7 +325,7 @@ TEST(SelfLoopBlock, type)
 
 TEST(SelfLoopBlock, name)
 {
-    BasicBlock* b0 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(1, 0, 0);
     b0->set_cond(b0);
     SelfLoopBlock slb(2, b0);
     EXPECT_STREQ(slb.get_name(), "Self-loop");
@@ -291,7 +333,7 @@ TEST(SelfLoopBlock, name)
 
 TEST(SelfLoopBlock, ctor)
 {
-    BasicBlock* b0 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(1, 0, 0);
     b0->set_cond(b0);
     SelfLoopBlock slb(2, b0);
     EXPECT_EQ(slb.size(), 1);
@@ -301,9 +343,9 @@ TEST(SelfLoopBlock, ctor)
 
 TEST(IfThenBlock, type)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
     b0->set_next(b2);
     b0->set_cond(b1);
     b1->set_next(b2);
@@ -314,9 +356,9 @@ TEST(IfThenBlock, type)
 
 TEST(IfThenBlock, name)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
     b0->set_next(b2);
     b0->set_cond(b1);
     b1->set_next(b2);
@@ -327,9 +369,9 @@ TEST(IfThenBlock, name)
 
 TEST(IfThenBlock, size)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
     b0->set_next(b2);
     b0->set_cond(b1);
     b1->set_next(b2);
@@ -340,9 +382,9 @@ TEST(IfThenBlock, size)
 
 TEST(IfThenBlock, access)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
     b0->set_next(b2);
     b0->set_cond(b1);
     b1->set_next(b2);
@@ -355,9 +397,9 @@ TEST(IfThenBlock, access)
 
 TEST(IfElseBlock, type)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
     b0->set_next(b1);
     b0->set_cond(b2);
     IfElseBlock ift(3, b0, b1, b2);
@@ -366,9 +408,9 @@ TEST(IfElseBlock, type)
 
 TEST(IfElseBlock, name)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
     b0->set_next(b1);
     b0->set_cond(b2);
     IfElseBlock ift(3, b0, b1, b2);
@@ -377,9 +419,9 @@ TEST(IfElseBlock, name)
 
 TEST(IfElseBlock, size)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
     b0->set_next(b1);
     b0->set_cond(b2);
     IfElseBlock ift(3, b0, b1, b2);
@@ -388,9 +430,9 @@ TEST(IfElseBlock, size)
 
 TEST(IfElseBlock, access)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
-    BasicBlock* b2 = new BasicBlock(2);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
+    BasicBlock* b2 = new BasicBlock(2, 0, 0);
     b0->set_next(b1);
     b0->set_cond(b2);
     IfElseBlock ift(3, b0, b1, b2);
@@ -402,8 +444,8 @@ TEST(IfElseBlock, access)
 
 TEST(WhileBlock, type)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     b1->set_next(b0);
     WhileBlock wb(2, b0, b1);
@@ -412,8 +454,8 @@ TEST(WhileBlock, type)
 
 TEST(WhileBlock, name)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     b1->set_next(b0);
     WhileBlock wb(2, b0, b1);
@@ -422,8 +464,8 @@ TEST(WhileBlock, name)
 
 TEST(WhileBlock, size)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     b1->set_next(b0);
     WhileBlock wb(2, b0, b1);
@@ -432,8 +474,8 @@ TEST(WhileBlock, size)
 
 TEST(WhileBlock, access)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     b1->set_next(b0);
     WhileBlock wb(2, b0, b1);
@@ -445,8 +487,8 @@ TEST(WhileBlock, access)
 
 TEST(DoWhileBlock, type)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     b1->set_next(b0);
     DoWhileBlock wb(2, b0, b1);
@@ -455,8 +497,8 @@ TEST(DoWhileBlock, type)
 
 TEST(DoWhileBlock, name)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     b1->set_next(b0);
     DoWhileBlock wb(2, b0, b1);
@@ -465,8 +507,8 @@ TEST(DoWhileBlock, name)
 
 TEST(DoWhileBlock, size)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     b1->set_next(b0);
     DoWhileBlock wb(2, b0, b1);
@@ -475,8 +517,8 @@ TEST(DoWhileBlock, size)
 
 TEST(DoWhileBlock, access)
 {
-    BasicBlock* b0 = new BasicBlock(0);
-    BasicBlock* b1 = new BasicBlock(1);
+    BasicBlock* b0 = new BasicBlock(0, 0, 0);
+    BasicBlock* b1 = new BasicBlock(1, 0, 0);
     b0->set_next(b1);
     b1->set_next(b0);
     DoWhileBlock wb(2, b0, b1);

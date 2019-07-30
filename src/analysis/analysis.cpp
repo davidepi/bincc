@@ -74,12 +74,12 @@ Analysis::Analysis(const std::string& str, std::shared_ptr<Architecture> arch)
     }
 }
 
-const std::shared_ptr<ControlFlowGraph> Analysis::get_cfg() const
+std::shared_ptr<const ControlFlowGraph> Analysis::get_cfg() const
 {
     return cfg;
 }
 
-const std::shared_ptr<ControlFlowStructure> Analysis::get_cfs() const
+std::shared_ptr<const ControlFlowStructure> Analysis::get_cfs() const
 {
     return cfs;
 }
@@ -118,6 +118,7 @@ void Analysis::build_cfg()
     std::set<uint64_t> dead_end_uncond;
     // last block of the cfg for the function
     std::set<uint64_t> dead_end_cond;
+    // function bounds
     uint64_t bounds[2];
     bounds[0] = stmt_list.at(0).get_offset();
     bounds[1] = stmt_list.at(stmt_list.size() - 1).get_offset();
@@ -216,12 +217,17 @@ void Analysis::build_cfg()
     cfg = std::make_shared<ControlFlowGraph>(bb_no);
 
     // maps every target to the block number. Otherwise I need to perform this
-    // operation multiple times inside a loop and the complexity grows
+    // operation multiple times inside a loop and the complexity grows.
+    // also record the offsets for each block
     std::unordered_map<uint64_t, int> blocks_id;
     int index = 0;
+    uint64_t previous_target = bounds[0];
     for(uint64_t block_beginning : targets)
     {
-        blocks_id.insert({{block_beginning, index++}});
+        // beginning? why not ending? TODO: investigate
+        cfg->set_offsets(index, previous_target, block_beginning);
+        blocks_id.insert({{block_beginning, index}});
+        index++;
     }
 
     // set the conditional jumps target

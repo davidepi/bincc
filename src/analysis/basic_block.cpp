@@ -4,8 +4,19 @@
 
 #include "basic_block.hpp"
 
-BasicBlock::BasicBlock(uint32_t number) : AbstractBlock(number), cond(nullptr)
+BasicBlock::BasicBlock(uint32_t id_in, uint64_t off_s, uint64_t off_e)
+    : AbstractBlock(id_in),
+      cond(nullptr),
+      offset_start(off_s),
+      offset_end(off_e)
 {
+    if(offset_start > offset_end)
+    {
+        // swap
+        offset_start ^= offset_end;
+        offset_end ^= offset_start;
+        offset_start ^= offset_end;
+    }
 }
 
 BasicBlock::BasicBlock(const BasicBlock& orig)
@@ -18,6 +29,8 @@ BasicBlock& BasicBlock::operator=(const BasicBlock& orig)
     BasicBlock::id = orig.id;
     BasicBlock::next = orig.next;
     BasicBlock::cond = orig.cond;
+    BasicBlock::offset_start = orig.offset_start;
+    BasicBlock::offset_end = orig.offset_end;
     return *this;
 }
 
@@ -63,4 +76,23 @@ std::ostream& BasicBlock::print(std::ostream& ss) const
 {
     ss << id << ";\n";
     return ss;
+}
+
+void BasicBlock::get_offset(uint64_t* start, uint64_t* end) const
+{
+    *start = offset_start;
+    *end = offset_end;
+}
+
+void BasicBlock::set_offset(uint64_t start, uint64_t end)
+{
+    BasicBlock::offset_start = start;
+    BasicBlock::offset_end = end;
+    if(offset_start > offset_end)
+    {
+        // swap
+        offset_start ^= offset_end;
+        offset_end ^= offset_start;
+        offset_start ^= offset_end;
+    }
 }

@@ -173,3 +173,34 @@ TEST(ControlFlowGraph, unreachables)
     EXPECT_EQ(head->get_id(), 3);
     ASSERT_NE(head->get_next(), nullptr);
 }
+
+TEST(ControlFlowGraph, offset_retained)
+{
+    ControlFlowGraph cfg(6);
+    cfg.set_offsets(0, 0x630, 0x634);
+    cfg.set_offsets(1, 0x634, 0x638);
+    cfg.set_offsets(2, 0x638, 0x63C);
+    cfg.set_offsets(3, 0x63C, 0x640);
+    cfg.set_offsets(4, 0x640, 0x644);
+    cfg.set_offsets(5, 0x644, 0x648);
+    cfg.set_next(1, 4);
+    cfg.set_conditional(2, 5);
+    cfg.set_next(5, 1);
+    cfg.set_conditional(5, 4);
+    cfg.finalize();
+    ASSERT_EQ(cfg.nodes_no(), 4);
+    uint64_t start;
+    uint64_t end;
+    cfg.get_node(0)->get_offset(&start, &end);
+    EXPECT_EQ(start, 0x630);
+    EXPECT_EQ(end, 0x634);
+    cfg.get_node(1)->get_offset(&start, &end);
+    EXPECT_EQ(start, 0x634);
+    EXPECT_EQ(end, 0x638);
+    cfg.get_node(2)->get_offset(&start, &end);
+    EXPECT_EQ(start, 0x640);
+    EXPECT_EQ(end, 0x644);
+    cfg.get_node(3)->get_offset(&start, &end);
+    EXPECT_EQ(start, 0x644);
+    EXPECT_EQ(end, 0x648);
+}

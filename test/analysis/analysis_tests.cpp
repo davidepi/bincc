@@ -31,7 +31,7 @@ TEST(Analysis, cfs_getter)
     stmts.emplace_back(0x620, "test esi, esi");
     stmts.emplace_back(0x621, "mov eax, 5");
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
-    std::shared_ptr<ControlFlowStructure> cfs = anal.get_cfs();
+    std::shared_ptr<const ControlFlowStructure> cfs = anal.get_cfs();
     EXPECT_NE(cfs->root(), nullptr);
 }
 
@@ -306,4 +306,43 @@ TEST(Analysis, cfg_long_unconditional_jump)
     cond = static_cast<const BasicBlock*>(cfg->get_cond());
     EXPECT_NE(next, nullptr); // again, finalize() created an exit node
     EXPECT_EQ(cond, nullptr);
+}
+
+TEST(Analysis, offset_retained)
+{
+    std::vector<Statement> stmts;
+    stmts.emplace_back(0x610, "test edi, edi");
+    stmts.emplace_back(0x612, "je 0x620");
+    stmts.emplace_back(0x614, "test esi, esi");
+    stmts.emplace_back(0x616, "mov eax, 5");
+    stmts.emplace_back(0x61b, "je 0x620");
+    stmts.emplace_back(0x61d, "ret");
+    stmts.emplace_back(0x620, "mov eax, 6");
+    stmts.emplace_back(0x625, "ret");
+    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    std::shared_ptr<const ControlFlowGraph> cfg = anal.get_cfg();
+    std::shared_ptr<const ControlFlowStructure> cfs = anal.get_cfs();
+    const AbstractBlock* root = cfs->root();
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->get_type(), SEQUENCE);
+    ASSERT_EQ(root->size(), 2);
+    root = (*root)[0];
+    EXPECT_EQ(root->get_type(), IF_ELSE);
+    ASSERT_EQ(root->size(), 4);
+    const AbstractBlock* node;
+    const BasicBlock* leaf;
+    uint64_t start;
+    uint64_t end;
+    node = (*root)[0]; // head
+    ASSERT_EQ(node->get_type(), BASIC);
+    leaf = static_cast<const BasicBlock*>(node);
+    leaf->get_offset(&start, &end);
+    EXPECT_EQ(start, 0x610);
+    EXPECT_EQ(end, 0x614);
+    node = (*root)[2]; // else
+    ASSERT_EQ(node->get_type(), BASIC);
+    leaf = static_cast<const BasicBlock*>(node);
+    leaf->get_offset(&start, &end);
+    EXPECT_EQ(start, 0x620);
+    EXPECT_EQ(end, 0x625);
 }

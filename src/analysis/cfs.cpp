@@ -429,7 +429,10 @@ static AbstractBlock* deep_copy(const BasicBlock* src,
     // create the node
     uint32_t current_id = src->get_id();
     (*visited)[current_id] = true;
-    BasicBlock* created = new BasicBlock(current_id);
+    uint64_t offset_start;
+    uint64_t offset_end;
+    src->get_offset(&offset_start, &offset_end);
+    BasicBlock* created = new BasicBlock(current_id, offset_start, offset_end);
     (*bmap)[current_id] = created;
     (*pred)[current_id] = std::unordered_set<uint32_t>();
     // resolve the children
@@ -714,7 +717,7 @@ static void link(uint32_t v, uint32_t w, uint32_t* size, uint32_t* label,
     {
         // swap
         s ^= child[v];
-        s ^= child[v];
+        child[v] ^= s;
         s ^= child[v];
     }
 

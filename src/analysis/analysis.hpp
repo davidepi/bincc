@@ -87,13 +87,13 @@ public:
      * \brief Return the control flow graph for this function
      * \return the control flow graph of the function
      */
-    const std::shared_ptr<ControlFlowGraph> get_cfg() const;
+    std::shared_ptr<const ControlFlowGraph> get_cfg() const;
 
     /**
      * \brief Return the control flow structure for this function
      * \return the control flow structure of the function
      */
-    const std::shared_ptr<ControlFlowStructure> get_cfs() const;
+    std::shared_ptr<const ControlFlowStructure> get_cfs() const;
 
 private:
     // build a control flow graph in O(nlogn) time-complexity

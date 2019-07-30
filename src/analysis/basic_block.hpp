@@ -21,9 +21,13 @@ class BasicBlock : public AbstractBlock
 public:
     /**
      * \brief Parametrized constructor, given the block id
-     * \param[in] number The id of this basic block
+     * \param[in] id The id of this basic block
+     * \param[in] off_start The start offset of this basic block in the
+     * disassembled code
+     * \param[in] off_end The end offset of this basic block in the disassembled
+     * code
      */
-    explicit BasicBlock(uint32_t number);
+    explicit BasicBlock(uint32_t id, uint64_t off_start, uint64_t off_end);
 
     /**
      * \brief Default constructor
@@ -108,9 +112,29 @@ public:
      */
     std::ostream& print(std::ostream& ss) const override;
 
+    /**
+     * \brief Returns the start and end offset for this basic block
+     * \param[out] start The start offset in the disassembled code
+     * \param[out] end The end offset in the disassembled code
+     */
+    void get_offset(uint64_t* start, uint64_t* end) const;
+
+    /**
+     * \brief Sets the start and end offset for this basic block
+     * \param[in] start The start offset in the disassembled code for this
+     * BasicBlock
+     * \param[in] end The end offset in the disassembled code for this
+     * BasicBlock
+     */
+    void set_offset(uint64_t start, uint64_t end);
+
 private:
     // target of the conditional jump if the condition is satisfied
     const AbstractBlock* cond{nullptr};
+    // offset corresponding to the start of this basic block in the disasm code
+    uint64_t offset_start{0};
+    // offset corresponding to the end of this basic block in the disasm code
+    uint64_t offset_end{0};
 };
 
 #endif

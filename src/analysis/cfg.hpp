@@ -51,6 +51,14 @@ public:
     void finalize();
 
     /**
+     * \brief Sets the start and end offset for a specific block in the CFG
+     * \param[in] id The id of the node that will be modified
+     * \param[in] start The start offset of the block
+     * \param[in] end The end offset of the block
+     */
+    void set_offsets(uint32_t id, uint64_t start, uint64_t end);
+
+    /**
      * \brief Sets an unconditional jump for this block
      *
      * If the source or target id are higher than the number of blocks, nothing

@@ -3,7 +3,6 @@
 //
 
 #include "abstract_block.hpp"
-#include <cassert>
 
 const char* AbstractBlock::block_names[BLOCK_TOTAL] = {
     "Basic",   "Self-loop", "Sequence", "If-then",

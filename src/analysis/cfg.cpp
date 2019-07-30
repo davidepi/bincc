@@ -262,9 +262,9 @@ void ControlFlowGraph::finalize()
     // realloc everything only if there are skipped nodes
     if(skip_counter != 0)
     {
-        blocks.clear();
+        std::vector<BasicBlock> old_blocks = std::move(blocks);
         nodes = nodes - skip_counter;
-        blocks.resize(nodes);
+        blocks = std::vector<BasicBlock>(nodes);
         edges = 0;
         const int SIZE = bbmap.size();
         for(int old_id = 0; old_id < SIZE; old_id++)
@@ -272,6 +272,10 @@ void ControlFlowGraph::finalize()
             if(marked[old_id])
             {
                 const uint32_t NEW_ID = old_id - skipped[old_id];
+                // this lines copies additional data of the basic block
+                // that will not change
+                blocks[NEW_ID] = old_blocks[old_id];
+                // then the new id is assigned
                 blocks[NEW_ID].set_id(NEW_ID);
                 if(bbmap[old_id].left_id != UINT32_MAX)
                 {
@@ -294,9 +298,14 @@ void ControlFlowGraph::finalize()
 
 const BasicBlock* ControlFlowGraph::get_node(uint32_t id) const
 {
-    if(id < nodes - 1)
+    if(id < nodes)
     {
         return &(blocks[id]);
     }
     return nullptr;
+}
+
+void ControlFlowGraph::set_offsets(uint32_t id, uint64_t start, uint64_t end)
+{
+    blocks[id].set_offset(start, end);
 }
