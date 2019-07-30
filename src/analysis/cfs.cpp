@@ -1047,6 +1047,59 @@ void ControlFlowStructure::to_file(const char* filename,
     }
 }
 
+void ControlFlowStructure::to_file(const char* filename) const
+{
+    std::ofstream fout;
+    fout.open(filename, std::ios::out);
+    if(fout.is_open())
+    {
+        fout << to_dot();
+        fout.close();
+    }
+    else
+    {
+        std::cerr << "Could not write file" << filename << std::endl;
+    }
+}
+
+std::string ControlFlowStructure::to_dot() const
+{
+    std::stringstream ss;
+    ss << "digraph {\n";
+    if(!bmap.empty())
+    {
+        std::vector<bool> visited(bmap.size(), false);
+        std::stack<const AbstractBlock*> stack;
+        const AbstractBlock* root = bmap[bmap.size() - 1];
+        stack.push(root);
+        // iterative visit of the tree
+        while(!stack.empty())
+        {
+            const AbstractBlock* current = stack.top();
+            stack.pop();
+            visited[current->get_id()] = true;
+            ss << current->get_id() << "[label=\"" << current->get_name();
+            if(current->get_type() == BASIC)
+            {
+                ss << "\" shape=\"box";
+            }
+            ss << "\"];\n";
+            const int CHILDREN_NO = current->size();
+            for(int i = 0; i < CHILDREN_NO; i++)
+            {
+                const AbstractBlock* child = (*current)[i];
+                ss << current->get_id() << " -> " << child->get_id() << "\n";
+                if(!visited[child->get_id()])
+                {
+                    stack.push(child);
+                }
+            }
+        }
+    }
+    ss << "}" << std::endl;
+    return ss.str();
+}
+
 std::string ControlFlowStructure::to_dot(const ControlFlowGraph& cfg) const
 {
     std::stringstream ss;

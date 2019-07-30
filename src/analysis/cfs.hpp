@@ -10,7 +10,7 @@
 #include "cfg.hpp"
 
 /**
- * \brief Class used to recognized the high level structure of a CFG
+ * \brief Class used to recognize the high level structure of a CFG
  *
  * This class takes a ControlFlowGraph as input an generates the high level
  * structure. This structure is composed of members of the BLOCK_TYPE enum, and
@@ -68,23 +68,40 @@ public:
 
     /**
      * \brief Return a Graphviz dot representation of this CFS
+     * The created representation contains a CFG with nodes clustered by high
+     * level structures.
      * \param[in] cfg the same ControlFlowGraph given at cosntruction time. The
      * CFG is needed given that the edges of the CFS are different and the CFG
      * given at construction time is not kept in memory. Passing a different CFG
      * may lead to undefined behaviour
-     * \return a string containing the dot representation of the CFS
+     * \return a string containing the dot representation of the CFS, as a
+     * clustered CFG
      */
     std::string to_dot(const ControlFlowGraph& cfg) const;
 
     /**
-     * \brief Saves this CFS to file as a Graphviz dot file
-     * \param[in] filename name of the output file. The extension is NOT
+     * \brief Return a Graphviz dot representation of this CFS
+     * The created representation contains the CFS represented as a tree of high
+     * level structures \return a string containing the dot representation of
+     * the CFS, as tree
+     */
+    std::string to_dot() const;
+
+    /**
+     * \brief Saves this CFS to file as a Graphviz dot file, CFG variant
+     * \param[in] filename name of the output file. The extension is NOT added
      * \param[in] cfg the same ControlFlowGraph given at cosntruction time. The
      * CFG is needed given that the edges of the CFS are different and the CFG
      * given at construction time is not kept in memory. Passing a different CFG
      * may lead to undefined behaviour
      */
     void to_file(const char* filename, const ControlFlowGraph& cfg) const;
+
+    /**
+     * \brief Saves this CFS to file as a Graphviz dot file, tree variant
+     * \param[in] filename name of the output file. The extension is NOT added
+     */
+    void to_file(const char* filename) const;
 
     /**
      * \brief Delete copy-constructor
