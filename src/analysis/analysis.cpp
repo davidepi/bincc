@@ -143,7 +143,7 @@ void Analysis::build_cfg()
                 {
                     uint64_t target = std::stoull(stmt.get_args(), nullptr, 0);
                     // check if target inside function
-                    if(target > bounds[0] && target < bounds[1])
+                    if(target >= bounds[0] && target <= bounds[1])
                     {
                         targets.insert(target);
                         conditional_src.insert({{stmt.get_offset(), target}});
@@ -168,7 +168,7 @@ void Analysis::build_cfg()
                 {
                     uint64_t target = std::stoull(stmt.get_args(), nullptr, 0);
                     // check if target inside function
-                    if(target > bounds[0] && target < bounds[1])
+                    if(target >= bounds[0] && target <= bounds[1])
                     {
                         targets.insert(target);
                         unconditional_src.insert({{stmt.get_offset(), target}});
