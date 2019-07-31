@@ -19,13 +19,15 @@ int run(int argc, const char* argv[])
 {
     if(argc < 2)
     {
-        fatal("Usage: ./analyze binary0 [binary1 ...]");
+        fatal("Usage: ./analyze baseline check0 [check1 ...]");
     }
 #ifndef NDEBUG
     unsigned int core_no = 1;
 #else
     unsigned int core_no = std::thread::hardware_concurrency();
 #endif
+
+    std::cout << "Using " << core_no << " cores" << std::endl;
 
     SynchronizedQueue<Disassembler*> disasm_jobs;
     SynchronizedQueue<Disassembler*> disasmed;
@@ -34,7 +36,9 @@ int run(int argc, const char* argv[])
     {
         if(access(argv[i], R_OK) == -1)
         {
-            fatal("Input file does not exists or is not readable");
+            std::cerr << "Input file " << argv[i]
+                      << " does not exists or is not readable" << std::endl;
+
         }
         disasm_jobs.push(new DisassemblerR2(argv[i]));
     }

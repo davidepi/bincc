@@ -65,7 +65,11 @@ void Analysis::init()
         build_cfg();
         cfg->finalize();
         cfs = std::make_shared<ControlFlowStructure>();
-        cfs->build(*cfg);
+        if(!cfs->build(*cfg))
+        {
+            // to maintain consistency with the successful() method
+            cfs = nullptr;
+        }
     }
 }
 

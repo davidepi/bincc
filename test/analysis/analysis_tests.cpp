@@ -12,6 +12,7 @@ TEST(Analysis, Analysis_constructor_empty_string)
     Statement ins = anal[0];
     EXPECT_EQ(ins.get_offset(), 0x0);
     EXPECT_STREQ(ins.get_command().c_str(), "");
+    EXPECT_FALSE(anal.successful());
 }
 
 TEST(Analysis, Analysis_constructor_null_vector)
@@ -21,6 +22,7 @@ TEST(Analysis, Analysis_constructor_null_vector)
     Statement ins = anal[0];
     EXPECT_EQ(ins.get_offset(), 0x0);
     EXPECT_STREQ(ins.get_command().c_str(), "");
+    EXPECT_FALSE(anal.successful());
 }
 
 TEST(Analysis, cfs_getter)
@@ -32,6 +34,7 @@ TEST(Analysis, cfs_getter)
     stmts.emplace_back(0x621, "mov eax, 5");
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
     std::shared_ptr<const ControlFlowStructure> cfs = anal.get_cfs();
+    EXPECT_TRUE(anal.successful());
     EXPECT_NE(cfs->root(), nullptr);
 }
 
@@ -351,7 +354,7 @@ TEST(Analysis, offset_retained)
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
     std::shared_ptr<const ControlFlowGraph> cfg = anal.get_cfg();
     std::shared_ptr<const ControlFlowStructure> cfs = anal.get_cfs();
-    cfs->to_file("/tmp/test.dot", *cfg);
+    ASSERT_TRUE(anal.successful());
     const AbstractBlock* root = cfs->root();
     ASSERT_NE(root, nullptr);
     EXPECT_EQ(root->get_type(), SEQUENCE);

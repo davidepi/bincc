@@ -107,15 +107,27 @@ public:
 
     /**
      * \brief Return the control flow graph for this function
-     * \return the control flow graph of the function
+     * \return the control flow graph of the function, nullptr if the analysis
+     * was not successful
      */
     std::shared_ptr<const ControlFlowGraph> get_cfg() const;
 
     /**
      * \brief Return the control flow structure for this function
-     * \return the control flow structure of the function
+     * \return the control flow structure of the function, nullptr if the
+     * analysis was not successful
      */
     std::shared_ptr<const ControlFlowStructure> get_cfs() const;
+
+    /**
+     * Checks whether the analysis was successful or not
+     * \return true if the analysis was completed successfully (both the CFG and
+     * CFS are available)
+     */
+    bool successful() const
+    {
+        return cfg != nullptr && cfs != nullptr;
+    }
 
 private:
     // actual constructor, the public constructors wrap this function
