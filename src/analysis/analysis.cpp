@@ -1,5 +1,3 @@
-#include <memory>
-
 //
 // Created by davide on 6/12/19.
 //
@@ -17,50 +15,47 @@ Statement Analysis::operator[](uint32_t value) const
 }
 
 Analysis::Analysis(const std::vector<Statement>* stmts,
-                   std::shared_ptr<Architecture> arch)
+                   std::shared_ptr<Architecture> arch, std::ostream& err)
     : architecture(std::move(arch))
 {
     if(architecture->get_name() == "unknown")
     {
-        fprintf(stderr, "%s\n",
-                "Unknown architecture, analysis won't be performed");
+        err << "Unknown architecture, analysis won't be performed" << std::endl;
     }
-    if(stmts != nullptr)
+    else if(stmts != nullptr)
     {
         stmt_list = *stmts;
-        for(const Statement& stmt : stmt_list)
-        {
-            stmt_sparse.insert({{stmt.get_offset(), &stmt}});
-        }
-    }
-    if(!stmt_list.empty())
-    {
-        build_cfg();
-        cfg->finalize();
-        cfs = std::make_shared<ControlFlowStructure>();
-        cfs->build(*cfg);
+        init();
     }
 }
 
-Analysis::Analysis(const std::string& str, std::shared_ptr<Architecture> arch)
+Analysis::Analysis(const std::string& str, std::shared_ptr<Architecture> arch,
+                   std::ostream& err)
     : architecture(std::move(arch))
 {
     if(architecture->get_name() == "unknown")
     {
-        fprintf(stderr, "%s\n",
-                "Unknown architecture, analysis won't be performed");
+        err << "Unknown architecture, analysis won't be performed" << std::endl;
     }
-    std::istringstream iss(str);
-    std::string line;
-    std::getline(iss, line); // skip first line
-    while(std::getline(iss, line))
+    else
     {
-        size_t pos = line.find_first_of(' ');
-        std::string offset_str = line.substr(0, pos);
-        std::string opcode = line.substr(pos + 1, std::string::npos);
-        uint64_t offset = std::stoll(offset_str, nullptr, 16);
-        stmt_list.emplace_back(offset, opcode);
+        std::istringstream iss(str);
+        std::string line;
+        std::getline(iss, line); // skip first line
+        while(std::getline(iss, line))
+        {
+            size_t pos = line.find_first_of(' ');
+            std::string offset_str = line.substr(0, pos);
+            std::string opcode = line.substr(pos + 1, std::string::npos);
+            uint64_t offset = std::stoll(offset_str, nullptr, 16);
+            stmt_list.emplace_back(offset, opcode);
+        }
+        init();
     }
+}
+
+void Analysis::init()
+{
     for(const Statement& stmt : stmt_list)
     {
         stmt_sparse.insert({{stmt.get_offset(), &stmt}});
@@ -127,7 +122,7 @@ void Analysis::build_cfg()
 
     // If the previous instruction was a conditional jump, the next one is the
     // target if the condition is not true. However, for variable-lenght opcode
-    // architectures such as X86 it is harder to look forward than to lookback,
+    // architectures such as X86 it is harder to look forward than to look back,
     // hence the reason of this boolean.
     // The initial value if true to target the starting block.
     bool previous_was_jump = true;
@@ -220,15 +215,20 @@ void Analysis::build_cfg()
     // operation multiple times inside a loop and the complexity grows.
     // also record the offsets for each block
     std::unordered_map<uint64_t, int> blocks_id;
-    int index = 0;
-    uint64_t previous_target = bounds[0];
-    for(uint64_t block_beginning : targets)
+    uint32_t id = 0;
+    // insert the end bound of the function, stop the iteration BEFORE
+    // considering this as the beginning of a block (the iteration considers a
+    // pair <current, next>
+    targets.insert(bounds[1]);
+    std::set<uint64_t>::const_iterator block_beginning;
+    for(block_beginning = targets.begin();
+        block_beginning != std::prev(targets.end()); block_beginning++)
     {
-        // beginning? why not ending? TODO: investigate
-        cfg->set_offsets(index, previous_target, block_beginning);
-        blocks_id.insert({{block_beginning, index}});
-        index++;
+        blocks_id.insert({{*block_beginning, id}});
+        cfg->set_offsets(id, *block_beginning, *std::next(block_beginning));
+        id++;
     }
+    blocks_id.insert({{*block_beginning, id}});
 
     // set the conditional jumps target
     for(std::pair<uint64_t, uint64_t> jmp_src : conditional_src)

@@ -47,7 +47,10 @@ TEST(Analysis, Analysis_constructor_string)
                        "0x61d ret\n"
                        "0x620 mov eax, 6\n"
                        "0x625 ret\n";
-    Analysis anal(func, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    std::stringstream errors;
+    Analysis anal(func, std::shared_ptr<Architecture>{new ArchitectureX86()},
+                  errors);
+    EXPECT_EQ(errors.str().length(), 0);
     // first ins
     Statement ins = anal[0];
     EXPECT_EQ(ins.get_offset(), 0x610);
@@ -78,8 +81,10 @@ TEST(Analysis, Analysis_constructor_vector)
     stmts.emplace_back(0x61d, "ret");
     stmts.emplace_back(0x620, "mov eax, 6");
     stmts.emplace_back(0x625, "ret");
-
-    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+    std::stringstream errors;
+    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()},
+                  errors);
+    EXPECT_EQ(errors.str().length(), 0);
     // first ins
     Statement ins = anal[0];
     EXPECT_EQ(ins.get_offset(), 0x610);
@@ -96,6 +101,30 @@ TEST(Analysis, Analysis_constructor_vector)
     ins = anal[8];
     EXPECT_EQ(ins.get_offset(), 0x0);
     EXPECT_STREQ(ins.get_command().c_str(), "");
+}
+
+TEST(Analysis, wrong_architecture_string)
+{
+    std::string func = "sym.if_and\n";
+    std::stringstream errors;
+    Analysis anal(func, std::shared_ptr<Architecture>{new ArchitectureUNK()},
+                  errors);
+    EXPECT_GT(errors.str().length(), 0);
+    EXPECT_EQ(anal.get_cfg(), nullptr);
+    EXPECT_EQ(anal.get_cfs(), nullptr);
+}
+
+TEST(Analysis, wrong_architecture_vector)
+{
+    std::vector<Statement> stmts;
+    stmts.emplace_back(0x610, "test edi, edi");
+    stmts.emplace_back(0x612, "je 0x620");
+    std::stringstream errors;
+    Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureUNK()},
+                  errors);
+    EXPECT_GT(errors.str().length(), 0);
+    EXPECT_EQ(anal.get_cfg(), nullptr);
+    EXPECT_EQ(anal.get_cfs(), nullptr);
 }
 
 TEST(Analysis, cfg_conditional)
@@ -312,16 +341,17 @@ TEST(Analysis, offset_retained)
 {
     std::vector<Statement> stmts;
     stmts.emplace_back(0x610, "test edi, edi");
-    stmts.emplace_back(0x612, "je 0x620");
-    stmts.emplace_back(0x614, "test esi, esi");
-    stmts.emplace_back(0x616, "mov eax, 5");
-    stmts.emplace_back(0x61b, "je 0x620");
-    stmts.emplace_back(0x61d, "ret");
-    stmts.emplace_back(0x620, "mov eax, 6");
-    stmts.emplace_back(0x625, "ret");
+    stmts.emplace_back(0x614, "je 0x628");
+    stmts.emplace_back(0x618, "test esi, esi");
+    stmts.emplace_back(0x61C, "mov eax, 5");
+    stmts.emplace_back(0x620, "je 0x628");
+    stmts.emplace_back(0x624, "ret");
+    stmts.emplace_back(0x628, "mov eax, 6");
+    stmts.emplace_back(0x62C, "ret");
     Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
     std::shared_ptr<const ControlFlowGraph> cfg = anal.get_cfg();
     std::shared_ptr<const ControlFlowStructure> cfs = anal.get_cfs();
+    cfs->to_file("/tmp/test.dot", *cfg);
     const AbstractBlock* root = cfs->root();
     ASSERT_NE(root, nullptr);
     EXPECT_EQ(root->get_type(), SEQUENCE);
@@ -338,11 +368,11 @@ TEST(Analysis, offset_retained)
     leaf = static_cast<const BasicBlock*>(node);
     leaf->get_offset(&start, &end);
     EXPECT_EQ(start, 0x610);
-    EXPECT_EQ(end, 0x614);
+    EXPECT_EQ(end, 0x618);
     node = (*root)[2]; // else
     ASSERT_EQ(node->get_type(), BASIC);
     leaf = static_cast<const BasicBlock*>(node);
     leaf->get_offset(&start, &end);
-    EXPECT_EQ(start, 0x620);
-    EXPECT_EQ(end, 0x625);
+    EXPECT_EQ(start, 0x628);
+    EXPECT_EQ(end, 0x62C);
 }

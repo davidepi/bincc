@@ -10,6 +10,7 @@
 #include "cfg.hpp"
 #include "cfs.hpp"
 #include "disassembler/statement.hpp"
+#include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -31,14 +32,24 @@ public:
      * This method is used to run the analysis on the resulting method obtained
      * after calling the Disassembler analyse() function
      *
+     * Additionally this constructor will build the ControlFlowGraph (CFG) and
+     * ControlFlowStructure (CFS) for the function.
+     * \note During this step, the offsets assigned to the basic blocks will be
+     * [start, end), so the end offset of a block corresponds to the starting
+     * offset of the next one. However, and hence the reason of this note, this
+     * is not valid for the last basic block of the function, that will have as
+     * end offset the start offset of the last instruction in the function
+     * (instead of the next one as every other block)
+     *
      * \param[in] stmts A vector of Statement, likely obtained from the
      * Disassembler class
      * \param[in] arch A pointer to the Architecture class representing the
      * binary architecture. This pointer is not inherited but will be used
      * during the class lifecycle
+     * \param[in] err The stream where error messages will be printed
      */
     Analysis(const std::vector<Statement>* stmts,
-             std::shared_ptr<Architecture> arch);
+             std::shared_ptr<Architecture> arch, std::ostream& err = std::cerr);
 
     /**
      * \brief Constructor given a string representing a function
@@ -53,15 +64,26 @@ public:
      * form</li> <li> A single space </li><li>The instruction represented as
      * string</li></ol></li></ul>
      *
-     * The string will be automatically converted to lowercase
+     * The string will be automatically converted to lowercase.
+     *
+     * Additionally this constructor will build the ControlFlowGraph (CFG) and
+     * ControlFlowStructure (CFS) for the function.
+     * \note During this step, the offsets assigned to the basic blocks will be
+     * [start, end), so the end offset of a block corresponds to the starting
+     * offset of the next one. However, and hence the reason of this note, this
+     * is not valid for the last basic block of the function, that will have as
+     * end offset the start offset of the last instruction in the function
+     * (instead of the next one as every other block)
      *
      * \param[in] str A string representing a single function, formatted as
      * described in the doc
      * \param[in] arch A pointer to the Architecture class representing the
      * binary architecture. This pointer is not inherited but will be used
      * during the class lifecycle
+     * \param[in] err The stream where error messages will be printed
      */
-    Analysis(const std::string& str, std::shared_ptr<Architecture> arch);
+    Analysis(const std::string& str, std::shared_ptr<Architecture> arch,
+             std::ostream& err = std::cerr);
 
     /**
      * \brief Default destructor
@@ -96,10 +118,13 @@ public:
     std::shared_ptr<const ControlFlowStructure> get_cfs() const;
 
 private:
+    // actual constructor, the public constructors wrap this function
+    void init();
+
     // build a control flow graph in O(nlogn) time-complexity
     void build_cfg();
 
-    // linear;y stored instructions
+    // linearly stored instructions
     std::vector<Statement> stmt_list;
 
     // sparsely stored instructions, indexed by offset
