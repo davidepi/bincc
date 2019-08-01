@@ -181,10 +181,18 @@ TEST(Comparison, cloned_multiple_functions)
 
   for(const CloneReport& rep : clones)
   {
-    const AbstractBlock* original = orig0.get_cfs()->get_node(rep.block_id);
-    if(rep.function == "orig1")
+    const AbstractBlock* original;
+    if(rep.function == "orig0")
+    {
+      original = orig0.get_cfs()->get_node(rep.block_id);
+    }
+    else if(rep.function == "orig1")
     {
       original = orig1.get_cfs()->get_node(rep.block_id);
+    }
+    else
+    {
+      FAIL();
     }
     const AbstractBlock* cloned = check.get_cfs()->get_node(rep.cloned_id);
     ASSERT_EQ(original->structural_hash(), cloned->structural_hash());
