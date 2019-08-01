@@ -42,11 +42,12 @@ std::vector<Statement> create_function()
 TEST(Comparison, failed_analysis)
 {
   std::stringstream out;
-  Analysis anal("", std::shared_ptr<Architecture>{new ArchitectureUNK()}, out);
+  Analysis anal("test", "not_successful", "",
+                std::shared_ptr<Architecture>{new ArchitectureUNK()}, out);
   ASSERT_GT(out.str().length(), 0);
   Comparison cmp;
   EXPECT_FALSE(anal.successful());
-  cmp.add_baseline("test", "not_successful", anal);
+  cmp.add_baseline(anal);
   std::vector<CloneReport> clones;
   bool res = cmp.cloned(anal, &clones);
   EXPECT_FALSE(res);
@@ -56,10 +57,11 @@ TEST(Comparison, failed_analysis)
 TEST(Comparison, cloned_full)
 {
   std::vector<Statement> stmts = create_function();
-  Analysis orig(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis orig("test", "test_function", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   ASSERT_TRUE(orig.successful());
   Comparison cmp;
-  cmp.add_baseline("test", "test_function", orig);
+  cmp.add_baseline(orig);
   std::vector<CloneReport> clones;
   bool res = cmp.cloned(orig, &clones);
   ASSERT_TRUE(res);
@@ -88,17 +90,17 @@ TEST(Comparison, cloned_partial)
   std::shared_ptr<Architecture> arch;
   arch = std::shared_ptr<Architecture>{new ArchitectureX86()};
   std::vector<Statement> stmts = create_function();
-  Analysis orig(&stmts, arch);
+  Analysis orig("original", "crafted", &stmts, arch);
   ASSERT_TRUE(orig.successful());
   stmts[2] = Statement(0x08, "nop");
   stmts[3] = Statement(0x0C, "nop");
   stmts[10] = Statement(0x28, "nop");
   stmts[11] = Statement(0x2C, "nop");
   stmts[12] = Statement(0x30, "nop");
-  Analysis check(&stmts, arch);
+  Analysis check("original", "copied", &stmts, arch);
   ASSERT_TRUE(check.successful());
   Comparison cmp;
-  cmp.add_baseline("original", "crafted", orig);
+  cmp.add_baseline(orig);
   std::vector<CloneReport> clones;
   bool res = cmp.cloned(check, &clones);
   ASSERT_TRUE(res);
@@ -136,7 +138,7 @@ TEST(Comparison, cloned_multiple_functions)
   std::shared_ptr<Architecture> arch;
   arch = std::shared_ptr<Architecture>{new ArchitectureX86()};
   std::vector<Statement> stmts = create_function();
-  Analysis check(&stmts, arch);
+  Analysis check("clone", "copied", &stmts, arch);
   ASSERT_TRUE(check.successful());
   stmts.clear();
   stmts.emplace_back(0x1A7EF534, "jmp 0x1A7EF538");
@@ -153,7 +155,7 @@ TEST(Comparison, cloned_multiple_functions)
   stmts.emplace_back(0x1A7EF560, "je 0x1A7EF568");
   stmts.emplace_back(0x1A7EF564, "mov eax, 1");
   stmts.emplace_back(0x1A7EF568, "ret");
-  Analysis orig0(&stmts, arch);
+  Analysis orig0("binary", "orig0", &stmts, arch);
   ASSERT_TRUE(orig0.successful());
   stmts.clear();
   stmts.emplace_back(0x12F4000, "jmp 0x12F4008");
@@ -169,11 +171,11 @@ TEST(Comparison, cloned_multiple_functions)
   stmts.emplace_back(0x12F402C, "mov eax, -1");
   stmts.emplace_back(0x12F4030, "jne 0x12F4008");
   stmts.emplace_back(0x12F4034, "ret");
-  Analysis orig1(&stmts, arch);
+  Analysis orig1("binary", "orig1", &stmts, arch);
   ASSERT_TRUE(orig1.successful());
   Comparison cmp(1);
-  cmp.add_baseline("binary", "orig0", orig0);
-  cmp.add_baseline("binary", "orig1", orig1);
+  cmp.add_baseline(orig0);
+  cmp.add_baseline(orig1);
   std::vector<CloneReport> clones;
   bool res = cmp.cloned(check, &clones);
   ASSERT_TRUE(res);

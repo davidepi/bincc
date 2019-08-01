@@ -9,9 +9,7 @@ Comparison::Comparison(unsigned int minimum_depth) : min_depth(minimum_depth)
 {
 }
 
-void Comparison::add_baseline(const std::string& binary_name,
-                              const std::string& method_name,
-                              const Analysis& binary)
+void Comparison::add_baseline(const Analysis& binary)
 {
   if(binary.successful())
   {
@@ -39,8 +37,8 @@ void Comparison::add_baseline(const std::string& binary_name,
       {
         uint64_t hash = node->structural_hash();
         CloneReport report;
-        report.binary = binary_name;
-        report.function = method_name;
+        report.binary = binary.get_binary_name();
+        report.function = binary.get_function_name();
         report.block_id = node->get_id();
         auto it = hash_table.find(hash);
         if(it == hash_table.end())

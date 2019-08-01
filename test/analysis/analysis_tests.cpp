@@ -4,11 +4,49 @@
 //
 // Created by davide on 6/13/19.
 //
+
+TEST(Analysis, get_binary_name)
+{
+  std::string binary = "ls";
+  std::string function = "main";
+  std::string func = "sym.if_and\n"
+                     "0x610 test edi, edi\n"
+                     "0x612 je 0x620\n"
+                     "0x614 test esi, esi\n"
+                     "0x616 mov eax, 5\n"
+                     "0x61b je 0x620\n"
+                     "0x61d ret\n"
+                     "0x620 mov eax, 6\n"
+                     "0x625 ret\n";
+  Analysis anal(binary, function, func,
+                std::shared_ptr<Architecture>{new ArchitectureUNK()});
+  EXPECT_STREQ(anal.get_binary_name().c_str(), binary.c_str());
+}
+
+TEST(Analysis, get_function_name)
+{
+  std::string binary = "ls";
+  std::string function = "main";
+  std::string func = "sym.if_and\n"
+                     "0x610 test edi, edi\n"
+                     "0x612 je 0x620\n"
+                     "0x614 test esi, esi\n"
+                     "0x616 mov eax, 5\n"
+                     "0x61b je 0x620\n"
+                     "0x61d ret\n"
+                     "0x620 mov eax, 6\n"
+                     "0x625 ret\n";
+  Analysis anal(binary, function, func,
+                std::shared_ptr<Architecture>{new ArchitectureUNK()});
+  EXPECT_STREQ(anal.get_function_name().c_str(), function.c_str());
+}
+
 TEST(Analysis, Analysis_constructor_empty_string)
 {
   // empty string
   std::string func;
-  Analysis anal(func, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", func,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   Statement ins = anal[0];
   EXPECT_EQ(ins.get_offset(), 0x0);
   EXPECT_STREQ(ins.get_command().c_str(), "");
@@ -17,7 +55,8 @@ TEST(Analysis, Analysis_constructor_empty_string)
 
 TEST(Analysis, Analysis_constructor_null_vector)
 {
-  Analysis anal(nullptr, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", nullptr,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   Statement ins = anal[0];
   EXPECT_EQ(ins.get_offset(), 0x0);
   EXPECT_STREQ(ins.get_command().c_str(), "");
@@ -31,7 +70,8 @@ TEST(Analysis, cfs_getter)
   stmts.emplace_back(0x612, "jmp 0x620");
   stmts.emplace_back(0x620, "test esi, esi");
   stmts.emplace_back(0x621, "mov eax, 5");
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   std::shared_ptr<const ControlFlowStructure> cfs = anal.get_cfs();
   EXPECT_TRUE(anal.successful());
   EXPECT_NE(cfs->root(), nullptr);
@@ -50,8 +90,8 @@ TEST(Analysis, Analysis_constructor_string)
                      "0x620 mov eax, 6\n"
                      "0x625 ret\n";
   std::stringstream errors;
-  Analysis anal(func, std::shared_ptr<Architecture>{new ArchitectureX86()},
-                errors);
+  Analysis anal("", "", func,
+                std::shared_ptr<Architecture>{new ArchitectureX86()}, errors);
   EXPECT_EQ(errors.str().length(), 0);
   // first ins
   Statement ins = anal[0];
@@ -84,8 +124,8 @@ TEST(Analysis, Analysis_constructor_vector)
   stmts.emplace_back(0x620, "mov eax, 6");
   stmts.emplace_back(0x625, "ret");
   std::stringstream errors;
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()},
-                errors);
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()}, errors);
   EXPECT_EQ(errors.str().length(), 0);
   // first ins
   Statement ins = anal[0];
@@ -109,8 +149,8 @@ TEST(Analysis, wrong_architecture_string)
 {
   std::string func = "sym.if_and\n";
   std::stringstream errors;
-  Analysis anal(func, std::shared_ptr<Architecture>{new ArchitectureUNK()},
-                errors);
+  Analysis anal("", "", func,
+                std::shared_ptr<Architecture>{new ArchitectureUNK()}, errors);
   EXPECT_GT(errors.str().length(), 0);
   EXPECT_EQ(anal.get_cfg(), nullptr);
   EXPECT_EQ(anal.get_cfs(), nullptr);
@@ -122,8 +162,8 @@ TEST(Analysis, wrong_architecture_vector)
   stmts.emplace_back(0x610, "test edi, edi");
   stmts.emplace_back(0x612, "je 0x620");
   std::stringstream errors;
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureUNK()},
-                errors);
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureUNK()}, errors);
   EXPECT_GT(errors.str().length(), 0);
   EXPECT_EQ(anal.get_cfg(), nullptr);
   EXPECT_EQ(anal.get_cfs(), nullptr);
@@ -141,7 +181,8 @@ TEST(Analysis, cfg_conditional)
   stmts.emplace_back(0x620, "mov eax, 6");
   stmts.emplace_back(0x625, "ret");
 
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   const BasicBlock* cfg = anal.get_cfg()->root();
   const BasicBlock* next;
   const BasicBlock* cond;
@@ -191,7 +232,8 @@ TEST(Analysis, cfg_unconditional)
   stmts.emplace_back(0x638, "pop rbp");
   stmts.emplace_back(0x639, "ret");
 
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   const BasicBlock* cfg = anal.get_cfg()->root();
   const BasicBlock* next;
   const BasicBlock* cond;
@@ -235,7 +277,8 @@ TEST(Analysis, cfg_indirect)
   stmts.emplace_back(0x612, "jmp dword [var_8h]");
   stmts.emplace_back(0x613, "ret");
 
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   const BasicBlock* cfg = anal.get_cfg()->root();
   const BasicBlock* next;
   const BasicBlock* cond;
@@ -264,7 +307,8 @@ TEST(Analysis, cfg_long_conditional_jmp)
   stmts.emplace_back(0x612, "jno 0x600");
   stmts.emplace_back(0x615, "ret");
 
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   const BasicBlock* cfg = anal.get_cfg()->root();
   const BasicBlock* next;
   const BasicBlock* cond;
@@ -309,7 +353,8 @@ TEST(Analysis, cfg_long_unconditional_jump)
   stmts.emplace_back(0x614, "jmp 0x615");
   stmts.emplace_back(0x615, "ret");
 
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   anal.get_cfg()->to_file("/home/davide/Desktop/test.dot");
   const BasicBlock* cfg = anal.get_cfg()->root();
   const BasicBlock* next;
@@ -348,7 +393,8 @@ TEST(Analysis, offset_retained)
   stmts.emplace_back(0x624, "ret");
   stmts.emplace_back(0x628, "mov eax, 6");
   stmts.emplace_back(0x62C, "ret");
-  Analysis anal(&stmts, std::shared_ptr<Architecture>{new ArchitectureX86()});
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
   std::shared_ptr<const ControlFlowGraph> cfg = anal.get_cfg();
   std::shared_ptr<const ControlFlowStructure> cfs = anal.get_cfs();
   ASSERT_TRUE(anal.successful());

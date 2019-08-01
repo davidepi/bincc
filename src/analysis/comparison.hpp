@@ -63,12 +63,9 @@ public:
   /**
    * \brief Add a function to be considered as baseline.
    * This method can be invoked multiple times
-   * \param[in] binary_name The name of the binary originating the function
-   * \param[in] method_name The function name
    * \param[in] binary The analysis performed on the function
    */
-  void add_baseline(const std::string& binary_name,
-                    const std::string& method_name, const Analysis& binary);
+  void add_baseline(const Analysis& binary);
 
   /**
    * \brief Check if the input function is a clone of the baseline

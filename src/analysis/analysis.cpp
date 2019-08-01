@@ -4,6 +4,7 @@
 
 #include "analysis.hpp"
 #include <set>
+#include <utility>
 
 Statement Analysis::operator[](uint32_t value) const
 {
@@ -14,9 +15,13 @@ Statement Analysis::operator[](uint32_t value) const
   return Statement();
 }
 
-Analysis::Analysis(const std::vector<Statement>* stmts,
+Analysis::Analysis(std::string  binary_name,
+                   std::string  function_name,
+                   const std::vector<Statement>* stmts,
                    std::shared_ptr<Architecture> arch, std::ostream& err)
-    : architecture(std::move(arch))
+    : binary(std::move(binary_name)),
+      function(std::move(function_name)),
+      architecture(std::move(arch))
 {
   if(architecture->get_name() == "unknown")
   {
@@ -29,9 +34,12 @@ Analysis::Analysis(const std::vector<Statement>* stmts,
   }
 }
 
-Analysis::Analysis(const std::string& str, std::shared_ptr<Architecture> arch,
-                   std::ostream& err)
-    : architecture(std::move(arch))
+Analysis::Analysis(std::string  binary_name,
+                   std::string  function_name, const std::string& str,
+                   std::shared_ptr<Architecture> arch, std::ostream& err)
+    : binary(std::move(binary_name)),
+      function(std::move(function_name)),
+      architecture(std::move(arch))
 {
   if(architecture->get_name() == "unknown")
   {

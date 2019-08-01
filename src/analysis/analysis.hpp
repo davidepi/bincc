@@ -41,6 +41,8 @@ public:
    * end offset the start offset of the last instruction in the function
    * (instead of the next one as every other block)
    *
+   * \param[in] binary_name The binary name
+   * \param[in] function_name The function name
    * \param[in] stmts A vector of Statement, likely obtained from the
    * Disassembler class
    * \param[in] arch A pointer to the Architecture class representing the
@@ -48,7 +50,8 @@ public:
    * during the class lifecycle
    * \param[in] err The stream where error messages will be printed
    */
-  Analysis(const std::vector<Statement>* stmts,
+  Analysis(std::string  binary_name, std::string  function_name,
+           const std::vector<Statement>* stmts,
            std::shared_ptr<Architecture> arch, std::ostream& err = std::cerr);
 
   /**
@@ -75,6 +78,8 @@ public:
    * end offset the start offset of the last instruction in the function
    * (instead of the next one as every other block)
    *
+   * \param[in] binary_name The binary name
+   * \param[in] function_name The function name
    * \param[in] str A string representing a single function, formatted as
    * described in the doc
    * \param[in] arch A pointer to the Architecture class representing the
@@ -82,7 +87,8 @@ public:
    * during the class lifecycle
    * \param[in] err The stream where error messages will be printed
    */
-  Analysis(const std::string& str, std::shared_ptr<Architecture> arch,
+  Analysis(std::string  binary_name, std::string  function_name,
+           const std::string& str, std::shared_ptr<Architecture> arch,
            std::ostream& err = std::cerr);
 
   /**
@@ -129,7 +135,31 @@ public:
     return cfg != nullptr && cfs != nullptr;
   }
 
+  /**
+   * Returns the decompiled binary name (provided at construction time)
+   * \return the binary name
+   */
+  const std::string& get_binary_name() const
+  {
+    return binary;
+  }
+
+  /**
+   * Returns the decompiled function name (provided at construction time)
+   * \return the binary name
+   */
+  const std::string& get_function_name() const
+  {
+    return function;
+  }
+
 private:
+  // binary name
+  std::string binary;
+
+  // function name
+  std::string function;
+
   // actual constructor, the public constructors wrap this function
   void init();
 

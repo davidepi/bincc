@@ -90,7 +90,8 @@ static void disasm(SynchronizedQueue<Disassembler*>* jobs,
             binary_no_folder.substr(binary_no_folder.find_last_of('/') + 1);
         std::string output = binary_no_folder + "." + func.get_name() + ".dot";
         start = std::chrono::steady_clock::now();
-        Analysis anal(disasm->get_function_body(func.get_name()),
+        Analysis anal(binary_no_folder, func.get_name(),
+                      disasm->get_function_body(func.get_name()),
                       disasm->get_arch());
         end = std::chrono::steady_clock::now();
         if(anal.get_cfg()->nodes_no() < 5)
