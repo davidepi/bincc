@@ -13,37 +13,37 @@
 class DisassemblerR2 : public Disassembler
 {
 public:
-    /**
-     * \brief Default constructor
-     * \param[in] binary Path to the binary file that will be decompiled
-     */
-    explicit DisassemblerR2(const char* binary);
+  /**
+   * \brief Default constructor
+   * \param[in] binary Path to the binary file that will be decompiled
+   */
+  explicit DisassemblerR2(const char* binary);
 
-    /**
-     * \brief Default destructor
-     */
-    ~DisassemblerR2() override = default;
+  /**
+   * \brief Default destructor
+   */
+  ~DisassemblerR2() override = default;
 
-    /**
-     * \brief Performs the analysis
-     *
-     * Performs the actual analysis using the radare2 disassembler and populates
-     * the necessary fields of the superclass
-     */
-    void analyse() override;
+  /**
+   * \brief Performs the analysis
+   *
+   * Performs the actual analysis using the radare2 disassembler and populates
+   * the necessary fields of the superclass
+   */
+  void analyse() override;
 
 private:
-    /**
-     * \brief Utility class used to interface with radare2
-     */
-    R2Pipe r2;
+  /**
+   * \brief Utility class used to interface with radare2
+   */
+  R2Pipe r2;
 
-    /**
-     * \brief Variable keeping track of the health of the radare2 process
-     *
-     * This will be false if the open or the exec fails
-     */
-    bool health;
+  /**
+   * \brief Variable keeping track of the health of the radare2 process
+   *
+   * This will be false if the open or the exec fails
+   */
+  bool health;
 };
 
 #endif

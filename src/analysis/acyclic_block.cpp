@@ -18,195 +18,195 @@ SequenceBlock::SequenceBlock(uint32_t id, const AbstractBlock* fst,
                              const AbstractBlock* snd)
     : AbstractBlock(id)
 {
-    depth = 0;
-    auto merge_blocks = [this](const AbstractBlock* p) -> void {
-        // merge all the internals of a sequence, and destroy the sequence
-        if(p->get_type() == BlockType::SEQUENCE)
-        {
-            uint32_t size = p->size();
-            for(uint32_t i = 0; i < size; i++)
-            {
-                components.push_back((*p)[i]);
-                depth = std::max(depth, (*p)[i]->get_depth());
-            }
-        }
-        // if it was a single node just add the node
-        else
-        {
-            depth = std::max(depth, p->get_depth());
-            components.push_back(p);
-        }
-        delete_list.push_back(p);
-    };
-    merge_blocks(fst);
-    merge_blocks(snd);
-    depth++;
+  depth = 0;
+  auto merge_blocks = [this](const AbstractBlock* p) -> void {
+    // merge all the internals of a sequence, and destroy the sequence
+    if(p->get_type() == BlockType::SEQUENCE)
+    {
+      uint32_t size = p->size();
+      for(uint32_t i = 0; i < size; i++)
+      {
+        components.push_back((*p)[i]);
+        depth = std::max(depth, (*p)[i]->get_depth());
+      }
+    }
+    // if it was a single node just add the node
+    else
+    {
+      depth = std::max(depth, p->get_depth());
+      components.push_back(p);
+    }
+    delete_list.push_back(p);
+  };
+  merge_blocks(fst);
+  merge_blocks(snd);
+  depth++;
 }
 
 BlockType SequenceBlock::get_type() const
 {
-    return SEQUENCE;
+  return SEQUENCE;
 }
 
 SequenceBlock::~SequenceBlock()
 {
-    for(const AbstractBlock* block : delete_list)
-    {
-        delete block;
-    }
+  for(const AbstractBlock* block : delete_list)
+  {
+    delete block;
+  }
 }
 
 uint32_t SequenceBlock::size() const
 {
-    return components.size();
+  return components.size();
 }
 
 const AbstractBlock* SequenceBlock::operator[](uint32_t index) const
 {
-    return components[index];
+  return components[index];
 }
 
 BlockType IfThenBlock::get_type() const
 {
-    return IF_THEN;
+  return IF_THEN;
 }
 
 IfThenBlock::IfThenBlock(uint32_t id, const BasicBlock* ifb,
                          const AbstractBlock* thenb)
     : AbstractBlock(id), head(ifb), then(thenb)
 {
-    // resolve chained heads
-    std::stack<const BasicBlock*> chain_stack;
-    const AbstractBlock* contd = thenb->get_next();
-    const AbstractBlock* next =
-        head->get_next() != contd ? head->get_next() : head->get_cond();
-    int chain_len = 0;
-    while(next != thenb)
+  // resolve chained heads
+  std::stack<const BasicBlock*> chain_stack;
+  const AbstractBlock* contd = thenb->get_next();
+  const AbstractBlock* next =
+      head->get_next() != contd ? head->get_next() : head->get_cond();
+  int chain_len = 0;
+  while(next != thenb)
+  {
+    chain_len++;
+    const BasicBlock* tmp_head = static_cast<const BasicBlock*>(next);
+    chain_stack.push(tmp_head);
+    next = tmp_head->get_next() != contd ? tmp_head->get_next() :
+                                           tmp_head->get_cond();
+  }
+  depth = std::max(head->get_depth(), thenb->get_depth());
+  if(chain_len != 0)
+  {
+    // copy the stack into the more space_efficient array
+    chain.resize(chain_len);
+    for(int i = chain_len - 1; i >= 0; i--)
     {
-        chain_len++;
-        const BasicBlock* tmp_head = static_cast<const BasicBlock*>(next);
-        chain_stack.push(tmp_head);
-        next = tmp_head->get_next() != contd ? tmp_head->get_next() :
-                                               tmp_head->get_cond();
+      chain[i] = chain_stack.top();
+      depth = std::max(depth, chain[i]->get_depth());
+      chain_stack.pop();
     }
-    depth = std::max(head->get_depth(), thenb->get_depth());
-    if(chain_len != 0)
-    {
-        // copy the stack into the more space_efficient array
-        chain.resize(chain_len);
-        for(int i = chain_len - 1; i >= 0; i--)
-        {
-            chain[i] = chain_stack.top();
-            depth = std::max(depth, chain[i]->get_depth());
-            chain_stack.pop();
-        }
-    }
-    depth++;
+  }
+  depth++;
 }
 
 IfThenBlock::~IfThenBlock()
 {
-    delete then;
-    delete head;
-    for(const BasicBlock* val : chain)
-    {
-        delete val;
-    }
+  delete then;
+  delete head;
+  for(const BasicBlock* val : chain)
+  {
+    delete val;
+  }
 }
 
 uint32_t IfThenBlock::size() const
 {
-    return chain.size() + 2;
+  return chain.size() + 2;
 }
 
 const AbstractBlock* IfThenBlock::operator[](uint32_t index) const
 {
-    if(index == 0)
-    {
-        return head;
-    }
-    else if(index == 1)
-    {
-        return then;
-    }
-    else
-    {
-        return chain[index - 2];
-    }
+  if(index == 0)
+  {
+    return head;
+  }
+  else if(index == 1)
+  {
+    return then;
+  }
+  else
+  {
+    return chain[index - 2];
+  }
 }
 
 IfElseBlock::IfElseBlock(uint32_t id, const BasicBlock* ifb,
                          const AbstractBlock* thenb, const AbstractBlock* elseb)
     : AbstractBlock(id), head(ifb), then(thenb), ellse(elseb), chain(0)
 {
-    // resolve chained heads
-    std::stack<const BasicBlock*> chain_stack;
-    const BasicBlock* tmp_head = ifb;
-    const AbstractBlock* next = tmp_head->get_next() != elseb ?
-                                    tmp_head->get_next() :
-                                    tmp_head->get_cond();
-    int chain_len = 0;
-    while(next != thenb)
+  // resolve chained heads
+  std::stack<const BasicBlock*> chain_stack;
+  const BasicBlock* tmp_head = ifb;
+  const AbstractBlock* next = tmp_head->get_next() != elseb ?
+                                  tmp_head->get_next() :
+                                  tmp_head->get_cond();
+  int chain_len = 0;
+  while(next != thenb)
+  {
+    chain_len++;
+    tmp_head = static_cast<const BasicBlock*>(next);
+    chain_stack.push(tmp_head);
+    next = tmp_head->get_next() != elseb ? tmp_head->get_next() :
+                                           tmp_head->get_cond();
+  }
+  depth = std::max(head->get_depth(), thenb->get_depth());
+  depth = std::max(depth, ellse->get_depth());
+  if(chain_len != 0)
+  {
+    // copy the stack into the more space_efficient array
+    chain.resize(chain_len);
+    for(int i = chain_len - 1; i >= 0; i--)
     {
-        chain_len++;
-        tmp_head = static_cast<const BasicBlock*>(next);
-        chain_stack.push(tmp_head);
-        next = tmp_head->get_next() != elseb ? tmp_head->get_next() :
-                                               tmp_head->get_cond();
+      chain[i] = chain_stack.top();
+      depth = std::max(depth, chain[i]->get_depth());
+      chain_stack.pop();
     }
-    depth = std::max(head->get_depth(), thenb->get_depth());
-    depth = std::max(depth, ellse->get_depth());
-    if(chain_len != 0)
-    {
-        // copy the stack into the more space_efficient array
-        chain.resize(chain_len);
-        for(int i = chain_len - 1; i >= 0; i--)
-        {
-            chain[i] = chain_stack.top();
-            depth = std::max(depth, chain[i]->get_depth());
-            chain_stack.pop();
-        }
-    }
-    depth++;
+  }
+  depth++;
 }
 
 IfElseBlock::~IfElseBlock()
 {
-    delete ellse;
-    delete then;
-    delete head;
-    for(const BasicBlock* val : chain)
-    {
-        delete val;
-    }
+  delete ellse;
+  delete then;
+  delete head;
+  for(const BasicBlock* val : chain)
+  {
+    delete val;
+  }
 }
 
 BlockType IfElseBlock::get_type() const
 {
-    return BlockType::IF_ELSE;
+  return BlockType::IF_ELSE;
 }
 
 uint32_t IfElseBlock::size() const
 {
-    return chain.size() + 3;
+  return chain.size() + 3;
 }
 
 const AbstractBlock* IfElseBlock::operator[](uint32_t index) const
 {
-    if(index == 0)
-    {
-        return head;
-    }
-    else if(index == 1)
-    {
-        return then;
-    }
-    else if(index == 2)
-    {
-        return ellse;
-    }
-    else
-    {
-        return chain[index - 3];
-    }
+  if(index == 0)
+  {
+    return head;
+  }
+  else if(index == 1)
+  {
+    return then;
+  }
+  else if(index == 2)
+  {
+    return ellse;
+  }
+  else
+  {
+    return chain[index - 3];
+  }
 }

@@ -14,20 +14,20 @@ Info::Info(bool be, bool has_canary, bool stripped, bool b64)
 
 bool Info::is_bigendian() const
 {
-    return big_endian;
+  return big_endian;
 }
 
 bool Info::has_canaries() const
 {
-    return canary;
+  return canary;
 }
 
 bool Info::is_stripped() const
 {
-    return stripped;
+  return stripped;
 }
 
 bool Info::is_64bit() const
 {
-    return bits_64;
+  return bits_64;
 }

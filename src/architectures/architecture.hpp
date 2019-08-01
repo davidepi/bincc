@@ -12,30 +12,30 @@
  */
 enum JumpType
 {
-    /**
-     * \brief Not a jump at all
-     */
-    NONE = 0,
+  /**
+   * \brief Not a jump at all
+   */
+  NONE = 0,
 
-    /**
-     * \brief Conditional jump
-     */
-    JUMP_CONDITIONAL = 1,
+  /**
+   * \brief Conditional jump
+   */
+  JUMP_CONDITIONAL = 1,
 
-    /**
-     * \brief Unconditional jump
-     */
-    JUMP_UNCONDITIONAL = 2,
+  /**
+   * \brief Unconditional jump
+   */
+  JUMP_UNCONDITIONAL = 2,
 
-    /**
-     * \brief Unconditional return
-     */
-    RET_UNCONDITIONAL = 3,
+  /**
+   * \brief Unconditional return
+   */
+  RET_UNCONDITIONAL = 3,
 
-    /**
-     * \brief Conditional return (for some architectures like ARM)
-     */
-    RET_CONDITIONAL = 4
+  /**
+   * \brief Conditional return (for some architectures like ARM)
+   */
+  RET_CONDITIONAL = 4
 };
 
 /**
@@ -44,22 +44,22 @@ enum JumpType
 class Architecture
 {
 public:
-    /**
-     * \brief Returns the name of this architecture
-     * \return the name of the architecture
-     */
-    virtual std::string get_name() = 0;
+  /**
+   * \brief Returns the name of this architecture
+   * \return the name of the architecture
+   */
+  virtual std::string get_name() = 0;
 
-    /**
-     * \brief Returns the type of jump of the mnemonic
-     *
-     * \note A return is considered a jump, and should be addressed by this
-     * method
-     *
-     * \param[in] mnemonic A mnemonic in form of a string
-     * \return the type of jump represented by this mnemonic
-     */
-    virtual JumpType is_jump(const std::string& mnemonic) = 0;
+  /**
+   * \brief Returns the type of jump of the mnemonic
+   *
+   * \note A return is considered a jump, and should be addressed by this
+   * method
+   *
+   * \param[in] mnemonic A mnemonic in form of a string
+   * \return the type of jump represented by this mnemonic
+   */
+  virtual JumpType is_jump(const std::string& mnemonic) = 0;
 };
 
 /**
@@ -73,15 +73,15 @@ public:
 class ArchitectureUNK final : public Architecture
 {
 public:
-    std::string get_name() override
-    {
-        return "unknown";
-    }
+  std::string get_name() override
+  {
+    return "unknown";
+  }
 
-    JumpType is_jump(const std::string&) override
-    {
-        return NONE;
-    };
+  JumpType is_jump(const std::string&) override
+  {
+    return NONE;
+  };
 };
 
 #endif //__ARCHITECTURE_HPP__

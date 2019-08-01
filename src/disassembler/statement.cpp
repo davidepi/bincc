@@ -7,38 +7,38 @@ Statement::Statement() : offset(0x0), args_at(0)
 
 int Statement::get_offset() const
 {
-    return offset;
+  return offset;
 }
 std::string Statement::get_command() const
 {
-    return instruction;
+  return instruction;
 }
 
 std::string Statement::get_mnemonic() const
 {
-    return instruction.substr(0, args_at);
+  return instruction.substr(0, args_at);
 }
 
 std::string Statement::get_args() const
 {
-    if(args_at >= instruction.length())
-    {
-        return std::string();
-    }
+  if(args_at >= instruction.length())
+  {
+    return std::string();
+  }
 
-    return instruction.substr(args_at + 1, std::string::npos);
+  return instruction.substr(args_at + 1, std::string::npos);
 }
 
 Statement::Statement(uint64_t offset, std::string opcode)
     : offset(offset), instruction(std::move(opcode))
 {
-    constexpr const unsigned int NPOS = (unsigned int)std::string::npos;
-    // everything lowercase. I'm sorry, little one
-    std::transform(instruction.begin(), instruction.end(), instruction.begin(),
-                   ::tolower);
-    args_at = instruction.find_first_of(' ');
-    if(args_at == NPOS)
-    {
-        args_at = instruction.length();
-    }
+  constexpr const unsigned int NPOS = (unsigned int)std::string::npos;
+  // everything lowercase. I'm sorry, little one
+  std::transform(instruction.begin(), instruction.end(), instruction.begin(),
+                 ::tolower);
+  args_at = instruction.find_first_of(' ');
+  if(args_at == NPOS)
+  {
+    args_at = instruction.length();
+  }
 }

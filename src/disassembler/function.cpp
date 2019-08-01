@@ -6,12 +6,12 @@ Function::Function() : offset(0), name("")
 
 int Function::get_offset() const
 {
-    return offset;
+  return offset;
 }
 
 const std::string& Function::get_name() const
 {
-    return name;
+  return name;
 }
 Function::Function(uint64_t offset, std::string name)
     : offset(offset), name(std::move(name))
@@ -20,5 +20,5 @@ Function::Function(uint64_t offset, std::string name)
 
 bool Function::operator<(const Function& second) const
 {
-    return offset < second.offset;
+  return offset < second.offset;
 }

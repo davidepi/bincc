@@ -9,94 +9,93 @@
 Disassembler::Disassembler(const char* bin_path)
     : exec_arch(new ArchitectureUNK())
 {
-    Disassembler::binary = bin_path;
+  Disassembler::binary = bin_path;
 }
 
 std::shared_ptr<Architecture> Disassembler::get_arch() const
 {
-    return exec_arch;
+  return exec_arch;
 }
 
 std::set<Function> Disassembler::get_function_names() const
 {
-    return function_names;
+  return function_names;
 }
 
 void Disassembler::set_binary(const char* bin_path)
 {
-    exec_arch = nullptr;
-    function_names.clear();
-    function_bodies.clear();
-    Disassembler::binary = bin_path;
+  exec_arch = nullptr;
+  function_names.clear();
+  function_bodies.clear();
+  Disassembler::binary = bin_path;
 }
 
 std::string Disassembler::get_function_as_string(const std::string& name) const
 {
-    std::stringstream sstr;
-    const std::vector<Statement>* stmts = this->get_function_body(name);
-    if(stmts != nullptr)
+  std::stringstream sstr;
+  const std::vector<Statement>* stmts = this->get_function_body(name);
+  if(stmts != nullptr)
+  {
+    sstr << name;
+    for(const Statement& stmt : *stmts)
     {
-        sstr << name;
-        for(const Statement& stmt : *stmts)
-        {
-            sstr << stmt.get_offset() << " " << stmt.get_mnemonic() << '\n';
-        }
+      sstr << stmt.get_offset() << " " << stmt.get_mnemonic() << '\n';
     }
-    else
-    {
-        sstr << "";
-    }
-    return sstr.str();
+  }
+  else
+  {
+    sstr << "";
+  }
+  return sstr.str();
 }
 
 const std::vector<Statement>*
     Disassembler::get_function_body(const std::string& name) const
 {
-    std::unordered_map<std::string, std::vector<Statement>>::const_iterator
-        got = function_bodies.find(name);
+  std::unordered_map<std::string, std::vector<Statement>>::const_iterator got =
+      function_bodies.find(name);
 
-    if(got != function_bodies.end())
-    {
-        return &(got->second);
-    }
-    return nullptr;
+  if(got != function_bodies.end())
+  {
+    return &(got->second);
+  }
+  return nullptr;
 }
 
 std::ostream& operator<<(std::ostream& stream, const Disassembler& disasm)
 {
-    // std::endl also flushes the stream
-    std::string endline("\n");
-    std::string tab("\t");
+  // std::endl also flushes the stream
+  std::string endline("\n");
+  std::string tab("\t");
 
-    stream << "--- " << disasm.binary << " ---" << endline;
-    for(const Function& fn : disasm.function_names)
+  stream << "--- " << disasm.binary << " ---" << endline;
+  for(const Function& fn : disasm.function_names)
+  {
+    const std::string& fn_name = fn.get_name();
+    stream << fn_name << endline;
+    std::unordered_map<std::string, std::vector<Statement>>::const_iterator
+        got = disasm.function_bodies.find(fn_name);
+    if(got != disasm.function_bodies.end())
     {
-        const std::string& fn_name = fn.get_name();
-        stream << fn_name << endline;
-        std::unordered_map<std::string, std::vector<Statement>>::const_iterator
-            got = disasm.function_bodies.find(fn_name);
-        if(got != disasm.function_bodies.end())
-        {
-            const std::vector<Statement>* stmts = &(got->second);
-            for(const Statement& stmt : *stmts)
-            {
-                stream << "|0x" << std::hex << std::uppercase
-                       << stmt.get_offset() << std::nouppercase << tab
-                       << stmt.get_mnemonic() << endline;
-            }
-        }
-        stream << ';' << endline << endline;
+      const std::vector<Statement>* stmts = &(got->second);
+      for(const Statement& stmt : *stmts)
+      {
+        stream << "|0x" << std::hex << std::uppercase << stmt.get_offset()
+               << std::nouppercase << tab << stmt.get_mnemonic() << endline;
+      }
     }
-    stream << "----";
-    for(size_t i = 0; i < disasm.binary.length(); i++)
-    {
-        stream << '-';
-    }
-    stream << "----";
-    return stream;
+    stream << ';' << endline << endline;
+  }
+  stream << "----";
+  for(size_t i = 0; i < disasm.binary.length(); i++)
+  {
+    stream << '-';
+  }
+  stream << "----";
+  return stream;
 }
 
 std::string Disassembler::get_binary_name() const
 {
-    return binary;
+  return binary;
 }

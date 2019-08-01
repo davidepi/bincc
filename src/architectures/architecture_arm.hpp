@@ -15,8 +15,8 @@
 class ArchitectureARM final : public Architecture
 {
 public:
-    std::string get_name() override;
-    JumpType is_jump(const std::string& mnemonic) override;
+  std::string get_name() override;
+  JumpType is_jump(const std::string& mnemonic) override;
 };
 
 #endif //__ARCHITECTURE_ARM_HPP__

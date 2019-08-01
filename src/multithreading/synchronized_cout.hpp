@@ -23,27 +23,27 @@
 class SyncCout : public std::ostringstream
 {
 public:
-    explicit SyncCout(std::ostream& os) : os_(os)
-    {
-        // copyfmt causes odd problems with lost output
-        // probably some specific flag
-        //            copyfmt(os);
-        // copy whatever properties are relevant
-        imbue(os.getloc());
-        precision(os.precision());
-        width(os.width());
-        setf(std::ios::fixed, std::ios::floatfield);
-    }
+  explicit SyncCout(std::ostream& os) : os_(os)
+  {
+    // copyfmt causes odd problems with lost output
+    // probably some specific flag
+    //            copyfmt(os);
+    // copy whatever properties are relevant
+    imbue(os.getloc());
+    precision(os.precision());
+    width(os.width());
+    setf(std::ios::fixed, std::ios::floatfield);
+  }
 
-    ~SyncCout() override
-    {
-        std::lock_guard<std::mutex> guard(_mutex_threadstream);
-        os_ << this->str();
-    }
+  ~SyncCout() override
+  {
+    std::lock_guard<std::mutex> guard(_mutex_threadstream);
+    os_ << this->str();
+  }
 
 private:
-    static std::mutex _mutex_threadstream;
-    std::ostream& os_;
+  static std::mutex _mutex_threadstream;
+  std::ostream& os_;
 };
 
 std::mutex SyncCout::_mutex_threadstream{};
