@@ -2,9 +2,9 @@
 #include "disassembler/radare2/r2_disassembler.hpp"
 #include "multithreading/synchronized_cout.hpp"
 #include "multithreading/synchronized_queue.hpp"
-#include "unistd.h"
 #include <iostream>
 #include <thread>
+#include <unistd.h>
 
 static void fatal(const char* message);
 static int run(int argc, const char* argv[]);

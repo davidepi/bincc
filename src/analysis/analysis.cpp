@@ -96,13 +96,13 @@ std::shared_ptr<const ControlFlowStructure> Analysis::get_cfs() const
  */
 static uint32_t
     resolve_block_id(uint64_t offset,
-                     const std::unordered_map<uint64_t, int>& blocks_map,
+                     const std::unordered_map<uint64_t, uint32_t>& blocks_map,
                      const std::set<uint64_t>& targets)
 {
   // resolve the current block by finding the next id in the set higher
   // than the current offset, and decreasing the id by 1
   uint64_t next_beginning;
-  std::unordered_map<uint64_t, int>::const_iterator next_block;
+  std::unordered_map<uint64_t, uint32_t>::const_iterator next_block;
 
   // resolve current block
   next_beginning = *targets.upper_bound(offset);
@@ -219,13 +219,13 @@ void Analysis::build_cfg()
   }
 
   // create the cfg and concatenate every block
-  int bb_no = targets.size();
+  uint32_t bb_no = targets.size();
   cfg = std::make_shared<ControlFlowGraph>(bb_no);
 
   // maps every target to the block number. Otherwise I need to perform this
   // operation multiple times inside a loop and the complexity grows.
   // also record the offsets for each block
-  std::unordered_map<uint64_t, int> blocks_id;
+  std::unordered_map<uint64_t, uint32_t> blocks_id;
   uint32_t id = 0;
   // insert the end bound of the function, stop the iteration BEFORE
   // considering this as the beginning of a block (the iteration considers a
@@ -244,23 +244,23 @@ void Analysis::build_cfg()
   // set the conditional jumps target
   for(std::pair<uint64_t, uint64_t> jmp_src : conditional_src)
   {
-    int src_id = resolve_block_id(jmp_src.first, blocks_id, targets);
-    int target_id = resolve_block_id(jmp_src.second, blocks_id, targets);
+    uint32_t src_id = resolve_block_id(jmp_src.first, blocks_id, targets);
+    uint32_t target_id = resolve_block_id(jmp_src.second, blocks_id, targets);
     cfg->set_conditional(src_id, target_id);
   }
 
   // set the unconditional jumps target
   for(std::pair<uint64_t, uint64_t> jmp_src : unconditional_src)
   {
-    int src_id = resolve_block_id(jmp_src.first, blocks_id, targets);
-    int target_id = resolve_block_id(jmp_src.second, blocks_id, targets);
+    uint32_t src_id = resolve_block_id(jmp_src.first, blocks_id, targets);
+    uint32_t target_id = resolve_block_id(jmp_src.second, blocks_id, targets);
     cfg->set_next(src_id, target_id);
   }
 
   // set the blocks pointing nowhere. Otherwise they point to the next block
   for(uint64_t ret : dead_end_uncond)
   {
-    int src_id = resolve_block_id(ret, blocks_id, targets);
+    uint32_t src_id = resolve_block_id(ret, blocks_id, targets);
     cfg->set_next_null(src_id);
   }
 
@@ -268,7 +268,7 @@ void Analysis::build_cfg()
   // consistency
   for(uint64_t ret : dead_end_cond)
   {
-    int src_id = resolve_block_id(ret, blocks_id, targets);
+    uint32_t src_id = resolve_block_id(ret, blocks_id, targets);
     cfg->set_conditional_null(src_id);
   }
 }

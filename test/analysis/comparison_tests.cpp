@@ -181,7 +181,6 @@ TEST(Comparison, cloned_multiple_functions)
   ASSERT_TRUE(res);
   ASSERT_GT(clones.size(), 0);
 
-  check.get_cfs()->to_file("/tmp/clone.dot", *check.get_cfg());
   cmp.to_file("/tmp/base0.dot", "/tmp/clone.dot", orig0, check, clones);
   cmp.to_file("/tmp/base1.dot", "/tmp/clone.dot", orig1, check, clones);
 

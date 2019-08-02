@@ -38,7 +38,7 @@ public:
    *
    * \return the offset at which the instruction is located
    */
-  int get_offset() const;
+  uint64_t get_offset() const;
 
   /**
    * \brief Getter for the entire command composed by opcode and args.

@@ -425,23 +425,30 @@ TEST(Analysis, offset_retained)
 
 TEST(Analysis, offset_64bit)
 {
-  // TODO: Decomment this when implementing the fix for 64 bits (Issue #1)
-
-  //  std::vector<Statement> stmts;
-  //  stmts.emplace_back(0x3FD1A7EF534, "jmp 0x3FD1A7EF538");
-  //  stmts.emplace_back(0x3FD1A7EF538, "incl eax");
-  //  stmts.emplace_back(0x3FD1A7EF53C, "mov ebx, [ebp+20]");
-  //  stmts.emplace_back(0x3FD1A7EF540, "cmp eax, ebx");
-  //  stmts.emplace_back(0x3FD1A7EF544, "je 0x3FD1A7EF558");
-  //  stmts.emplace_back(0x3FD1A7EF548, "mov ecx, [ebp+20]");
-  //  stmts.emplace_back(0x3FD1A7EF54C, "decl ecx");
-  //  stmts.emplace_back(0x3FD1A7EF550, "mov [ebp+20], ecx");
-  //  stmts.emplace_back(0x3FD1A7EF554, "jmp 0x3FD1A7EF538");
-  //  stmts.emplace_back(0x3FD1A7EF558, "test eax, eax");
-  //  stmts.emplace_back(0x3FD1A7EF55C, "mov eax, 0");
-  //  stmts.emplace_back(0x3FD1A7EF560, "je 0x3FD1A7EF568");
-  //  stmts.emplace_back(0x3FD1A7EF564, "mov eax, 1");
-  //  stmts.emplace_back(0x3FD1A7EF568, "ret");
-  //  Analysis anal(&stmts, std::shared_ptr<Architecture>{new
-  //  ArchitectureX86()}); ASSERT_TRUE(anal.successful());
+  std::vector<Statement> stmts;
+  stmts.emplace_back(0x3FD1A7EF534, "jmp 0x3FD1A7EF538");
+  stmts.emplace_back(0x3FD1A7EF538, "incl eax");
+  stmts.emplace_back(0x3FD1A7EF53C, "mov ebx, [ebp+20]");
+  stmts.emplace_back(0x3FD1A7EF540, "cmp eax, ebx");
+  stmts.emplace_back(0x3FD1A7EF544, "je 0x3FD1A7EF558");
+  stmts.emplace_back(0x3FD1A7EF548, "mov ecx, [ebp+20]");
+  stmts.emplace_back(0x3FD1A7EF54C, "decl ecx");
+  stmts.emplace_back(0x3FD1A7EF550, "mov [ebp+20], ecx");
+  stmts.emplace_back(0x3FD1A7EF554, "jmp 0x3FD1A7EF538");
+  stmts.emplace_back(0x3FD1A7EF558, "test eax, eax");
+  stmts.emplace_back(0x3FD1A7EF55C, "mov eax, 0");
+  stmts.emplace_back(0x3FD1A7EF560, "je 0x3FD1A7EF568");
+  stmts.emplace_back(0x3FD1A7EF564, "mov eax, 1");
+  stmts.emplace_back(0x3FD1A7EF568, "ret");
+  Analysis anal("", "", &stmts,
+                std::shared_ptr<Architecture>{new ArchitectureX86()});
+  ASSERT_TRUE(anal.successful());
+  ASSERT_EQ(anal.get_cfg()->nodes_no(), 6);
+  const BasicBlock* root = anal.get_cfg()->root();
+  const BasicBlock* current;
+  EXPECT_EQ(root->get_id(), 0);
+  ASSERT_EQ(root->get_out_edges(), 1);
+  current = static_cast<const BasicBlock*>(root->get_next());
+  EXPECT_EQ(current->get_id(), 1);
+  ASSERT_EQ(current->get_out_edges(), 2);
 }

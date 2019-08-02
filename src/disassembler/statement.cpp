@@ -5,7 +5,7 @@ Statement::Statement() : offset(0x0), args_at(0)
 {
 }
 
-int Statement::get_offset() const
+uint64_t Statement::get_offset() const
 {
   return offset;
 }
