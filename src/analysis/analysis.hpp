@@ -50,7 +50,7 @@ public:
    * during the class lifecycle
    * \param[in] err The stream where error messages will be printed
    */
-  Analysis(std::string  binary_name, std::string  function_name,
+  Analysis(std::string binary_name, std::string function_name,
            const std::vector<Statement>* stmts,
            std::shared_ptr<Architecture> arch, std::ostream& err = std::cerr);
 
@@ -87,7 +87,7 @@ public:
    * during the class lifecycle
    * \param[in] err The stream where error messages will be printed
    */
-  Analysis(std::string  binary_name, std::string  function_name,
+  Analysis(std::string binary_name, std::string function_name,
            const std::string& str, std::shared_ptr<Architecture> arch,
            std::ostream& err = std::cerr);
 

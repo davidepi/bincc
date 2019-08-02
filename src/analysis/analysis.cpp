@@ -15,8 +15,7 @@ Statement Analysis::operator[](uint32_t value) const
   return Statement();
 }
 
-Analysis::Analysis(std::string  binary_name,
-                   std::string  function_name,
+Analysis::Analysis(std::string binary_name, std::string function_name,
                    const std::vector<Statement>* stmts,
                    std::shared_ptr<Architecture> arch, std::ostream& err)
     : binary(std::move(binary_name)),
@@ -34,9 +33,9 @@ Analysis::Analysis(std::string  binary_name,
   }
 }
 
-Analysis::Analysis(std::string  binary_name,
-                   std::string  function_name, const std::string& str,
-                   std::shared_ptr<Architecture> arch, std::ostream& err)
+Analysis::Analysis(std::string binary_name, std::string function_name,
+                   const std::string& str, std::shared_ptr<Architecture> arch,
+                   std::ostream& err)
     : binary(std::move(binary_name)),
       function(std::move(function_name)),
       architecture(std::move(arch))

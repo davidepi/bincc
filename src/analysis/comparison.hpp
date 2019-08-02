@@ -82,6 +82,22 @@ public:
    */
   bool cloned(const Analysis& binary, std::vector<CloneReport>* cloned) const;
 
+  /**
+   * \brief Print two dot files, highlighting the clones parts in red
+   * These files represent the CFS in dot format.
+   * \note If no match between baseline and clone is found in the report,
+   * calling this function is equivalent to calling the to_file of the CFS for
+   * both the baseline and clone
+   * \param[in] baseline_file The path to the baseline dot file
+   * \param[in] clone_file The path to the clone dot file
+   * \param[in] baseline The baseline analysis
+   * \param[in] clone The clone analysis
+   * \param[in] report The reported clones
+   */
+  void to_file(const char* baseline_file, const char* clone_file,
+               const Analysis& baseline, const Analysis& clone,
+               const std::vector<CloneReport>& report) const;
+
 private:
   // minimum depth that a tree must be in order to be considered clone
   uint32_t min_depth{2};
