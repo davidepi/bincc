@@ -10,6 +10,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <list>
 #include <queue>
 #include <stack>
 #include <unordered_set>
@@ -403,6 +404,131 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
     return true;
   }
   return false;
+}
+
+/**
+ * \brief Remove break and continue statements from the CFG of a SINGLE loop
+ * \param[in] node A random node belonging to the loop
+ * \param[in] lh The filled LoopHelper class for this CFG
+ * \param[in] bmap The vector containing every node
+ * \param[in] preds The predecessors array
+ * \return true if the CFG is reducible, false otherwise
+ */
+static bool
+    decompose_loop(BasicBlock* node, const LoopHelpers& lh,
+                   const std::vector<AbstractBlock*>& bmap,
+                   const std::vector<std::unordered_set<uint32_t>>& preds)
+{
+  std::list<BasicBlock*> exits;
+  std::stack<BasicBlock*> visit_stack;
+  std::unordered_set<uint32_t> targets;
+  visit_stack.push(node);
+  std::vector<bool> visited(bmap.size(), false);
+  while(!visit_stack.empty())
+  {
+    BasicBlock* current = visit_stack.top();
+    const uint32_t CURRENT_ID = current->get_id();
+    visit_stack.pop();
+    visited[current->get_id()] = true;
+    // check the children if their scc is different from mine, I'm an exit node
+    // otherswise if they have not been visited push them on the stack
+    if(current->get_next() != nullptr)
+    {
+      const uint32_t NEXT_ID = current->get_next()->get_id();
+      BasicBlock* next = static_cast<BasicBlock*>(bmap[NEXT_ID]);
+      if(lh.scc[NEXT_ID] != lh.scc[CURRENT_ID])
+      {
+        exits.push_back(current);
+        targets.insert(NEXT_ID);
+      }
+      else if(!visited[NEXT_ID])
+      {
+        visit_stack.push(next);
+      }
+    }
+    if(current->get_cond() != nullptr)
+    {
+      const uint32_t COND_ID = current->get_cond()->get_id();
+      BasicBlock* cond = static_cast<BasicBlock*>(bmap[COND_ID]);
+      if(lh.scc[COND_ID] != lh.scc[CURRENT_ID])
+      {
+        exits.push_back(current);
+        targets.insert(COND_ID);
+      }
+      else if(!visited[COND_ID])
+      {
+        visit_stack.push(cond);
+      }
+    }
+  }
+
+  // if more than one exit exists
+  if(exits.size() > 1)
+  {
+    // sort exits based on the number of predecessors
+    exits.sort([preds](const BasicBlock* a, const BasicBlock* b) {
+      return preds[a->get_id()].size() > preds[b->get_id()].size();
+    });
+    if(targets.size() == 1)
+    {
+      // all the statements are break, keep the one with highest number of entry
+      // points, remove the others
+      exits.pop_front();
+      BasicBlock* target = static_cast<BasicBlock*>(bmap[*targets.begin()]);
+      for(BasicBlock* front : exits)
+      {
+        if(front->get_next() == target)
+        {
+          front->set_next(front->get_cond());
+        }
+        front->set_cond(nullptr);
+      }
+    }
+    else if(targets.size() == 2)
+    {
+      // TODO: check the depth, keep the exit with highest depth
+    }
+    else
+    {
+      // 3 or more targets, impossible to solve, the compiler did some tricks
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * \brief Remove break and continue jumps from loops in the CFG
+ * \param[in] lh The filled LoopHelper class for this CFG
+ * \param[in] bmap The vector containing every node
+ * \param[in] preds The predecessors array
+ * \return true if the CFG is reducible, false otherwise
+ */
+static bool
+    decompose_loops(const LoopHelpers& lh,
+                    const std::vector<AbstractBlock*>& bmap,
+                    const std::vector<std::unordered_set<uint32_t>>& preds)
+{
+  // if this becomes false, it is impossible to resolve the CFG
+  bool retval = true;
+  // visit the CFG and gather a node for each loop
+  std::unordered_set<uint32_t> visited;
+  const uint32_t NODES = bmap.size();
+  for(uint32_t i = 0; i < NODES; i++)
+  {
+    uint32_t loop_id = lh.scc[i];
+    if(visited.find(loop_id) == visited.end())
+    {
+      // run the decomposition for this particular loop
+      visited.insert(loop_id);
+      if(lh.is_loop[i])
+      {
+        retval &=
+            decompose_loop(static_cast<BasicBlock*>(bmap[i]), lh, bmap, preds);
+      }
+    }
+  }
+  return retval;
 }
 
 /**
@@ -951,6 +1077,9 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
   std::vector<bool> inherited(NODES, false);
   LoopHelpers lh;
   lh.dom = dominator(&bmap[0], NODES);
+  recompute_loops(&lh, &bmap[0], bmap.size());
+  // TODO: exit immediately if decompose loops returns false
+  decompose_loops(lh, bmap, preds);
 
   // iterate and resolve
   while(root_node->get_out_edges() != 0)
@@ -1020,14 +1149,6 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     }
   }
   bmap = shrink_bmap(bmap);
-
-  // calculate hahes for the subtrees
-  const int BMAP_SIZE = bmap.size();
-  hash.resize(BMAP_SIZE);
-  for(int i = 0; i < BMAP_SIZE; i++)
-  {
-    hash[i] = bmap[i]->structural_hash();
-  }
   return true;
 }
 

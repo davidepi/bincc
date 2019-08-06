@@ -117,9 +117,6 @@ public:
 private:
   // array of every block (basic and reconstructed) used by this class
   std::vector<AbstractBlock*> bmap;
-  // array containing the hash of every block (consider that non-basic blocks
-  // can be seen as subtrees)
-  std::vector<uint64_t> hash;
 };
 
 #endif //__CFS_HPP__
