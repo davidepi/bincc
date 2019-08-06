@@ -237,7 +237,7 @@ TEST(ControlFlowStructure, whileb)
   EXPECT_EQ(tail->get_id(), 2);
 }
 
-TEST(ControlFlowStructure, do_whileb)
+TEST(ControlFlowStructure, do_whileb_T1)
 {
   // 0 -> 1 -> 2 -> 1
   //      2 ~> 3
@@ -261,6 +261,50 @@ TEST(ControlFlowStructure, do_whileb)
   tail = (*middle)[1];
   EXPECT_EQ(head->get_id(), 1);
   EXPECT_EQ(tail->get_id(), 2);
+}
+
+TEST(ControlFlowStructure, do_whileb_T2)
+{
+  ControlFlowGraph cfg(5);
+  cfg.set_conditional(3, 1);
+  ControlFlowStructure cfs;
+  ASSERT_TRUE(cfs.build(cfg));
+  const AbstractBlock* node = cfs.root();
+  ASSERT_EQ(node->size(), 3);
+  EXPECT_EQ((*node)[0]->get_id(), 0);
+  EXPECT_EQ((*node)[2]->get_id(), 4);
+  const AbstractBlock* loop = (*node)[1];
+  EXPECT_EQ(loop->get_type(), DO_WHILE);
+}
+
+TEST(ControlFlowStructure, do_whileb_T3)
+{
+  ControlFlowGraph cfg(5);
+  cfg.set_conditional(2, 4);
+  cfg.set_next(3, 1);
+  ControlFlowStructure cfs;
+  ASSERT_TRUE(cfs.build(cfg));
+  const AbstractBlock* node = cfs.root();
+  ASSERT_EQ(node->size(), 3);
+  EXPECT_EQ((*node)[0]->get_id(), 0);
+  EXPECT_EQ((*node)[2]->get_id(), 4);
+  const AbstractBlock* loop = (*node)[1];
+  EXPECT_EQ(loop->get_type(), DO_WHILE);
+}
+
+TEST(ControlFlowStructure, do_whileb_T4)
+{
+  ControlFlowGraph cfg(6);
+  cfg.set_conditional(3, 5);
+  cfg.set_next(4, 1);
+  ControlFlowStructure cfs;
+  ASSERT_TRUE(cfs.build(cfg));
+  const AbstractBlock* node = cfs.root();
+  ASSERT_EQ(node->size(), 3);
+  EXPECT_EQ((*node)[0]->get_id(), 0);
+  EXPECT_EQ((*node)[2]->get_id(), 4);
+  const AbstractBlock* loop = (*node)[1];
+  EXPECT_EQ(loop->get_type(), DO_WHILE);
 }
 
 TEST(ControlFlowStructure, impossible_CFG)
@@ -426,7 +470,6 @@ TEST(ControlFlowStructure, loop_break_while)
   EXPECT_EQ((*node)[2]->get_id(), 4);
   const AbstractBlock* loop = (*node)[1];
   EXPECT_EQ(loop->get_type(), WHILE);
-  cfg.to_file("/tmp/test.dot");
 }
 
 TEST(ControlFlowStructure, loop_break_do_while)
@@ -435,7 +478,6 @@ TEST(ControlFlowStructure, loop_break_do_while)
   cfg.set_conditional(2, 4); // break
   cfg.set_conditional(3, 1); // end of loop
   ControlFlowStructure cfs;
-  cfg.to_file("/tmp/test.dot");
   ASSERT_TRUE(cfs.build(cfg));
   const AbstractBlock* node = cfs.root();
   ASSERT_EQ(node->size(), 3);
