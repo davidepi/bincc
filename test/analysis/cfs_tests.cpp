@@ -412,7 +412,7 @@ TEST(ControlFlowStructure, nested_loop)
   EXPECT_EQ(inner_loop->get_type(), DO_WHILE);
 }
 
-TEST(ControlFLowStructure, get_node)
+TEST(ControlFlowStructure, get_node)
 {
   ControlFlowStructure cfs;
   EXPECT_EQ(cfs.nodes_no(), 0);
@@ -448,9 +448,10 @@ TEST(ControlFlowStructure, print_cfg)
              std::istreambuf_iterator<char>());
   std::string expected;
   expected = "digraph "
-             "{\n0->1\n1->2\n2->3\n2->4[arrowhead=\"empty\"];\n4->5\n5->1\n5-"
-             ">6[arrowhead=\"empty\"];\n3->5\n3->3[arrowhead=\"empty\"];"
-             "\nsubgraph cluster_11 {\n0;\nsubgraph cluster_10 {\nsubgraph "
+             "{\n0->1;\n1->2;\n2->3;\n2->4[arrowhead=\"empty\"];\n4->5;\n5->1;"
+             "\n5->6[arrowhead=\"empty\",style=\"dotted\"];\n6[style="
+             "\"dotted\"];\n3->5;\n3->3[arrowhead=\"empty\"];\nsubgraph "
+             "cluster_11 {\n0;\nsubgraph cluster_10 {\nsubgraph "
              "cluster_9 {\n1;\nsubgraph cluster_8 {\n2;\n4;\nsubgraph "
              "cluster_7 {\n3;\nlabel = \"Self-loop\";\n}\nlabel = "
              "\"If-else\";\n}\nlabel = \"Sequence\";\n}\n5;\nlabel = "

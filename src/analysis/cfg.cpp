@@ -81,6 +81,26 @@ uint32_t ControlFlowGraph::edges_no() const
   return edges;
 }
 
+/**
+ * \brief Returns if a node is a bogus node, the Single Exit point
+ * The finalize() method creates a fake single exit node in case multiple return
+ * statements are found. The node obviously is unmatched on the underlying
+ * binary. This function is used to know if a node is that kind of node
+ * \param[in] node The node that will be checked
+ * \return true if the node is bogus, false otherwise
+ */
+static bool exit_bogus_node(const BasicBlock* node)
+{
+  if(node->get_out_edges() == 0)
+  {
+    uint64_t start;
+    uint64_t end;
+    node->get_offset(&start, &end);
+    return start == 0 && end == 0;
+  }
+  return false;
+}
+
 std::ostream& operator<<(std::ostream& stream, const ControlFlowGraph& cfg)
 {
   stream << "digraph {\n";
@@ -98,9 +118,19 @@ std::ostream& operator<<(std::ostream& stream, const ControlFlowGraph& cfg)
     // these are created by this class so will ALWAYS be of type BasicBlock
     next = static_cast<const BasicBlock*>(current->get_next());
     cond = static_cast<const BasicBlock*>(current->get_cond());
+
+    if(exit_bogus_node(current))
+    {
+      stream << current->get_id() << "[style=\"dotted\"];\n";
+    }
     if(next != nullptr)
     {
-      stream << current->get_id() << "->" << next->get_id() << "\n";
+      stream << current->get_id() << "->" << next->get_id();
+      if(exit_bogus_node(next))
+      {
+        stream << "[style=\"dotted\"]";
+      }
+      stream << ";\n";
       if(visited.find(next->get_id()) == visited.end())
       {
         unvisited.push(next);
@@ -110,7 +140,12 @@ std::ostream& operator<<(std::ostream& stream, const ControlFlowGraph& cfg)
     if(cond != nullptr)
     {
       stream << current->get_id() << "->" << cond->get_id()
-             << "[arrowhead=\"empty\"];\n";
+             << "[arrowhead=\"empty\"";
+      if(exit_bogus_node(cond))
+      {
+        stream << ",style=\"dotted\"";
+      }
+      stream << "];\n";
       if(visited.find(cond->get_id()) == visited.end())
       {
         unvisited.push(cond);
@@ -219,6 +254,7 @@ void ControlFlowGraph::finalize()
     blocks[nodes - 1].set_id(nodes - 1);
     blocks[nodes - 1].set_next(nullptr);
     blocks[nodes - 1].set_cond(nullptr);
+    blocks[nodes - 1].set_offset(0x0, 0x0);
     for(int id : exit_nodes)
     {
       set_next(id, nodes - 1);

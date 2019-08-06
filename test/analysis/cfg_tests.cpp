@@ -58,7 +58,7 @@ TEST(ControlFlowGraph, stream)
   cfg.set_next(2, 0);
   cfg.set_conditional(0, 2);
   const char* expected =
-      "digraph {\n0->1\n0->2[arrowhead=\"empty\"];\n2->0\n1->2\n}";
+      "digraph {\n0->1;\n0->2[arrowhead=\"empty\"];\n2->0;\n1->2;\n}";
   std::stringstream strstr;
   strstr << cfg;
   EXPECT_STREQ(strstr.str().c_str(), expected);
@@ -71,7 +71,7 @@ TEST(ControlFlowGraph, dot_file)
   cfg.set_conditional(0, 2);
   std::string dot = cfg.to_dot();
   const char* expected =
-      "digraph {\n0->1\n0->2[arrowhead=\"empty\"];\n2->0\n1->2\n}";
+      "digraph {\n0->1;\n0->2[arrowhead=\"empty\"];\n2->0;\n1->2;\n}";
   EXPECT_STREQ(dot.c_str(), expected);
 }
 
