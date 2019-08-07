@@ -485,11 +485,6 @@ static bool
   // if more than one exit exists, remove break and continues
   if(exits.size() > 1)
   {
-    // sort exits based on the number of predecessors
-    exits.sort([preds](const BasicBlock* a, const BasicBlock* b) {
-      return preds[a->get_id()].size() > preds[b->get_id()].size();
-    });
-
     // harder case: multi exit points, two targets
     if(targets.size() == 2)
     {
@@ -497,7 +492,7 @@ static bool
       BasicBlock* target_corr =
           static_cast<BasicBlock*>(bmap[*targets.begin()]);
       BasicBlock* target_wron =
-          static_cast<BasicBlock*>(bmap[*targets.begin()++]);
+          static_cast<BasicBlock*>(bmap[*std::next(targets.begin())]);
       if(depth[target_corr->get_id()] < depth[target_wron->get_id()])
       {
         std::swap(target_corr, target_wron);
@@ -524,6 +519,12 @@ static bool
       }
       // now same behaviour of the 1 target, so slide down
     }
+
+    // sort exits based on the number of predecessors, used to chose correct one
+    exits.sort([preds](const BasicBlock* a, const BasicBlock* b) {
+      return preds[a->get_id()].size() > preds[b->get_id()].size();
+    });
+
     // easy case single target, multi exit points
     if(targets.size() == 1)
     {
@@ -595,7 +596,7 @@ static bool
 static void calc_depth(const BasicBlock* block, std::vector<uint32_t>* dep_arr)
 {
   const AbstractBlock* left = block->get_next();
-  const AbstractBlock* right = block->get_next();
+  const AbstractBlock* right = block->get_cond();
   (*dep_arr)[block->get_id()] = 0; // avoid infinite looping
   uint32_t depth = 0;
   if(left != nullptr)
@@ -620,7 +621,7 @@ static void calc_depth(const BasicBlock* block, std::vector<uint32_t>* dep_arr)
     }
     depth = std::max(depth, right_depth);
   }
-  (*dep_arr)[block->get_id()] = depth;
+  (*dep_arr)[block->get_id()] = depth + 1;
 }
 
 /**
