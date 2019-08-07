@@ -366,8 +366,8 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
       }
       else
       {
-        // NATURAL LOOP
-        // TODO: insert last resort here
+        // Should never fall here!!!!
+        // TODO: profile and eventually delete
         return false;
       }
     }
@@ -375,24 +375,43 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
     {
       const BasicBlock* tail_bb = static_cast<const BasicBlock*>(tail);
       next = tail->get_next();
-      // assert that next and cond are set correctly
-      if(next == head)
-      {
-        next = tail_bb->get_cond();
-      }
-      // assert that it is really a loop
+      // type 3 or type 4 do while (a single node between tail and head)
       if(!dfs_2step(head, head->get_next()))
       {
-        return false;
+        const AbstractBlock* post_tail;
+        // determine if next or cond goes outside the loop
+        if(tail->get_next() != nullptr && tail->get_next()->get_next() == head)
+        {
+
+          next = tail_bb->get_cond();
+          post_tail = tail_bb->get_next();
+        }
+        else if(tail_bb->get_cond() != nullptr &&
+                tail_bb->get_cond()->get_next() == head)
+        {
+          next = tail_bb->get_next();
+          post_tail = tail_bb->get_cond();
+        }
+        else // not a loop at all
+        {
+          return false;
+        }
+        *created = new DoWhileBlock(next_id, head, tail_bb, post_tail);
       }
-      if(head->get_out_edges() == 1)
+      // type 1 or type 2 (2 nodes or a node between head and tail only)
+      else if(head->get_out_edges() == 1)
       {
+        // assert that next and cond are set correctly
+        if(next == head)
+        {
+          next = tail_bb->get_cond();
+        }
         *created = new DoWhileBlock(next_id, head, tail_bb);
       }
       else
       {
-        // NATURAL LOOP
-        // TODO: insert last resort here
+        // Should never fall here!!!!
+        // TODO: profile and eventually delete
         return false;
       }
     }
@@ -415,9 +434,9 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
  * \return true if the CFG is reducible, false otherwise
  */
 static bool
-    decompose_loop(BasicBlock* node, const LoopHelpers& lh,
-                   const std::vector<AbstractBlock*>& bmap,
-                   const std::vector<std::unordered_set<uint32_t>>& preds)
+    denaturate_loop(BasicBlock* node, const LoopHelpers& lh,
+                    const std::vector<AbstractBlock*>& bmap,
+                    const std::vector<std::unordered_set<uint32_t>>& preds)
 {
   std::list<BasicBlock*> exits;
   std::stack<BasicBlock*> visit_stack;
@@ -505,9 +524,9 @@ static bool
  * \return true if the CFG is reducible, false otherwise
  */
 static bool
-    decompose_loops(const LoopHelpers& lh,
-                    const std::vector<AbstractBlock*>& bmap,
-                    const std::vector<std::unordered_set<uint32_t>>& preds)
+    remove_nat_loops(const LoopHelpers& lh,
+                     const std::vector<AbstractBlock*>& bmap,
+                     const std::vector<std::unordered_set<uint32_t>>& preds)
 {
   // if this becomes false, it is impossible to resolve the CFG
   bool retval = true;
@@ -524,7 +543,7 @@ static bool
       if(lh.is_loop[i])
       {
         retval &=
-            decompose_loop(static_cast<BasicBlock*>(bmap[i]), lh, bmap, preds);
+            denaturate_loop(static_cast<BasicBlock*>(bmap[i]), lh, bmap, preds);
       }
     }
   }
@@ -1079,7 +1098,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
   lh.dom = dominator(&bmap[0], NODES);
   recompute_loops(&lh, &bmap[0], bmap.size());
   // TODO: exit immediately if decompose loops returns false
-  decompose_loops(lh, bmap, preds);
+  remove_nat_loops(lh, bmap, preds);
 
   // iterate and resolve
   while(root_node->get_out_edges() != 0)
@@ -1125,12 +1144,6 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
           }
         }
         next_id++;
-        if(next_id > 1000)
-        {
-          // TODO: should never enter here! remove after validation
-          std::cerr << "Killing at 1000 nodes" << std::endl;
-          modified = false;
-        }
         break;
       }
     }

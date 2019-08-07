@@ -60,16 +60,22 @@ const AbstractBlock* WhileBlock::operator[](uint32_t index) const
 }
 
 DoWhileBlock::DoWhileBlock(uint32_t id, const AbstractBlock* head,
-                           const BasicBlock* tail)
-    : AbstractBlock(id), head(head), tail(tail)
+                           const BasicBlock* tail, const AbstractBlock* pt)
+    : AbstractBlock(id), head(head), tail(tail), post_tail(pt)
 {
-  depth = std::max(head->get_depth(), tail->get_depth()) + 1;
+  depth = std::max(head->get_depth(), tail->get_depth());
+  if(pt != nullptr)
+  {
+    depth = std::max(depth, post_tail->get_depth());
+  }
+  depth++;
 }
 
 DoWhileBlock::~DoWhileBlock()
 {
   delete tail;
   delete head;
+  delete post_tail;
 }
 
 BlockType DoWhileBlock::get_type() const
@@ -79,10 +85,21 @@ BlockType DoWhileBlock::get_type() const
 
 uint32_t DoWhileBlock::size() const
 {
-  return 2;
+  return post_tail == nullptr ? 2 : 3;
 }
 
 const AbstractBlock* DoWhileBlock::operator[](uint32_t index) const
 {
-  return index == 0 ? head : tail;
+  if(index == 0)
+  {
+    return head;
+  }
+  else if(index == 1)
+  {
+    return tail;
+  }
+  else
+  {
+    return post_tail;
+  }
 }

@@ -295,14 +295,15 @@ TEST(ControlFlowStructure, do_whileb_T3)
 TEST(ControlFlowStructure, do_whileb_T4)
 {
   ControlFlowGraph cfg(6);
-  cfg.set_conditional(3, 5);
+  cfg.set_next(3, 5);
+  cfg.set_conditional(3, 4);
   cfg.set_next(4, 1);
   ControlFlowStructure cfs;
   ASSERT_TRUE(cfs.build(cfg));
   const AbstractBlock* node = cfs.root();
   ASSERT_EQ(node->size(), 3);
   EXPECT_EQ((*node)[0]->get_id(), 0);
-  EXPECT_EQ((*node)[2]->get_id(), 4);
+  EXPECT_EQ((*node)[2]->get_id(), 5);
   const AbstractBlock* loop = (*node)[1];
   EXPECT_EQ(loop->get_type(), DO_WHILE);
 }
@@ -456,7 +457,7 @@ TEST(ControlFlowStructure, nested_loop)
   EXPECT_EQ(inner_loop->get_type(), DO_WHILE);
 }
 
-TEST(ControlFlowStructure, loop_break_while)
+TEST(ControlFlowStructure, nat_loop_break_while)
 {
   ControlFlowGraph cfg(5);
   cfg.set_conditional(1, 4); // break
@@ -472,7 +473,7 @@ TEST(ControlFlowStructure, loop_break_while)
   EXPECT_EQ(loop->get_type(), WHILE);
 }
 
-TEST(ControlFlowStructure, loop_break_do_while)
+TEST(ControlFlowStructure, nat_loop_break_do_while)
 {
   ControlFlowGraph cfg(5);
   cfg.set_conditional(2, 4); // break

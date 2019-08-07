@@ -140,9 +140,12 @@ public:
    * \param[in] head BasicBlock representing the head of the loop, containing
    * both the entry point and the exit point
    * \param[in] tail BasicBlock representing the tail of the loop, a block
-   * reachable only from the head and pointing only towards the head
+   * \param[in] post_tail If there is a node between tail and head, it is
+   * impossible to reduce it to a sequence, so it must be passed as a post_tail
+   * node here reachable only from the head and pointing only towards the head
    */
-  DoWhileBlock(uint32_t id, const AbstractBlock* head, const BasicBlock* tail);
+  DoWhileBlock(uint32_t id, const AbstractBlock* head, const BasicBlock* tail,
+               const AbstractBlock* post_tail = nullptr);
 
   /**
    * \brief Destructor
@@ -174,6 +177,8 @@ private:
   const AbstractBlock* head;
   // bottom point of the loop
   const BasicBlock* tail;
+  // eventual block between head and tail
+  const AbstractBlock* post_tail;
 };
 
 #endif //__CYCLIC_BLOCK_HPP__
