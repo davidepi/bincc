@@ -436,7 +436,8 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
 static bool
     denaturate_loop(BasicBlock* node, const LoopHelpers& lh,
                     const std::vector<AbstractBlock*>& bmap,
-                    const std::vector<std::unordered_set<uint32_t>>& preds)
+                    const std::vector<std::unordered_set<uint32_t>>& preds,
+                    const std::vector<uint32_t>& depth)
 {
   std::list<BasicBlock*> exits;
   std::stack<BasicBlock*> visit_stack;
@@ -481,13 +482,49 @@ static bool
     }
   }
 
-  // if more than one exit exists
+  // if more than one exit exists, remove break and continues
   if(exits.size() > 1)
   {
     // sort exits based on the number of predecessors
     exits.sort([preds](const BasicBlock* a, const BasicBlock* b) {
       return preds[a->get_id()].size() > preds[b->get_id()].size();
     });
+
+    // harder case: multi exit points, two targets
+    if(targets.size() == 2)
+    {
+      // retrieve targets and decide the deepest (correct) one
+      BasicBlock* target_corr =
+          static_cast<BasicBlock*>(bmap[*targets.begin()]);
+      BasicBlock* target_wron =
+          static_cast<BasicBlock*>(bmap[*targets.begin()++]);
+      if(depth[target_corr->get_id()] < depth[target_wron->get_id()])
+      {
+        std::swap(target_corr, target_wron);
+      }
+      targets.erase(target_wron->get_id());
+      // remove every exit pointing to the wrong target
+      std::list<BasicBlock*>::iterator exit_it = exits.begin();
+      while(exit_it != exits.end())
+      {
+        BasicBlock* front = *exit_it;
+        if(front->get_next() == target_wron || front->get_cond() == target_wron)
+        {
+          if(front->get_next() == target_wron)
+          {
+            front->set_next(front->get_cond());
+          }
+          front->set_cond(nullptr);
+          exit_it = exits.erase(exit_it);
+        }
+        else
+        {
+          exit_it++;
+        }
+      }
+      // now same behaviour of the 1 target, so slide down
+    }
+    // easy case single target, multi exit points
     if(targets.size() == 1)
     {
       // all the statements are break, keep the one with highest number of entry
@@ -503,13 +540,12 @@ static bool
         front->set_cond(nullptr);
       }
     }
-    else if(targets.size() == 2)
-    {
-      // TODO: check the depth, keep the exit with highest depth
-    }
+    // hardest case: multi exit points, multi targets
     else
     {
-      // 3 or more targets, impossible to solve, the compiler did some tricks
+      // TODO: 3 or more blocks is NOT impossible!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      //      maybe some blocks perform something before breaking, but they are
+      //      thus impossible for this kind of analysis
       return false;
     }
   }
@@ -526,7 +562,8 @@ static bool
 static bool
     remove_nat_loops(const LoopHelpers& lh,
                      const std::vector<AbstractBlock*>& bmap,
-                     const std::vector<std::unordered_set<uint32_t>>& preds)
+                     const std::vector<std::unordered_set<uint32_t>>& preds,
+                     const std::vector<uint32_t>& depth)
 {
   // if this becomes false, it is impossible to resolve the CFG
   bool retval = true;
@@ -542,12 +579,48 @@ static bool
       visited.insert(loop_id);
       if(lh.is_loop[i])
       {
-        retval &=
-            denaturate_loop(static_cast<BasicBlock*>(bmap[i]), lh, bmap, preds);
+        retval &= denaturate_loop(static_cast<BasicBlock*>(bmap[i]), lh, bmap,
+                                  preds, depth);
       }
     }
   }
   return retval;
+}
+
+/**
+ * Calculate the depth of the current block in the CFG
+ * \param[in] block The block for which the depth will be calculated
+ * \param[in,out] dep_arr A vector initialized to UINT32_MAX
+ */
+static void calc_depth(const BasicBlock* block, std::vector<uint32_t>* dep_arr)
+{
+  const AbstractBlock* left = block->get_next();
+  const AbstractBlock* right = block->get_next();
+  (*dep_arr)[block->get_id()] = 0; // avoid infinite looping
+  uint32_t depth = 0;
+  if(left != nullptr)
+  {
+    const uint32_t LEFT_ID = left->get_id();
+    uint32_t left_depth = (*dep_arr)[LEFT_ID];
+    if(left_depth == UINT32_MAX)
+    {
+      calc_depth(static_cast<const BasicBlock*>(left), dep_arr);
+      left_depth = (*dep_arr)[LEFT_ID];
+    }
+    depth = std::max(depth, left_depth);
+  }
+  if(right != nullptr)
+  {
+    const uint32_t RIGHT_ID = right->get_id();
+    uint32_t right_depth = (*dep_arr)[RIGHT_ID];
+    if(right_depth == UINT32_MAX)
+    {
+      calc_depth(static_cast<const BasicBlock*>(right), dep_arr);
+      right_depth = (*dep_arr)[RIGHT_ID];
+    }
+    depth = std::max(depth, right_depth);
+  }
+  (*dep_arr)[block->get_id()] = depth;
 }
 
 /**
@@ -1094,11 +1167,12 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
   const AbstractBlock* root_node = bmap[0];
   // nodes that should NOT be deleted in case of failure
   std::vector<bool> inherited(NODES, false);
+  std::vector<uint32_t> depth(NODES, UINT32_MAX);
   LoopHelpers lh;
   lh.dom = dominator(&bmap[0], NODES);
   recompute_loops(&lh, &bmap[0], bmap.size());
-  // TODO: exit immediately if decompose loops returns false
-  remove_nat_loops(lh, bmap, preds);
+  calc_depth(static_cast<const BasicBlock*>(bmap[0]), &depth);
+  remove_nat_loops(lh, bmap, preds, depth);
 
   // iterate and resolve
   while(root_node->get_out_edges() != 0)
