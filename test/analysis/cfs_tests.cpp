@@ -498,7 +498,6 @@ TEST(ControlFlowStructure, nat_loop_return_while)
   cfg.set_conditional(4, 8);
   cfg.set_next(5, 8);
   cfg.set_conditional(5, 1);
-  cfg.to_file("/tmp/test.dot");
   ControlFlowStructure cfs;
   ASSERT_TRUE(cfs.build(cfg));
   const AbstractBlock* node = cfs.root();
@@ -530,7 +529,6 @@ TEST(ControlFlowStructure, nat_loop_return_do_while)
   EXPECT_EQ((*node)[4]->get_id(), 8);
   const AbstractBlock* loop = (*node)[1];
   EXPECT_EQ(loop->get_type(), DO_WHILE);
-  cfs.to_file("/tmp/test.dot", cfg);
 }
 
 TEST(ControlFlowStructure, nat_loop_return_orphaning)
@@ -538,14 +536,15 @@ TEST(ControlFlowStructure, nat_loop_return_orphaning)
   ControlFlowGraph cfg(10);
   cfg.set_conditional(2, 6);
   cfg.set_conditional(3, 4);
+  cfg.set_conditional(4, 7);
   cfg.set_next(3, 6);
   cfg.set_next(7, 9);
   cfg.set_conditional(1, 8);
   cfg.set_next(5, 6);
   cfg.set_conditional(5, 1);
+  cfg.set_next(5, 8);
   ControlFlowStructure cfs;
   ASSERT_TRUE(cfs.build(cfg));
-  cfs.to_file("/tmp/test.dot", cfg);
   const AbstractBlock* node = cfs.root();
   ASSERT_EQ(node->size(), 5);
   EXPECT_EQ((*node)[0]->get_id(), 0);

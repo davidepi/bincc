@@ -433,7 +433,7 @@ static bool reduce_loop(const AbstractBlock* node, AbstractBlock** created,
  * \param[in] preds The predecessors array
  * \return true if the CFG is reducible, false otherwise
  */
-static bool
+static void
     denaturate_loop(BasicBlock* node, const LoopHelpers& lh,
                     const std::vector<AbstractBlock*>& bmap,
                     const std::vector<std::unordered_set<uint32_t>>& preds,
@@ -485,31 +485,63 @@ static bool
   // if more than one exit exists, remove break and continues
   if(exits.size() > 1)
   {
-    // harder case: multi exit points, two targets
-    if(targets.size() == 2)
+    // harder case: multi exit points
+    if(targets.size() >= 2)
     {
       // retrieve targets and decide the deepest (correct) one
-      BasicBlock* target_corr =
-          static_cast<BasicBlock*>(bmap[*targets.begin()]);
-      BasicBlock* target_wron =
-          static_cast<BasicBlock*>(bmap[*std::next(targets.begin())]);
-      if(depth[target_corr->get_id()] < depth[target_wron->get_id()])
+      // TODO: probably the deepest is not always the best one
+      const BasicBlock* target_corr =
+          static_cast<const BasicBlock*>(bmap[*targets.begin()]);
+      std::unordered_set<const BasicBlock*> target_wron;
+      uint32_t cur_depth = depth[target_corr->get_id()];
+      auto it = std::next(targets.begin());
+      while(it != targets.end())
       {
-        std::swap(target_corr, target_wron);
+        const BasicBlock* cur_tar = static_cast<const BasicBlock*>(bmap[*it]);
+        uint32_t test_depth = depth[cur_tar->get_id()];
+        if(cur_depth < test_depth)
+        {
+          cur_depth = test_depth;
+          target_wron.insert(target_corr);
+          target_corr = cur_tar;
+        }
+        else
+        {
+          target_wron.insert(cur_tar);
+        }
+        it++;
       }
-      targets.erase(target_wron->get_id());
+      targets.clear();
+      targets.insert(target_corr->get_id());
+
       // remove every exit pointing to the wrong target
       std::list<BasicBlock*>::iterator exit_it = exits.begin();
       while(exit_it != exits.end())
       {
         BasicBlock* front = *exit_it;
-        if(front->get_next() == target_wron || front->get_cond() == target_wron)
+        const BasicBlock* next =
+            static_cast<const BasicBlock*>(front->get_next());
+        const BasicBlock* cond =
+            static_cast<const BasicBlock*>(front->get_cond());
+        bool modified = false;
+        if(target_wron.find(next) != target_wron.end())
         {
-          if(front->get_next() == target_wron)
-          {
-            front->set_next(front->get_cond());
-          }
+          front->set_next(nullptr);
+          modified = true;
+        }
+        if(target_wron.find(cond) != target_wron.end())
+        {
           front->set_cond(nullptr);
+          modified = true;
+        }
+        if(front->get_cond() == front->get_next() ||
+           (front->get_next() == nullptr && front->get_cond() != nullptr))
+        {
+          front->set_next(front->get_cond());
+          front->set_cond(nullptr);
+        }
+        if(modified)
+        {
           exit_it = exits.erase(exit_it);
         }
         else
@@ -541,16 +573,7 @@ static bool
         front->set_cond(nullptr);
       }
     }
-    // hardest case: multi exit points, multi targets
-    else
-    {
-      // TODO: 3 or more blocks is NOT impossible!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      //      maybe some blocks perform something before breaking, but they are
-      //      thus impossible for this kind of analysis
-      return false;
-    }
   }
-  return true;
 }
 
 /**
@@ -560,14 +583,13 @@ static bool
  * \param[in] preds The predecessors array
  * \return true if the CFG is reducible, false otherwise
  */
-static bool
+static void
     remove_nat_loops(const LoopHelpers& lh,
                      const std::vector<AbstractBlock*>& bmap,
                      const std::vector<std::unordered_set<uint32_t>>& preds,
                      const std::vector<uint32_t>& depth)
 {
   // if this becomes false, it is impossible to resolve the CFG
-  bool retval = true;
   // visit the CFG and gather a node for each loop
   std::unordered_set<uint32_t> visited;
   const uint32_t NODES = bmap.size();
@@ -580,12 +602,11 @@ static bool
       visited.insert(loop_id);
       if(lh.is_loop[i])
       {
-        retval &= denaturate_loop(static_cast<BasicBlock*>(bmap[i]), lh, bmap,
-                                  preds, depth);
+        denaturate_loop(static_cast<BasicBlock*>(bmap[i]), lh, bmap, preds,
+                        depth);
       }
     }
   }
-  return retval;
 }
 
 /**
@@ -1147,7 +1168,7 @@ static std::vector<AbstractBlock*>
   uint32_t id = 0;
   for(AbstractBlock* block : bmap)
   {
-    if(visited[block->get_id()])
+    if(block != nullptr && visited[block->get_id()])
     {
       new_bmap.push_back(block);
       block->set_id(id++);
@@ -1213,6 +1234,8 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
         const uint32_t CREATED_SIZE = created->size();
         for(uint32_t i = 0; i < CREATED_SIZE; i++)
         {
+          // mark inherited node
+          inherited[(*created)[i]->get_id()] = true;
           if((*created)[i] == root_node)
           {
             root_node = created;
@@ -1227,6 +1250,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     {
       std::fill(visited.begin(), visited.begin() + visited.capacity(), false);
       postorder_visit_and_preds(root_node, &list, &visited, &preds);
+      // unreachable nodes are removed aswell
       while(!list.empty())
       {
         delete bmap[list.front()];
@@ -1234,6 +1258,15 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
       }
       bmap.clear();
       return false;
+    }
+  }
+  // delete unreachable and unresolved. They are produced by nat-loop removal
+  for(int i = 0; i < NODES; i++)
+  {
+    if(!inherited[i])
+    {
+      delete bmap[i];
+      bmap[i] = nullptr;
     }
   }
   bmap = shrink_bmap(bmap);
