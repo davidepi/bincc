@@ -35,7 +35,7 @@ x86_test:
   stage: test
   script:
     - apt-get install -y wget build-essential g++ cmake radare2
-    - mkdir build && cd build && cmake .. && make runtests && make test CTEST_OUTPUT_ON_FAILURE=TRUE
+    - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Debug" .. && make runtests && make test CTEST_OUTPUT_ON_FAILURE=TRUE
   tags:
     - x86_64
 
@@ -43,7 +43,7 @@ x86_memcheck:
   stage: memcheck
   script:
     - apt-get install -y wget build-essential g++ cmake radare2 valgrind
-    - mkdir build && cd build && cmake .. && make runtests && make memcheck
+    - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Debug" .. && make runtests && make memcheck
   tags:
     - x86_64
 
@@ -51,6 +51,6 @@ x86_coverage:
   stage: coverage
   script:
     - apt-get install -y wget build-essential g++ cmake radare2 gcovr
-    - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Coverage" .. && make runtests && make test && make coverage
+    - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Debug" .. && make runtests && make test && make coverage
   tags:
     - x86_64
