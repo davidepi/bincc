@@ -1,59 +1,56 @@
 image: ubuntu:latest
 
 before_script:
-    - apt-get update
+  - apt-get update
 
 variables:
-    GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_STRATEGY: recursive
 
 stages:
-    - syntax
-    - build
-    - test
-    - memcheck
-    - coverage
+  - syntax
+  - build
+  - test
+  - memcheck
+  - coverage
 
 x86_syntax:
-    stage: syntax
-    script:
-        - apt-get install -y python3 clang-format-8 wget
-        - wget https://raw.githubusercontent.com/Sarcasm/run-clang-format/master/run-clang-format.py
-        - ln -s /usr/bin/clang-format-8 /usr/bin/clang-format
-        - python3 run-clang-format.py -r src/ test/
-    tags:
-        - x86_64
+  stage: syntax
+  script:
+    - apt-get install -y python3 clang-format-8 wget
+    - wget https://raw.githubusercontent.com/Sarcasm/run-clang-format/master/run-clang-format.py
+    - ln -s /usr/bin/clang-format-8 /usr/bin/clang-format
+    - python3 run-clang-format.py -r src/ test/
+  tags:
+    - x86_64
 
 x86_build:
-    stage: build
-    script:
-        - apt-get install -y build-essential g++ cmake radare2
-        - mkdir build && cd build && cmake .. && make
-    tags:
-        - x86_64
+  stage: build
+  script:
+    - apt-get install -y build-essential g++ cmake radare2
+    - mkdir build && cd build && cmake .. && make
+  tags:
+    - x86_64
 
 x86_test:
-    stage: test
-    script:
-        - apt-get install -y wget build-essential g++ cmake radare2
-        - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz && tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
-        - mkdir build && cd build && cmake .. && make runTests && make test CTEST_OUTPUT_ON_FAILURE=TRUE
-    tags:
-        - x86_64
+  stage: test
+  script:
+    - apt-get install -y wget build-essential g++ cmake radare2
+    - mkdir build && cd build && cmake .. && make runtests && make test CTEST_OUTPUT_ON_FAILURE=TRUE
+  tags:
+    - x86_64
 
 x86_memcheck:
-    stage: memcheck
-    script:
-        - apt-get install -y wget build-essential g++ cmake radare2 valgrind
-        - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz && tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
-        - mkdir build && cd build && cmake .. && make runTests && valgrind --trace-children=no --leak-check=full --error-exitcode=1 ./runTests
-    tags:
-        - x86_64
+  stage: memcheck
+  script:
+    - apt-get install -y wget build-essential g++ cmake radare2 valgrind
+    - mkdir build && cd build && cmake .. && make runtests && make memcheck
+  tags:
+    - x86_64
 
 x86_coverage:
-    stage: coverage
-    script:
-        - apt-get install -y wget build-essential g++ cmake radare2 gcovr
-        - wget https://github.com/google/googletest/archive/release-1.8.1.tar.gz && tar xzf release-1.8.1.tar.gz && cd googletest-release-1.8.1/ && mkdir build && cd build && cmake .. && make install && cd ../..
-        - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Coverage" .. && make runTests && make test && make coverage
-    tags:
-        - x86_64
+  stage: coverage
+  script:
+    - apt-get install -y wget build-essential g++ cmake radare2 gcovr
+    - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Coverage" .. && make runtests && make test && make coverage
+  tags:
+    - x86_64

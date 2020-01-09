@@ -1261,7 +1261,7 @@ bool ControlFlowStructure::build(const ControlFlowGraph& cfg)
     }
   }
   // delete unreachable and unresolved. They are produced by nat-loop removal
-  for(int i = 0; i < NODES; i++)
+  for(uint32_t i = 0; i < NODES; i++)
   {
     if(!inherited[i])
     {

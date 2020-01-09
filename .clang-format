@@ -17,23 +17,7 @@ AlwaysBreakTemplateDeclarations: Yes
 BinPackArguments: true
 BinPackParameters: true
 BreakBeforeBinaryOperators: None
-BreakBeforeBraces: Custom
-BraceWrapping:
-    AfterClass: true
-    AfterControlStatement: true
-    AfterEnum: true
-    AfterFunction: true
-    AfterNamespace: true
-    AfterObjCDeclaration: true
-    AfterStruct: true
-    AfterUnion: true
-    AfterExternBlock: true
-    BeforeCatch: true
-    BeforeElse: true
-    IndentBraces: false
-    SplitEmptyFunction: true
-    SplitEmptyRecord: true
-    SplitEmptyNamespace: true
+BreakBeforeBraces: Allman
 BreakBeforeTernaryOperators: false
 BreakConstructorInitializers: BeforeColon
 BreakInheritanceList: BeforeColon
