@@ -19,7 +19,7 @@ BasicBlock::BasicBlock(uint32_t id_in, uint64_t off_s, uint64_t off_e)
   }
 }
 
-BasicBlock::BasicBlock(const BasicBlock& orig)
+BasicBlock::BasicBlock(const BasicBlock& orig) : AbstractBlock(orig.id)
 {
   *this = orig;
 }

@@ -27,6 +27,7 @@ SET(BCC_MAIN_SOURCES
         ${PROJECT_SOURCE_DIR}/src/analysis/cfs.cpp
         ${PROJECT_SOURCE_DIR}/src/analysis/comparison.cpp
         )
+
 #TEST SOURCES
 SET(BCC_TEST_SOURCES
         ${PROJECT_SOURCE_DIR}/test/disassembler/statement_tests.cpp
@@ -41,21 +42,8 @@ SET(BCC_TEST_SOURCES
 LIST(APPEND ALL_REQUIRED_INCLUDES ${PROJECT_SOURCE_DIR}/src)
 
 #COMPILER FLAGS
-SET(DEBUG_FLAGS
-        -O0
-        -g
-        -Wall
-        -Wpedantic
-        -Werror
-        -Wfatal-errors
-        -Wno-unused-function
-        )
-
-SET(RELEASE_FLAGS
-        -w
-        -O3
-        -flto
-        )
+SET(DEBUG_FLAGS -O0 -g -Wall -Wextra -Wpedantic -Werror -Wno-unused-function)
+SET(RELEASE_FLAGS -w -O3 -march=native)
 
 #FIND DISASSEMBLERS AND POPULATE THE DISASM LIST
 FIND_PROGRAM(RADARE2 NAMES "r2" "radare2")
