@@ -1,0 +1,19 @@
+[package]
+name = "bcc"
+description = "Checks for similarities amongs different binaries."
+version = "0.1.0"
+authors = [
+    "Davide Pizzolotto <davide.pizzolotto@gmail.com>"
+]
+edition = "2018"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "bcc"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
+
+[dev-dependencies]

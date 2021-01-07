@@ -1,56 +1,47 @@
-image: ubuntu:latest
-
-before_script:
-  - apt-get update
-
-variables:
-  GIT_SUBMODULE_STRATEGY: recursive
-
 stages:
   - syntax
+  - lint
   - build
   - test
-  - memcheck
   - coverage
 
-x86_syntax:
+rust_fmt:
   stage: syntax
   script:
-    - apt-get install -y python3 clang-format-8 wget
-    - wget https://raw.githubusercontent.com/Sarcasm/run-clang-format/master/run-clang-format.py
-    - ln -s /usr/bin/clang-format-8 /usr/bin/clang-format
-    - python3 run-clang-format.py -r src/ test/
-  tags:
-    - x86_64
+    - rustup install nightly
+    - cargo +nightly fmt --all -- --check
+  image: rust:latest
 
-x86_build:
+rust_clippy:
+  stage: lint
+  script:
+    - cargo +stable clippy --all-features
+  image: rust:latest
+
+rust_build:
   stage: build
   script:
-    - apt-get install -y build-essential g++ cmake radare2
-    - mkdir build && cd build && cmake .. && make
-  tags:
-    - x86_64
+    - cargo build --verbose --target x86_64-unknown-linux-gnu
+  image: rust:latest
 
-x86_test:
+rust_test:
   stage: test
   script:
-    - apt-get install -y wget build-essential g++ cmake radare2
-    - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Debug" .. && make runtests && make test CTEST_OUTPUT_ON_FAILURE=TRUE
-  tags:
-    - x86_64
+    - cargo test --verbose --all-features --target x86_64-unknown-linux-gnu
+  image: rust:latest
 
-x86_memcheck:
-  stage: memcheck
-  script:
-    - apt-get install -y wget build-essential g++ cmake radare2 valgrind
-    - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Debug" .. && make runtests && make memcheck
-  tags:
-    - x86_64
-
-x86_coverage:
+rust-coverage:
   stage: coverage
   script:
-    - apt-get install -y wget build-essential g++ cmake radare2 gcovr
-    - mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE="Debug" .. && make runtests && make test && make coverage
-  tags:
-    - x86_64
+    - rustup show
+    - curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
+    - ./grcov --version
+    - export CARGO_INCREMENTAL=0
+    - export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort"
+    - export RUSTDOCFLAGS="-Cpanic=abort"
+    - rustup install nightly
+    - cargo +nightly build
+    - cargo +nightly test
+    - ./grcov ./target/debug/ -s . --commit-sha="${ CI_COMMIT_SHA }" --llvm --branch --ignore-not-existing --ignore="/*" --ignore="*_tests.rs" --ignore="benches/*" -t html -o ./target/debug/coverage
+    - cat ./target/debug/coverage/index.html
+  image: rust:latest
