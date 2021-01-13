@@ -15,5 +15,11 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
+fnv = "1.0.7"
+r2pipe = { git = "https://github.com/davidepi/r2pipe.rs", branch = "http-as-feature", optional = true }
 
 [dev-dependencies]
+serial_test = "0.5.1" # needed only by radare2, but dev-dependencies are not allowed to be optional
+
+[features]
+radare2 = ["r2pipe"]
