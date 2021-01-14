@@ -23,3 +23,7 @@ serial_test = "0.5.1" # needed only by radare2, but dev-dependencies are not all
 
 [features]
 radare2 = ["r2pipe"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

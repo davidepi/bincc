@@ -8,4 +8,5 @@ pub use self::disassembler::Disassembler;
 
 /// Module containing utilities using the radare2 backend.
 #[cfg(feature = "radare2")]
+#[cfg_attr(docsrs, doc(cfg(feature = "radare2")))]
 pub mod radare2;
