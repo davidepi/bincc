@@ -9,39 +9,65 @@ rust_fmt:
   stage: syntax
   script:
     - rustup install nightly
+    - rustup show
+    - rustup component add rustfmt --toolchain nightly
     - cargo +nightly fmt --all -- --check
   image: rust:latest
+  tags:
+    - x86_64
 
 rust_clippy:
   stage: lint
   script:
-    - cargo +stable clippy --all-features
+    - rustup show
+    - rustup component add clippy
+    - cargo clippy --all-features -- -Dwarnings
   image: rust:latest
+  tags:
+    - x86_64
 
 rust_build:
   stage: build
   script:
-    - cargo build --verbose --target x86_64-unknown-linux-gnu
+    - rustup show
+    - cargo build --verbose --all-features --target x86_64-unknown-linux-gnu
   image: rust:latest
+  tags:
+    - x86_64
 
 rust_test:
   stage: test
   script:
+    - rustup show
+    - curl -L https://github.com/radareorg/radare2/releases/download/5.1.0/radare2_5.1.0_amd64.deb > radare2.deb
+    - dpkg -i radare2.deb
+    - radare2 -version
     - cargo test --verbose --all-features --target x86_64-unknown-linux-gnu
   image: rust:latest
+  tags:
+    - x86_64
 
 rust-coverage:
   stage: coverage
   script:
+    - rustup install nightly
     - rustup show
+    - curl -L https://github.com/radareorg/radare2/releases/download/5.1.0/radare2_5.1.0_amd64.deb > radare2.deb
+    - dpkg -i radare2.deb
+    - radare2 -version
     - curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 | tar jxf -
     - ./grcov --version
+    - curl -L https://github.com/Kogia-sima/rust-covfix/releases/download/v0.2.2/rust-covfix-linux-x86_64.tar.xz > rust-covfix.tar.xz
+    - tar xJf rust-covfix.tar.xz rust-covfix-linux-x86_64/rust-covfix --strip-components 1
     - export CARGO_INCREMENTAL=0
-    - export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort"
+    - export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Copt-level=0 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Zpanic_abort_tests -C panic=abort"
     - export RUSTDOCFLAGS="-Cpanic=abort"
-    - rustup install nightly
-    - cargo +nightly build
+    - cargo clean
     - cargo +nightly test
-    - ./grcov ./target/debug/ -s . --commit-sha="${ CI_COMMIT_SHA }" --llvm --branch --ignore-not-existing --ignore="/*" --ignore="*_tests.rs" --ignore="benches/*" -t html -o ./target/debug/coverage
-    - cat ./target/debug/coverage/index.html
+    - mkdir ./target/debug/coverage
+    - ./grcov ./target/debug/ -s . --llvm --ignore-not-existing --ignore="/*" -t lcov -o ./target/debug/coverage/lcov.info
+    - ./rust-covfix ./target/debug/coverage/lcov.info -o ./target/debug/coverage/lcov_fix.info
+    - cat ./target/debug/coverage/lcov_fix.info
   image: rust:latest
+  tags:
+    - x86_64
