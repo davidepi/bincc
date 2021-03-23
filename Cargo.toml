@@ -1,6 +1,6 @@
 [package]
 name = "bcc"
-description = "Checks for similarities amongs different binaries."
+description = "Checks for similarities among different binaries."
 version = "0.1.0"
 authors = [
     "Davide Pizzolotto <davide.pizzolotto@gmail.com>"

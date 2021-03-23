@@ -1,20 +1,11 @@
+use crate::disasm::architectures::Architecture;
 use crate::disasm::Statement;
 use fnv::FnvHashMap;
 use std::collections::HashMap;
 
-/// Enum containing a list of CPU architectures.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum Architecture {
-    UNKNOWN,
-    X86_64,
-    AARCH64,
-    X86,
-    ARM32,
-}
-
 /// Trait providing disassembler services.
 pub trait Disassembler {
-    /// Perform analysis on the underlying binary.
+    /// Performs analysis on the underlying binary.
     fn analyse(&mut self);
 
     /// Returns the architecture of a specific file.
@@ -23,7 +14,9 @@ pub trait Disassembler {
     ///
     /// This implementation currently supports only the architectures defined in the enum
     /// [Architecture].
-    fn get_arch(&self) -> Architecture;
+    ///
+    /// If the architecture can not be recognized, None is returned.
+    fn get_arch(&self) -> Option<Box<dyn Architecture>>;
 
     /// Returns names and offsets of every function in the current executable.
     ///
