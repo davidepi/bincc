@@ -16,6 +16,7 @@ doc = false
 
 [dependencies]
 fnv = "1.0.7"
+parse_int = "0.5"
 r2pipe = { git = "https://github.com/davidepi/r2pipe.rs", branch = "http-as-feature", optional = true }
 
 [dev-dependencies]
