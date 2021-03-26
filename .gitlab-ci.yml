@@ -8,10 +8,9 @@ stages:
 rust_fmt:
   stage: syntax
   script:
-    - rustup install nightly
     - rustup show
-    - rustup component add rustfmt --toolchain nightly
-    - cargo +nightly fmt --all -- --check
+    - rustup component add rustfmt
+    - cargo fmt --all -- --check
   image: rust:latest
   tags:
     - x86_64
