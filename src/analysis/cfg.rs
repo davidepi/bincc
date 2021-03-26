@@ -16,7 +16,12 @@ pub struct CFG {
 }
 
 pub struct BasicBlock {
+    // id of bb
     pub id: usize,
+    // offset of first instruction
+    pub first: u64,
+    // offset of last instruction (beginning of the instruction)
+    pub last: u64,
 }
 
 impl Display for CFG {
@@ -74,6 +79,14 @@ impl CFG {
 
     pub fn root(&self) -> usize {
         self.root
+    }
+
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
     }
 
     pub fn to_dot(&self) -> String {
@@ -190,13 +203,33 @@ fn resolve_bb_id(offset: u64, id_map: &FnvHashMap<u64, usize>, targets: &BTreeSe
 }
 
 fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
+    let all_offsets = stmts
+        .iter()
+        .map(|x| x.get_offset())
+        .collect::<BTreeSet<_>>();
     let tgmap = get_targets(stmts, arch);
-    let nodes = tgmap
+    let empty_stmt = Statement::new(0x0, "");
+    // This target is used for a strictly lower bound.
+    // The +1 is useful so I can use the last statement in the function
+    let function_over = stmts.last().unwrap_or(&empty_stmt).get_offset() + 1;
+    // create all nodes (without ending statement)
+    let mut nodes = tgmap
         .targets
         .iter()
         .enumerate()
-        .map(|x| BasicBlock { id: x.0 })
-        .collect();
+        .map(|x| BasicBlock {
+            id: x.0,
+            first: *x.1,
+            last: 0,
+        })
+        .collect::<Vec<_>>();
+    // fill ending statement
+    let mut nodes_iter = tgmap.targets.iter().enumerate().peekable();
+    while let Some(target) = nodes_iter.next() {
+        let next_target = *nodes_iter.peek().unwrap_or(&(0, &function_over)).1;
+        let last_stmt = *all_offsets.range(..next_target).last().unwrap_or(&0);
+        nodes[target.0].last = last_stmt;
+    }
     let mut edges = (1..)
         .take(tgmap.targets.len() - 1)
         .map(|next| [Some(next), None])
@@ -242,7 +275,14 @@ mod tests {
 
     #[test]
     fn preorder() {
-        let nodes = (0..).take(7).map(|x| BasicBlock { id: x }).collect();
+        let nodes = (0..)
+            .take(7)
+            .map(|x| BasicBlock {
+                id: x,
+                first: 0,
+                last: 0,
+            })
+            .collect();
         let edges = vec![
             [Some(1), Some(2)],
             [Some(6), None],
@@ -278,6 +318,8 @@ mod tests {
         let arch = ArchX86::new_amd64();
         let cfg = build_cfg(&stmts, &arch);
         assert_eq!(cfg.root(), 0);
+        assert!(!cfg.is_empty());
+        assert_eq!(cfg.len(), 4);
         assert_eq!(cfg.next(0), Some(1));
         assert_eq!(cfg.cond(0), Some(3));
         assert_eq!(cfg.next(1), Some(2));
@@ -305,6 +347,7 @@ mod tests {
         ];
         let arch = ArchX86::new_amd64();
         let cfg = build_cfg(&stmts, &arch);
+        assert_eq!(cfg.len(), 4);
         assert_eq!(cfg.root(), 0);
         assert_eq!(cfg.next(0), Some(1));
         assert_eq!(cfg.cond(0), Some(2));
@@ -314,5 +357,85 @@ mod tests {
         assert!(cfg.cond(2).is_none());
         assert!(cfg.next(3).is_none());
         assert!(cfg.cond(3).is_none());
+    }
+
+    #[test]
+    fn build_cfg_long_unconditional_jump() {
+        // this is crafted so offsets are completely random
+        let stmts = vec![
+            Statement::new(0x610, "test edi, edi"),
+            Statement::new(0x611, "je 0x613"),
+            Statement::new(0x612, "jmp 0xFFFFFFFFFFFFFFFC"),
+            Statement::new(0x613, "jmp 0x600"),
+            Statement::new(0x614, "jmp 0x615"),
+            Statement::new(0x615, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = build_cfg(&stmts, &arch);
+        assert_eq!(cfg.len(), 5);
+        assert_eq!(cfg.root(), 0);
+        assert_eq!(cfg.next(0), Some(1));
+        assert_eq!(cfg.cond(0), Some(2));
+        assert!(cfg.next(1).is_none());
+        assert!(cfg.cond(1).is_none());
+        assert!(cfg.next(2).is_none());
+        assert!(cfg.cond(2).is_none());
+    }
+
+    #[test]
+    fn build_cfg_bb_offset() {
+        let stmts = vec![
+            Statement::new(0x610, "test edi, edi"),
+            Statement::new(0x614, "je 0x628"),
+            Statement::new(0x618, "test esi, esi"),
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x620, "je 0x628"),
+            Statement::new(0x624, "ret"),
+            Statement::new(0x628, "mov eax, 6"),
+            Statement::new(0x62C, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = build_cfg(&stmts, &arch);
+        assert_eq!(cfg.len(), 4);
+        assert_eq!(cfg.root(), 0);
+        assert_eq!(cfg.next(0), Some(1));
+        assert_eq!(cfg.cond(0), Some(3));
+        assert_eq!(cfg.next(1), Some(2));
+        assert_eq!(cfg.cond(1), Some(3));
+        assert!(cfg.next(2).is_none());
+        assert!(cfg.cond(2).is_none());
+        assert!(cfg.next(3).is_none());
+        assert!(cfg.cond(3).is_none());
+        assert_eq!(cfg[0].first, 0x610);
+        assert_eq!(cfg[0].last, 0x614);
+        assert_eq!(cfg[1].first, 0x618);
+        assert_eq!(cfg[1].last, 0x620);
+        assert_eq!(cfg[2].first, 0x624);
+        assert_eq!(cfg[2].last, 0x624);
+        assert_eq!(cfg[3].first, 0x628);
+        assert_eq!(cfg[3].last, 0x62C);
+    }
+
+    #[test]
+    fn build_cfg_offset_64bit() {
+        let stmts = vec![
+            Statement::new(0x3FD1A7EF534, "jmp 0x3FD1A7EF538"),
+            Statement::new(0x3FD1A7EF538, "incl eax"),
+            Statement::new(0x3FD1A7EF53C, "mov ebx, [ebp+20]"),
+            Statement::new(0x3FD1A7EF540, "cmp eax, ebx"),
+            Statement::new(0x3FD1A7EF544, "je 0x3FD1A7EF558"),
+            Statement::new(0x3FD1A7EF548, "mov ecx, [ebp+20]"),
+            Statement::new(0x3FD1A7EF54C, "decl ecx"),
+            Statement::new(0x3FD1A7EF550, "mov [ebp+20], ecx"),
+            Statement::new(0x3FD1A7EF554, "jmp 0x3FD1A7EF538"),
+            Statement::new(0x3FD1A7EF558, "test eax, eax"),
+            Statement::new(0x3FD1A7EF55C, "mov eax, 0"),
+            Statement::new(0x3FD1A7EF560, "je 0x3FD1A7EF568"),
+            Statement::new(0x3FD1A7EF564, "mov eax, 1"),
+            Statement::new(0x3FD1A7EF568, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = build_cfg(&stmts, &arch);
+        assert_eq!(cfg.len(), 6);
     }
 }
