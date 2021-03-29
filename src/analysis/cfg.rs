@@ -27,7 +27,17 @@ pub struct BasicBlock {
 
 impl Display for CFG {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CFG({}, {})", self.nodes.len(), self.edges.len())
+        let has_sink = self
+            .nodes
+            .iter()
+            .filter(|x| x.first == 0x0 && x.last == 0x0)
+            .count()
+            == 1;
+        if has_sink {
+            write!(f, "CFG({}+1, {})", self.nodes.len() - 1, self.edges.len())
+        } else {
+            write!(f, "CFG({}, {})", self.nodes.len(), self.edges.len())
+        }
     }
 }
 
@@ -92,9 +102,26 @@ impl CFG {
 
     pub fn to_dot(&self) -> String {
         let mut content = Vec::new();
+        let sink_iter = self
+            .nodes
+            .iter()
+            .filter(|x| x.first == 0x0 && x.last == 0x0)
+            .last();
+        let sink = if let Some(sink_node) = sink_iter {
+            let id = sink_node.id;
+            content.push(format!("{}[style=\"dotted\"];", id));
+            id
+        } else {
+            usize::MAX
+        };
         for edge in self.edges.iter().enumerate() {
             if let Some(next) = edge.1[0] {
-                content.push(format!("{} -> {}", edge.0, next));
+                let dashed = if next == sink {
+                    "[style=\"dotted\"];"
+                } else {
+                    ""
+                };
+                content.push(format!("{} -> {}{}", edge.0, next, dashed));
             }
             if let Some(cond) = edge.1[1] {
                 content.push(format!("{} -> {}[arrowhead=\"empty\"];", edge.0, cond));
@@ -106,6 +133,37 @@ impl CFG {
     pub fn to_file<S: AsRef<Path>>(&self, filename: S) -> Result<(), io::Error> {
         let mut file = File::create(filename)?;
         file.write_all(self.to_dot().as_bytes())
+    }
+
+    pub fn add_sink(&self) -> CFG {
+        let exit_nodes = self
+            .edges
+            .iter()
+            .enumerate()
+            .filter(|x| x.1[0].is_none() && x.1[1].is_none())
+            .map(|x| x.0)
+            .collect::<BTreeSet<_>>();
+        let mut nodes = self.nodes.clone();
+        let mut edges = self.edges.clone();
+        if exit_nodes.len() > 1 {
+            let sink = BasicBlock {
+                id: nodes.len(),
+                first: 0x0,
+                last: 0x0,
+            };
+            nodes.push(sink);
+            edges = edges
+                .into_iter()
+                .map(|x| {
+                    if x[0].is_none() && x[1].is_none() {
+                        [Some(nodes.len() - 1), None]
+                    } else {
+                        x
+                    }
+                })
+                .collect();
+        }
+        CFG { nodes, edges }
     }
 }
 
@@ -272,7 +330,6 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
 
 #[cfg(test)]
 mod tests {
-    use crate::analysis::cfg::build_cfg;
     use crate::analysis::{BasicBlock, CFG};
     use crate::disasm::{ArchX86, Statement};
 
@@ -334,7 +391,7 @@ mod tests {
             Statement::new(0x625, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = build_cfg(&stmts, &arch);
+        let cfg = CFG::new(&stmts, &arch);
         assert!(!cfg.is_empty());
         assert_eq!(cfg.len(), 4);
         assert_eq!(cfg.next(0), Some(1));
@@ -363,7 +420,7 @@ mod tests {
             Statement::new(0x639, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = build_cfg(&stmts, &arch);
+        let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 4);
         assert_eq!(cfg.next(0), Some(1));
         assert_eq!(cfg.cond(0), Some(2));
@@ -387,7 +444,7 @@ mod tests {
             Statement::new(0x615, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = build_cfg(&stmts, &arch);
+        let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 5);
         assert_eq!(cfg.next(0), Some(1));
         assert_eq!(cfg.cond(0), Some(2));
@@ -410,7 +467,7 @@ mod tests {
             Statement::new(0x62C, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = build_cfg(&stmts, &arch);
+        let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 4);
         assert_eq!(cfg.next(0), Some(1));
         assert_eq!(cfg.cond(0), Some(3));
@@ -449,7 +506,44 @@ mod tests {
             Statement::new(0x3FD1A7EF568, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = build_cfg(&stmts, &arch);
+        let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 6);
+    }
+
+    #[test]
+    fn add_sink_empty() {
+        let stmts = Vec::new();
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let cfg_with_sink = cfg.add_sink();
+        assert!(cfg_with_sink.is_empty());
+    }
+
+    #[test]
+    fn add_sink_necessary() {
+        let stmts = vec![
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x620, "je 0x628"),
+            Statement::new(0x624, "ret"),
+            Statement::new(0x628, "mov eax, 6"),
+            Statement::new(0x62C, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert_eq!(cfg.len(), 3);
+        let cfg_with_sink = cfg.add_sink();
+        assert_eq!(cfg_with_sink.len(), 4);
+    }
+
+    #[test]
+    fn add_sink_unnecessary() {
+        let stmts = vec![
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x624, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let cfg_with_sink = cfg.add_sink();
+        assert_eq!(cfg.len(), cfg_with_sink.len());
     }
 }
