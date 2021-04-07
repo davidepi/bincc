@@ -84,6 +84,37 @@ impl CFG {
         }
     }
 
+    pub fn postorder(&self) -> CFGIter {
+        if !self.is_empty() {
+            let mut buffer = vec![0];
+            let mut retval = Vec::with_capacity(self.nodes.len());
+            let mut marked = vec![false; self.nodes.len()];
+            while let Some(current_id) = buffer.last() {
+                let mut to_push = Vec::new();
+                marked[*current_id] = true;
+                let children = self.edges[*current_id];
+                for maybe_child in children.iter().rev() {
+                    if let Some(child_id) = maybe_child {
+                        if !marked[*child_id] {
+                            marked[*child_id] = true;
+                            to_push.push(*child_id);
+                        }
+                    }
+                }
+                if to_push.is_empty() {
+                    let current = &self.nodes[buffer.pop().unwrap()];
+                    retval.push(current);
+                } else {
+                    buffer.append(&mut to_push);
+                }
+            }
+            retval.reverse();
+            CFGIter { stack: retval }
+        } else {
+            CFGIter { stack: Vec::new() }
+        }
+    }
+
     pub fn next(&self, id: usize) -> Option<usize> {
         self.edges[id][0]
     }
@@ -365,6 +396,42 @@ mod tests {
         let cfg = CFG { nodes, edges };
         let expected = vec![0, 1, 6, 2, 3, 5, 4];
         for (index, val) in cfg.preorder().enumerate() {
+            assert_eq!(val.id, expected[index]);
+        }
+    }
+
+    #[test]
+    fn postorder_empty() {
+        let cfg = CFG {
+            nodes: Vec::new(),
+            edges: Vec::new(),
+        };
+        let order = cfg.postorder();
+        assert_eq!(order.count(), 0)
+    }
+
+    #[test]
+    fn postorder() {
+        let nodes = (0..)
+            .take(7)
+            .map(|x| BasicBlock {
+                id: x,
+                first: 0,
+                last: 0,
+            })
+            .collect();
+        let edges = vec![
+            [Some(1), Some(2)],
+            [Some(6), None],
+            [Some(3), Some(4)],
+            [Some(5), None],
+            [Some(5), None],
+            [Some(6), None],
+            [None, None],
+        ];
+        let cfg = CFG { nodes, edges };
+        let expected = vec![6, 1, 5, 3, 4, 2, 0];
+        for (index, val) in cfg.postorder().enumerate() {
             assert_eq!(val.id, expected[index]);
         }
     }
