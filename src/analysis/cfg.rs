@@ -1,5 +1,5 @@
 use crate::disasm::{Architecture, JumpType, Statement};
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use parse_int::parse;
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
@@ -195,6 +195,42 @@ impl CFG {
                 .collect();
         }
         CFG { nodes, edges }
+    }
+
+    pub fn reachable(&self) -> CFG {
+        if self.nodes.len() > 1 {
+            let mut new_nodes = vec![self.nodes[0].clone()];
+            let mut new_edges = vec![self.edges[0].clone()];
+            let reachables = self
+                .preorder()
+                .enumerate()
+                .map(|x| x.0)
+                .collect::<FnvHashSet<_>>();
+            let mut skipped = vec![0; self.nodes.len()];
+            for index in 1..self.nodes.len() {
+                skipped[index] = skipped[index - 1];
+                if reachables.contains(&index) {
+                    new_nodes.push(self.nodes[index].clone());
+                    new_edges.push(self.edges[index].clone());
+                } else {
+                    skipped[index] += 1;
+                }
+            }
+            for edge in new_edges.iter_mut() {
+                if let Some(target) = edge[0] {
+                    edge[0] = Some(target - skipped[target])
+                }
+                if let Some(target) = edge[1] {
+                    edge[1] = Some(target - skipped[target])
+                }
+            }
+            CFG {
+                nodes: new_nodes,
+                edges: new_edges,
+            }
+        } else {
+            self.clone()
+        }
     }
 }
 
@@ -612,5 +648,51 @@ mod tests {
         let cfg = CFG::new(&stmts, &arch);
         let cfg_with_sink = cfg.add_sink();
         assert_eq!(cfg.len(), cfg_with_sink.len());
+    }
+
+    #[test]
+    fn reachable_empty() {
+        let stmts = Vec::new();
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let cfg_only_reachables = cfg.reachable();
+        assert!(cfg_only_reachables.is_empty());
+    }
+
+    #[test]
+    fn reachable_all() {
+        let nodes = (0..)
+            .take(4)
+            .map(|x| BasicBlock {
+                id: x,
+                first: 0,
+                last: 0,
+            })
+            .collect();
+        let edges = vec![
+            [Some(1), None],
+            [Some(2), None],
+            [Some(3), None],
+            [None, None],
+        ];
+        let cfg = CFG { nodes, edges };
+        let cfg_only_reachables = cfg.reachable();
+        assert_eq!(cfg_only_reachables.len(), cfg.len());
+    }
+
+    #[test]
+    fn reachable_some() {
+        let nodes = (0..)
+            .take(4)
+            .map(|x| BasicBlock {
+                id: x,
+                first: 0,
+                last: 0,
+            })
+            .collect();
+        let edges = vec![[Some(1), None], [None, None], [Some(3), None], [None, None]];
+        let cfg = CFG { nodes, edges };
+        let cfg_only_reachables = cfg.reachable();
+        assert_eq!(cfg_only_reachables.len(), 2);
     }
 }
