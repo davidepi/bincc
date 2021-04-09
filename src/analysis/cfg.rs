@@ -17,6 +17,8 @@ use std::path::Path;
 pub struct CFG {
     nodes: Vec<BasicBlock>,
     edges: Vec<[Option<usize>; 2]>,
+    // mapping basic block ids to position in the nodes/edges vector
+    idmap: FnvHashMap<usize, usize>,
 }
 
 /// Minimum portion of code without any jump.
@@ -174,7 +176,11 @@ impl CFG {
     ///
     /// Returns None if there is no next block.
     pub fn next(&self, id: usize) -> Option<usize> {
-        self.edges[id][0]
+        if let Some(index) = self.idmap.get(&id) {
+            self.edges[*index][0]
+        } else {
+            None
+        }
     }
 
     /// Returns the conditional basic block.
@@ -182,7 +188,11 @@ impl CFG {
     /// Given a basic block id, returns the basic block id of the conditional jump target.
     /// If the current block does not end with a conditional jump, None is returned.
     pub fn cond(&self, id: usize) -> Option<usize> {
-        self.edges[id][1]
+        if let Some(index) = self.idmap.get(&id) {
+            self.edges[*index][1]
+        } else {
+            None
+        }
     }
 
     /// Returns the number of blocks in this CFG.
@@ -250,6 +260,8 @@ impl CFG {
             .collect::<BTreeSet<_>>();
         let mut nodes = self.nodes.clone();
         let mut edges = self.edges.clone();
+        let mut idmap = self.idmap.clone();
+        idmap.insert(nodes.len(), nodes.len());
         if exit_nodes.len() > 1 {
             let sink = BasicBlock {
                 id: nodes.len(),
@@ -268,7 +280,11 @@ impl CFG {
                 })
                 .collect();
         }
-        CFG { nodes, edges }
+        CFG {
+            nodes,
+            edges,
+            idmap,
+        }
     }
 
     /// Removes unreachable nodes.
@@ -279,6 +295,7 @@ impl CFG {
         if self.nodes.len() > 1 {
             let mut new_nodes = vec![self.nodes[0].clone()];
             let mut new_edges = vec![self.edges[0]];
+            let mut new_idmap = FnvHashMap::default();
             let reachables = self
                 .preorder()
                 .enumerate()
@@ -288,6 +305,7 @@ impl CFG {
             for index in 1..self.nodes.len() {
                 skipped[index] = skipped[index - 1];
                 if reachables.contains(&index) {
+                    new_idmap.insert(self.nodes[index].id, new_nodes.len());
                     new_nodes.push(self.nodes[index].clone());
                     new_edges.push(self.edges[index]);
                 } else {
@@ -305,6 +323,7 @@ impl CFG {
             CFG {
                 nodes: new_nodes,
                 edges: new_edges,
+                idmap: new_idmap,
             }
         } else {
             self.clone()
@@ -443,6 +462,7 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
             last: 0,
         })
         .collect::<Vec<_>>();
+    let idmap = (0..).take(nodes.len()).map(|x| (x, x)).collect();
     // fill ending statement
     let mut nodes_iter = tgmap.targets.iter().enumerate().peekable();
     while let Some(target) = nodes_iter.next() {
@@ -461,43 +481,49 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
         Vec::new()
     };
     // map every offset to the block id
-    let id_map = tgmap
+    let offset_id_map = tgmap
         .targets
         .iter()
         .enumerate()
         .map(|x| (*x.1, x.0))
         .collect::<FnvHashMap<_, _>>();
     for jmp in tgmap.srcs_uncond {
-        let src_id = resolve_bb_id(jmp.0, &id_map, &tgmap.targets);
-        let dst_id = resolve_bb_id(jmp.1, &id_map, &tgmap.targets);
+        let src_id = resolve_bb_id(jmp.0, &offset_id_map, &tgmap.targets);
+        let dst_id = resolve_bb_id(jmp.1, &offset_id_map, &tgmap.targets);
         edges[src_id][0] = Some(dst_id);
     }
     for jmp in tgmap.srcs_cond {
-        let src_id = resolve_bb_id(jmp.0, &id_map, &tgmap.targets);
-        let dst_id = resolve_bb_id(jmp.1, &id_map, &tgmap.targets);
+        let src_id = resolve_bb_id(jmp.0, &offset_id_map, &tgmap.targets);
+        let dst_id = resolve_bb_id(jmp.1, &offset_id_map, &tgmap.targets);
         edges[src_id][1] = Some(dst_id);
     }
     for ret in tgmap.deadend_uncond {
-        let src_id = resolve_bb_id(ret, &id_map, &tgmap.targets);
+        let src_id = resolve_bb_id(ret, &offset_id_map, &tgmap.targets);
         edges[src_id][0] = None;
     }
     for ret in tgmap.deadend_cond {
-        let src_id = resolve_bb_id(ret, &id_map, &tgmap.targets);
+        let src_id = resolve_bb_id(ret, &offset_id_map, &tgmap.targets);
         edges[src_id][1] = None;
     }
-    CFG { nodes, edges }
+    CFG {
+        nodes,
+        edges,
+        idmap,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::analysis::{BasicBlock, CFG};
     use crate::disasm::{ArchX86, Statement};
+    use fnv::FnvHashMap;
 
     #[test]
     fn preorder_empty() {
         let cfg = CFG {
             nodes: Vec::new(),
             edges: Vec::new(),
+            idmap: FnvHashMap::default(),
         };
         let order = cfg.preorder();
         assert_eq!(order.count(), 0)
@@ -522,7 +548,12 @@ mod tests {
             [Some(6), None],
             [None, None],
         ];
-        let cfg = CFG { nodes, edges };
+        let idmap = (0..).take(7).map(|x| (x, x)).collect();
+        let cfg = CFG {
+            nodes,
+            edges,
+            idmap,
+        };
         let expected = vec![0, 1, 6, 2, 3, 5, 4];
         for (index, val) in cfg.preorder().enumerate() {
             assert_eq!(val.id, expected[index]);
@@ -534,6 +565,7 @@ mod tests {
         let cfg = CFG {
             nodes: Vec::new(),
             edges: Vec::new(),
+            idmap: FnvHashMap::default(),
         };
         let order = cfg.postorder();
         assert_eq!(order.count(), 0)
@@ -558,7 +590,12 @@ mod tests {
             [Some(6), None],
             [None, None],
         ];
-        let cfg = CFG { nodes, edges };
+        let idmap = (0..).take(7).map(|x| (x, x)).collect();
+        let cfg = CFG {
+            nodes,
+            edges,
+            idmap,
+        };
         let expected = vec![6, 1, 5, 3, 4, 2, 0];
         for (index, val) in cfg.postorder().enumerate() {
             assert_eq!(val.id, expected[index]);
@@ -768,7 +805,12 @@ mod tests {
             [Some(3), None],
             [None, None],
         ];
-        let cfg = CFG { nodes, edges };
+        let idmap = (0..).take(4).map(|x| (x, x)).collect();
+        let cfg = CFG {
+            nodes,
+            edges,
+            idmap,
+        };
         let cfg_only_reachables = cfg.reachable();
         assert_eq!(cfg_only_reachables.len(), cfg.len());
     }
@@ -784,8 +826,37 @@ mod tests {
             })
             .collect();
         let edges = vec![[Some(1), None], [None, None], [Some(3), None], [None, None]];
-        let cfg = CFG { nodes, edges };
+        let idmap = (0..).take(4).map(|x| (x, x)).collect();
+        let cfg = CFG {
+            nodes,
+            edges,
+            idmap,
+        };
         let cfg_only_reachables = cfg.reachable();
         assert_eq!(cfg_only_reachables.len(), 2);
+    }
+
+    #[test]
+    fn reference_unreachable() {
+        // add unreachable nodes, then reference them when asking for next
+        // assert no panic
+        let nodes = (0..)
+            .take(4)
+            .map(|x| BasicBlock {
+                id: x,
+                first: 0,
+                last: 0,
+            })
+            .collect();
+        let edges = vec![[Some(1), None], [None, None], [Some(3), None], [None, None]];
+        let idmap = (0..).take(4).map(|x| (x, x)).collect();
+        let cfg = CFG {
+            nodes,
+            edges,
+            idmap,
+        };
+        let cfg_only_reachables = cfg.reachable();
+        assert!(cfg.next(2).is_some());
+        assert!(cfg_only_reachables.next(2).is_none());
     }
 }
