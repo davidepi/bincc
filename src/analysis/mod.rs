@@ -4,4 +4,5 @@ pub use self::cfg::CFGIter;
 pub use self::cfg::CFG;
 mod blocks;
 pub use self::blocks::AbstractBlock;
+pub use self::blocks::BlockType;
 pub use self::blocks::StructureBlock;
