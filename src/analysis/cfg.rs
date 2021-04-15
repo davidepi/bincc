@@ -1,3 +1,4 @@
+use crate::analysis::Graph;
 use crate::disasm::{Architecture, JumpType, Statement};
 use fnv::{FnvHashMap, FnvHashSet};
 use parse_int::parse;
@@ -58,19 +59,6 @@ impl Display for CFG {
     }
 }
 
-/// An iterator for contents of a CFG.
-pub struct CFGIter<'a> {
-    stack: Vec<&'a BasicBlock>,
-}
-
-impl<'a> Iterator for CFGIter<'a> {
-    type Item = &'a BasicBlock;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.stack.pop()
-    }
-}
-
 impl CFG {
     /// Creates a new CFG from a list of statements.
     ///
@@ -83,7 +71,7 @@ impl CFG {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::analysis::CFG;
+    /// use bcc::analysis::{Graph, CFG};
     /// use bcc::disasm::{ArchX86, Statement};
     ///
     /// let stmts = vec![
@@ -101,71 +89,6 @@ impl CFG {
     /// ```
     pub fn new(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
         build_cfg(stmts, arch)
-    }
-
-    /// Visits the CFG nodes in pre-order.
-    ///
-    /// Returns an iterator visiting every node reachable from the CFG root using a depth-first
-    /// pre-order.
-    pub fn preorder(&self) -> CFGIter {
-        if !self.is_empty() {
-            let mut buffer = vec![0];
-            let mut retval = Vec::with_capacity(self.nodes.len());
-            let mut marked = vec![false; self.nodes.len()];
-            while let Some(current_id) = buffer.pop() {
-                let current = &self.nodes[current_id];
-                retval.push(current);
-                marked[current_id] = true;
-                let children = self.edges[current_id];
-                for maybe_child in children.iter().rev() {
-                    if let Some(child_id) = maybe_child {
-                        if !marked[*child_id] {
-                            marked[*child_id] = true;
-                            buffer.push(*child_id);
-                        }
-                    }
-                }
-            }
-            retval.reverse();
-            CFGIter { stack: retval }
-        } else {
-            CFGIter { stack: Vec::new() }
-        }
-    }
-
-    /// Visits the CFG nodes in post-order.
-    ///
-    /// Returns an iterator visiting every node reachable from the CFG root using a depth-first
-    /// post-order.
-    pub fn postorder(&self) -> CFGIter {
-        if !self.is_empty() {
-            let mut buffer = vec![0];
-            let mut retval = Vec::with_capacity(self.nodes.len());
-            let mut marked = vec![false; self.nodes.len()];
-            while let Some(current_id) = buffer.last() {
-                let mut to_push = Vec::new();
-                marked[*current_id] = true;
-                let children = self.edges[*current_id];
-                for maybe_child in children.iter().rev() {
-                    if let Some(child_id) = maybe_child {
-                        if !marked[*child_id] {
-                            marked[*child_id] = true;
-                            to_push.push(*child_id);
-                        }
-                    }
-                }
-                if to_push.is_empty() {
-                    let current = &self.nodes[buffer.pop().unwrap()];
-                    retval.push(current);
-                } else {
-                    buffer.append(&mut to_push);
-                }
-            }
-            retval.reverse();
-            CFGIter { stack: retval }
-        } else {
-            CFGIter { stack: Vec::new() }
-        }
     }
 
     /// Returns the next basic block.
@@ -193,16 +116,6 @@ impl CFG {
         } else {
             None
         }
-    }
-
-    /// Returns the number of blocks in this CFG.
-    pub fn len(&self) -> usize {
-        self.nodes.len()
-    }
-
-    /// Returns true if the current CFG is empty.
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
     }
 
     /// Converts the current CFG into a Graphviz dot representation.
@@ -328,6 +241,31 @@ impl CFG {
         } else {
             self.clone()
         }
+    }
+}
+
+impl Graph for CFG {
+    type Item = BasicBlock;
+
+    fn node(&self, id: usize) -> Option<&Self::Item> {
+        if let Some(index) = self.idmap.get(&id) {
+            Some(&self.nodes[*index])
+        } else {
+            None
+        }
+    }
+
+    fn children(&self, id: usize) -> Option<Vec<usize>> {
+        if let Some(index) = self.idmap.get(&id) {
+            let retval = self.edges[*index].iter().filter_map(|x| *x).collect();
+            Some(retval)
+        } else {
+            None
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.nodes.len()
     }
 }
 
@@ -514,92 +452,79 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
 
 #[cfg(test)]
 mod tests {
-    use crate::analysis::{BasicBlock, CFG};
+    use crate::analysis::{BasicBlock, Graph, CFG};
     use crate::disasm::{ArchX86, Statement};
-    use fnv::FnvHashMap;
 
     #[test]
-    fn preorder_empty() {
-        let cfg = CFG {
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            idmap: FnvHashMap::default(),
-        };
-        let order = cfg.preorder();
-        assert_eq!(order.count(), 0)
+    fn get_node_nonexisting() {
+        let stmts = Vec::new();
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let node = cfg.node(0);
+        assert!(node.is_none())
     }
 
     #[test]
-    fn preorder() {
-        let nodes = (0..)
-            .take(7)
-            .map(|x| BasicBlock {
-                id: x,
-                first: 0,
-                last: 0,
-            })
-            .collect();
-        let edges = vec![
-            [Some(1), Some(2)],
-            [Some(6), None],
-            [Some(3), Some(4)],
-            [Some(5), None],
-            [Some(5), None],
-            [Some(6), None],
-            [None, None],
+    fn get_node_existing() {
+        let stmts = vec![
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x624, "ret"),
         ];
-        let idmap = (0..).take(7).map(|x| (x, x)).collect();
-        let cfg = CFG {
-            nodes,
-            edges,
-            idmap,
-        };
-        let expected = vec![0, 1, 6, 2, 3, 5, 4];
-        for (index, val) in cfg.preorder().enumerate() {
-            assert_eq!(val.id, expected[index]);
-        }
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let node = cfg.node(0);
+        assert!(node.is_some());
+        assert_eq!(node.unwrap().first, 0x61C);
     }
 
     #[test]
-    fn postorder_empty() {
-        let cfg = CFG {
-            nodes: Vec::new(),
-            edges: Vec::new(),
-            idmap: FnvHashMap::default(),
-        };
-        let order = cfg.postorder();
-        assert_eq!(order.count(), 0)
+    fn get_children_nonexisting() {
+        let stmts = Vec::new();
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let children = cfg.children(0);
+        assert!(children.is_none())
     }
 
     #[test]
-    fn postorder() {
-        let nodes = (0..)
-            .take(7)
-            .map(|x| BasicBlock {
-                id: x,
-                first: 0,
-                last: 0,
-            })
-            .collect();
-        let edges = vec![
-            [Some(1), Some(2)],
-            [Some(6), None],
-            [Some(3), Some(4)],
-            [Some(5), None],
-            [Some(5), None],
-            [Some(6), None],
-            [None, None],
+    fn get_children_existing_empty() {
+        let stmts = vec![
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x624, "ret"),
         ];
-        let idmap = (0..).take(7).map(|x| (x, x)).collect();
-        let cfg = CFG {
-            nodes,
-            edges,
-            idmap,
-        };
-        let expected = vec![6, 1, 5, 3, 4, 2, 0];
-        for (index, val) in cfg.postorder().enumerate() {
-            assert_eq!(val.id, expected[index]);
-        }
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let children = cfg.children(0);
+        assert!(children.is_some());
+        assert!(children.unwrap().is_empty());
+    }
+
+    #[test]
+    fn get_children_existing() {
+        let stmts = vec![
+            Statement::new(0x610, "test edi, edi"),
+            Statement::new(0x612, "je 0x618"),
+            Statement::new(0x614, "mov eax, 6"),
+            Statement::new(0x618, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let children = cfg.children(0);
+        assert!(children.is_some());
+        assert_eq!(children.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn len() {
+        let stmts = vec![
+            Statement::new(0x610, "test edi, edi"),
+            Statement::new(0x612, "je 0x618"),
+            Statement::new(0x614, "mov eax, 6"),
+            Statement::new(0x618, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert_eq!(cfg.len(), 3);
     }
 
     #[test]
