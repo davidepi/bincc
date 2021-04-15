@@ -33,7 +33,7 @@ pub struct CFG {
 ///
 /// This class does not contains the actual statements, rather than their offsets in the original
 /// code.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct BasicBlock {
     /// Numerical integer representing an unique identifier for this block.
     pub id: usize,
@@ -91,16 +91,32 @@ impl CFG {
         build_cfg(stmts, arch)
     }
 
+    /// Returns the root of the CFG.
+    ///
+    /// Returns None if the CFG is empty.
+    pub fn root(&self) -> Option<&BasicBlock> {
+        self.nodes.first()
+    }
+
     /// Returns the next basic block.
     ///
-    /// Given a basic block id, returns the basic block id of its follower.
+    /// Given an optional basic block, returns its follower.
     /// This means the target of an unconditional jump or the next block in case the current block
     /// ends with a conditional jump.
     ///
-    /// Returns None if there is no next block.
-    pub fn next(&self, id: usize) -> Option<usize> {
-        if let Some(index) = self.idmap.get(&id) {
-            self.edges[*index][0]
+    /// Returns None if there is no next block, the current basic block does not belong to this CFG
+    /// or the original BasicBlock is None.
+    pub fn next(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
+        if let Some(bb) = block {
+            if let Some(index) = self.idmap.get(&bb.id) {
+                if let Some(next_index) = self.edges[*index][0] {
+                    Some(&self.nodes[next_index])
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -108,11 +124,21 @@ impl CFG {
 
     /// Returns the conditional basic block.
     ///
-    /// Given a basic block id, returns the basic block id of the conditional jump target.
-    /// If the current block does not end with a conditional jump, None is returned.
-    pub fn cond(&self, id: usize) -> Option<usize> {
-        if let Some(index) = self.idmap.get(&id) {
-            self.edges[*index][1]
+    /// Given an optional basic block, returns the conditional jump target.
+    ///
+    /// Returns None if the current basic block does not have conditiona jumps, does not belong to
+    /// this CFG or the original BasicBlock is None.
+    pub fn cond(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
+        if let Some(bb) = block {
+            if let Some(index) = self.idmap.get(&bb.id) {
+                if let Some(cond_index) = self.edges[*index][1] {
+                    Some(&self.nodes[cond_index])
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -528,6 +554,26 @@ mod tests {
     }
 
     #[test]
+    fn root_empty() {
+        let stmts = Vec::new();
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert!(cfg.root().is_none());
+    }
+
+    #[test]
+    fn root() {
+        let stmts = vec![
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x624, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert!(cfg.root().is_some());
+        assert_eq!(cfg.root().unwrap().first, 0x61C);
+    }
+
+    #[test]
     fn build_cfg_empty() {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
@@ -552,14 +598,15 @@ mod tests {
         let cfg = CFG::new(&stmts, &arch);
         assert!(!cfg.is_empty());
         assert_eq!(cfg.len(), 4);
-        assert_eq!(cfg.next(0), Some(1));
-        assert_eq!(cfg.cond(0), Some(3));
-        assert_eq!(cfg.next(1), Some(2));
-        assert_eq!(cfg.cond(1), Some(3));
-        assert!(cfg.next(2).is_none());
-        assert!(cfg.cond(2).is_none());
-        assert!(cfg.next(3).is_none());
-        assert!(cfg.cond(3).is_none());
+        let root = cfg.root();
+        assert_eq!(cfg.next(root), cfg.node(1));
+        assert_eq!(cfg.cond(root), cfg.node(3));
+        assert_eq!(cfg.next(cfg.node(1)), cfg.node(2));
+        assert_eq!(cfg.cond(cfg.node(1)), cfg.node(3));
+        assert!(cfg.next(cfg.node(2)).is_none());
+        assert!(cfg.cond(cfg.node(2)).is_none());
+        assert!(cfg.next(cfg.node(3)).is_none());
+        assert!(cfg.cond(cfg.node(3)).is_none());
     }
 
     #[test]
@@ -580,14 +627,14 @@ mod tests {
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 4);
-        assert_eq!(cfg.next(0), Some(1));
-        assert_eq!(cfg.cond(0), Some(2));
-        assert_eq!(cfg.next(1), Some(3));
-        assert!(cfg.cond(1).is_none());
-        assert_eq!(cfg.next(2), Some(3));
-        assert!(cfg.cond(2).is_none());
-        assert!(cfg.next(3).is_none());
-        assert!(cfg.cond(3).is_none());
+        assert_eq!(cfg.next(cfg.root()), cfg.node(1));
+        assert_eq!(cfg.cond(cfg.root()), cfg.node(2));
+        assert_eq!(cfg.next(cfg.node(1)), cfg.node(3));
+        assert!(cfg.cond(cfg.node(1)).is_none());
+        assert_eq!(cfg.next(cfg.node(2)), cfg.node(3));
+        assert!(cfg.cond(cfg.node(2)).is_none());
+        assert!(cfg.next(cfg.node(3)).is_none());
+        assert!(cfg.cond(cfg.node(3)).is_none());
     }
 
     #[test]
@@ -604,12 +651,12 @@ mod tests {
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 5);
-        assert_eq!(cfg.next(0), Some(1));
-        assert_eq!(cfg.cond(0), Some(2));
-        assert!(cfg.next(1).is_none());
-        assert!(cfg.cond(1).is_none());
-        assert!(cfg.next(2).is_none());
-        assert!(cfg.cond(2).is_none());
+        assert_eq!(cfg.next(cfg.root()), cfg.node(1));
+        assert_eq!(cfg.cond(cfg.root()), cfg.node(2));
+        assert!(cfg.next(cfg.node(1)).is_none());
+        assert!(cfg.cond(cfg.node(1)).is_none());
+        assert!(cfg.next(cfg.node(2)).is_none());
+        assert!(cfg.cond(cfg.node(2)).is_none());
     }
 
     #[test]
@@ -627,14 +674,14 @@ mod tests {
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 4);
-        assert_eq!(cfg.next(0), Some(1));
-        assert_eq!(cfg.cond(0), Some(3));
-        assert_eq!(cfg.next(1), Some(2));
-        assert_eq!(cfg.cond(1), Some(3));
-        assert!(cfg.next(2).is_none());
-        assert!(cfg.cond(2).is_none());
-        assert!(cfg.next(3).is_none());
-        assert!(cfg.cond(3).is_none());
+        assert_eq!(cfg.next(cfg.root()), cfg.node(1));
+        assert_eq!(cfg.cond(cfg.root()), cfg.node(3));
+        assert_eq!(cfg.next(cfg.node(1)), cfg.node(2));
+        assert_eq!(cfg.cond(cfg.node(1)), cfg.node(3));
+        assert!(cfg.next(cfg.node(2)).is_none());
+        assert!(cfg.cond(cfg.node(2)).is_none());
+        assert!(cfg.next(cfg.node(3)).is_none());
+        assert!(cfg.cond(cfg.node(3)).is_none());
         assert_eq!(cfg[0].first, 0x610);
         assert_eq!(cfg[0].last, 0x614);
         assert_eq!(cfg[1].first, 0x618);
@@ -781,7 +828,7 @@ mod tests {
             idmap,
         };
         let cfg_only_reachables = cfg.reachable();
-        assert!(cfg.next(2).is_some());
-        assert!(cfg_only_reachables.next(2).is_none());
+        assert!(cfg.next(cfg.node(2)).is_some());
+        assert!(cfg_only_reachables.next(cfg.node(2)).is_none());
     }
 }
