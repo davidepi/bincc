@@ -1,14 +1,16 @@
 use crate::analysis::Graph;
 use crate::disasm::{Architecture, JumpType, Statement};
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashMap;
 use parse_int::parse;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io;
 use std::io::Write;
-use std::ops::Index;
 use std::path::Path;
+use std::rc::Rc;
+
+const SINK_ADDR: u64 = u64::MAX;
 
 /// A Control Flow Graph.
 ///
@@ -16,10 +18,8 @@ use std::path::Path;
 /// This is a graph representation of all the possible execution paths in a function.
 #[derive(Debug, Clone)]
 pub struct CFG {
-    nodes: Vec<BasicBlock>,
-    edges: Vec<[Option<usize>; 2]>,
-    // mapping basic block ids to position in the nodes/edges vector
-    idmap: FnvHashMap<usize, usize>,
+    root: Option<Rc<BasicBlock>>,
+    edges: HashMap<Rc<BasicBlock>, [Option<Rc<BasicBlock>>; 2]>,
 }
 
 /// Minimum portion of code without any jump.
@@ -33,7 +33,7 @@ pub struct CFG {
 ///
 /// This class does not contains the actual statements, rather than their offsets in the original
 /// code.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct BasicBlock {
     /// Numerical integer representing an unique identifier for this block.
     pub id: usize,
@@ -43,18 +43,49 @@ pub struct BasicBlock {
     pub last: u64,
 }
 
+impl BasicBlock {
+    /// Returns true if the current block is a sink block.
+    ///
+    /// Sink blocks are added by the [CFG::add_sink()] method.
+    pub fn is_sink(&self) -> bool {
+        self.first == self.last && self.first == SINK_ADDR
+    }
+
+    /// Creates a new sink block.
+    fn new_sink() -> BasicBlock {
+        BasicBlock {
+            id: usize::MAX,
+            first: SINK_ADDR,
+            last: SINK_ADDR,
+        }
+    }
+}
+
+impl Default for BasicBlock {
+    fn default() -> Self {
+        BasicBlock::new_sink()
+    }
+}
+
 impl Display for CFG {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let has_sink = self
-            .nodes
+            .edges
             .iter()
-            .filter(|x| x.first == 0x0 && x.last == 0x0)
-            .count()
-            == 1;
-        if has_sink {
-            write!(f, "CFG({}+1, {})", self.nodes.len() - 1, self.edges.len())
+            .filter(|(node, _child)| node.is_sink())
+            .map(|(node, _child)| node)
+            .last();
+        let edges_no = self
+            .edges
+            .iter()
+            .flat_map(|(_node, edge)| edge)
+            .filter_map(Option::Some)
+            .count();
+        if let Some(_sink) = has_sink {
+            //TODO: fix this +0 (filter after filter_map) removing everything equal to sink
+            write!(f, "CFG({}+1, {}+0)", self.len(), edges_no)
         } else {
-            write!(f, "CFG({}, {})", self.nodes.len(), self.edges.len())
+            write!(f, "CFG({}, {})", self.len(), edges_no)
         }
     }
 }
@@ -65,9 +96,9 @@ impl CFG {
     /// Given a list of statements and a source architectures, builds the CFG for that list.
     /// The list of statements is presented as slice.
     ///
-    /// The newly returned CFG will not contain a sink and may present unreachable nodes (mainly due
-    /// to indirect jumps). One should use [CFG::add_sink()] or [CFG::reachable()] to refine the
-    /// CFG.
+    /// The newly returned CFG will not contain a sink and will contain only reachable nodes
+    /// (thus eliminating indirect jumps).
+    /// One should use [CFG::add_sink()] to refine the CFG.
     /// # Examples
     /// Basic usage:
     /// ```
@@ -91,13 +122,6 @@ impl CFG {
         build_cfg(stmts, arch)
     }
 
-    /// Returns the root of the CFG.
-    ///
-    /// Returns None if the CFG is empty.
-    pub fn root(&self) -> Option<&BasicBlock> {
-        self.nodes.first()
-    }
-
     /// Returns the next basic block.
     ///
     /// Given an optional basic block, returns its follower.
@@ -108,9 +132,10 @@ impl CFG {
     /// or the original BasicBlock is None.
     pub fn next(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
         if let Some(bb) = block {
-            if let Some(index) = self.idmap.get(&bb.id) {
-                if let Some(next_index) = self.edges[*index][0] {
-                    Some(&self.nodes[next_index])
+            let maybe_children = self.edges.get(bb);
+            if let Some(children) = maybe_children {
+                if let Some(next) = &children[0] {
+                    Some(next)
                 } else {
                     None
                 }
@@ -126,13 +151,14 @@ impl CFG {
     ///
     /// Given an optional basic block, returns the conditional jump target.
     ///
-    /// Returns None if the current basic block does not have conditiona jumps, does not belong to
+    /// Returns None if the current basic block does not have conditional jumps, does not belong to
     /// this CFG or the original BasicBlock is None.
     pub fn cond(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
         if let Some(bb) = block {
-            if let Some(index) = self.idmap.get(&bb.id) {
-                if let Some(cond_index) = self.edges[*index][1] {
-                    Some(&self.nodes[cond_index])
+            let maybe_children = self.edges.get(bb);
+            if let Some(children) = maybe_children {
+                if let Some(cond) = &children[1] {
+                    Some(cond)
                 } else {
                     None
                 }
@@ -148,28 +174,30 @@ impl CFG {
     pub fn to_dot(&self) -> String {
         let mut content = Vec::new();
         let sink_iter = self
-            .nodes
+            .edges
             .iter()
-            .filter(|x| x.first == 0x0 && x.last == 0x0)
+            .filter(|(node, _child)| node.is_sink())
             .last();
         let sink = if let Some(sink_node) = sink_iter {
-            let id = sink_node.id;
-            content.push(format!("{}[style=\"dotted\"];", id));
-            id
+            content.push("0[style=\"dotted\"];".to_string());
+            sink_node.0.clone()
         } else {
-            usize::MAX
+            Rc::new(BasicBlock::default()) // just use any random node
         };
-        for edge in self.edges.iter().enumerate() {
-            if let Some(next) = edge.1[0] {
-                let dashed = if next == sink {
+        for (node, child) in self.edges.iter() {
+            if let Some(next) = &child[0] {
+                let dashed = if next == &sink {
                     "[style=\"dotted\"];"
                 } else {
                     ""
                 };
-                content.push(format!("{} -> {}{}", edge.0, next, dashed));
+                content.push(format!("{} -> {}{}", node.first, next.first, dashed));
             }
-            if let Some(cond) = edge.1[1] {
-                content.push(format!("{} -> {}[arrowhead=\"empty\"];", edge.0, cond));
+            if let Some(cond) = &child[1] {
+                content.push(format!(
+                    "{} -> {}[arrowhead=\"empty\"];",
+                    node.first, cond.first
+                ));
             }
         }
         format!("digraph {{\n{}\n}}\n", content.join("\n"))
@@ -188,84 +216,26 @@ impl CFG {
     ///
     /// In some cases, a CFG may have multiple nodes without children (like in the case of multiple
     /// return statements). This method merges those nodes by attaching them to a sink. The sink
-    /// is recognizable by having both starting and ending offsets equal to 0.
+    /// is recognizable by calling [BasicBlock::is_sink()].
     pub fn add_sink(&self) -> CFG {
         let exit_nodes = self
             .edges
             .iter()
-            .enumerate()
-            .filter(|x| x.1[0].is_none() && x.1[1].is_none())
-            .map(|x| x.0)
-            .collect::<BTreeSet<_>>();
-        let mut nodes = self.nodes.clone();
+            .filter(|(_, child)| child[0].is_none() && child[1].is_none())
+            .count();
         let mut edges = self.edges.clone();
-        let mut idmap = self.idmap.clone();
-        idmap.insert(nodes.len(), nodes.len());
-        if exit_nodes.len() > 1 {
-            let sink = BasicBlock {
-                id: nodes.len(),
-                first: 0x0,
-                last: 0x0,
-            };
-            nodes.push(sink);
-            edges = edges
-                .into_iter()
-                .map(|x| {
-                    if x[0].is_none() && x[1].is_none() {
-                        [Some(nodes.len() - 1), None]
-                    } else {
-                        x
-                    }
-                })
-                .collect();
+        if exit_nodes > 1 {
+            let sink = Rc::new(BasicBlock::new_sink());
+            for (_, child) in edges.iter_mut() {
+                if child[0].is_none() && child[1].is_none() {
+                    child[0] = Some(sink.clone());
+                }
+            }
+            edges.insert(sink, [None, None]);
         }
         CFG {
-            nodes,
+            root: self.root.clone(),
             edges,
-            idmap,
-        }
-    }
-
-    /// Removes unreachable nodes.
-    ///
-    /// Removes nodes that are not reachable from the CFG root by any path. These nodes are usually
-    /// created when there are indirect jumps in the original statement list.
-    pub fn reachable(&self) -> CFG {
-        if self.nodes.len() > 1 {
-            let mut new_nodes = vec![self.nodes[0].clone()];
-            let mut new_edges = vec![self.edges[0]];
-            let mut new_idmap = FnvHashMap::default();
-            let reachables = self
-                .preorder()
-                .enumerate()
-                .map(|x| x.0)
-                .collect::<FnvHashSet<_>>();
-            let mut skipped = vec![0; self.nodes.len()];
-            for index in 1..self.nodes.len() {
-                skipped[index] = skipped[index - 1];
-                if reachables.contains(&index) {
-                    new_idmap.insert(self.nodes[index].id, new_nodes.len());
-                    new_nodes.push(self.nodes[index].clone());
-                    new_edges.push(self.edges[index]);
-                } else {
-                    skipped[index] += 1;
-                }
-            }
-            for edge in new_edges.iter_mut() {
-                if let Some(target) = edge[0] {
-                    edge[0] = Some(target - skipped[target])
-                }
-                if let Some(target) = edge[1] {
-                    edge[1] = Some(target - skipped[target])
-                }
-            }
-            CFG {
-                nodes: new_nodes,
-                edges: new_edges,
-                idmap: new_idmap,
-            }
-        } else {
-            self.clone()
         }
     }
 }
@@ -273,33 +243,30 @@ impl CFG {
 impl Graph for CFG {
     type Item = BasicBlock;
 
-    fn node(&self, id: usize) -> Option<&Self::Item> {
-        if let Some(index) = self.idmap.get(&id) {
-            Some(&self.nodes[*index])
+    fn root(&self) -> Option<&Self::Item> {
+        if let Some(root) = &self.root {
+            Some(&root)
         } else {
             None
         }
     }
 
-    fn children(&self, id: usize) -> Option<Vec<usize>> {
-        if let Some(index) = self.idmap.get(&id) {
-            let retval = self.edges[*index].iter().filter_map(|x| *x).collect();
-            Some(retval)
+    fn children(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
+        if let Some(children) = self.edges.get(node) {
+            Some(
+                children
+                    .iter()
+                    .flatten()
+                    .map(|x| x.as_ref())
+                    .collect::<Vec<_>>(),
+            )
         } else {
             None
         }
     }
 
     fn len(&self) -> usize {
-        self.nodes.len()
-    }
-}
-
-impl Index<usize> for CFG {
-    type Output = BasicBlock;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.nodes[index]
+        self.edges.len()
     }
 }
 
@@ -386,6 +353,29 @@ fn get_targets(stmts: &[Statement], arch: &dyn Architecture) -> TargetMap {
     }
 }
 
+/// Removes unreachable nodes.
+///
+/// Removes nodes that are not reachable from the CFG root by any path. These nodes are usually
+/// created when there are indirect jumps in the original statement list.
+fn reachable(cfg: CFG) -> CFG {
+    if !cfg.is_empty() {
+        let reachables = cfg.preorder().collect::<HashSet<_>>();
+        // need to clone edges map that uses Rc instead of the reachables set
+        let edges = cfg
+            .edges
+            .clone()
+            .into_iter()
+            .filter(|(node, _child)| reachables.contains(node.as_ref()))
+            .collect::<HashMap<_, _>>();
+        CFG {
+            root: cfg.root,
+            edges,
+        }
+    } else {
+        cfg
+    }
+}
+
 // given an offset (any offset) returns the corresponding basic block id containing it.
 // requires:
 // - the actual offset
@@ -416,141 +406,123 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
     // The +1 is useful so I can use the last statement in the function
     let function_over = stmts.last().unwrap_or(&empty_stmt).get_offset() + 1;
     // create all nodes (without ending statement)
-    let mut nodes = tgmap
+    let mut nodes_tmp = tgmap
         .targets
         .iter()
         .enumerate()
-        .map(|x| BasicBlock {
-            id: x.0,
-            first: *x.1,
+        .map(|(index, target)| BasicBlock {
+            id: index,
+            first: *target,
             last: 0,
         })
         .collect::<Vec<_>>();
-    let idmap = (0..).take(nodes.len()).map(|x| (x, x)).collect();
-    // fill ending statement
+    // fill ending statement offset
     let mut nodes_iter = tgmap.targets.iter().enumerate().peekable();
-    while let Some(target) = nodes_iter.next() {
+    while let Some((index, _)) = nodes_iter.next() {
         let next_target = *nodes_iter.peek().unwrap_or(&(0, &function_over)).1;
         let last_stmt = *all_offsets.range(..next_target).last().unwrap_or(&0);
-        nodes[target.0].last = last_stmt;
+        nodes_tmp[index].last = last_stmt;
     }
+    let nodes = nodes_tmp.into_iter().map(Rc::new).collect::<Vec<_>>();
     let mut edges = if !tgmap.targets.is_empty() {
-        let mut edges = (1..)
-            .take(tgmap.targets.len() - 1)
-            .map(|next| [Some(next), None])
-            .collect::<Vec<_>>();
-        edges.push([None, None]);
+        let mut edges = HashMap::new();
+        let mut iter = nodes.iter().peekable();
+        while let Some(node) = iter.next() {
+            match iter.peek() {
+                Some(next) => edges.insert(node.clone(), [Some((*next).clone()), None]),
+                None => edges.insert(node.clone(), [None, None]),
+            };
+        }
         edges
     } else {
-        Vec::new()
+        HashMap::new()
     };
     // map every offset to the block id
     let offset_id_map = tgmap
         .targets
         .iter()
         .enumerate()
-        .map(|x| (*x.1, x.0))
+        .map(|(index, target)| (*target, index))
         .collect::<FnvHashMap<_, _>>();
-    for jmp in tgmap.srcs_uncond {
-        let src_id = resolve_bb_id(jmp.0, &offset_id_map, &tgmap.targets);
-        let dst_id = resolve_bb_id(jmp.1, &offset_id_map, &tgmap.targets);
-        edges[src_id][0] = Some(dst_id);
+    for (off_src, off_dst) in tgmap.srcs_uncond {
+        let src_id = resolve_bb_id(off_src, &offset_id_map, &tgmap.targets);
+        let dst_id = resolve_bb_id(off_dst, &offset_id_map, &tgmap.targets);
+        edges.get_mut(&nodes[src_id]).unwrap()[0] = Some(nodes[dst_id].clone());
     }
-    for jmp in tgmap.srcs_cond {
-        let src_id = resolve_bb_id(jmp.0, &offset_id_map, &tgmap.targets);
-        let dst_id = resolve_bb_id(jmp.1, &offset_id_map, &tgmap.targets);
-        edges[src_id][1] = Some(dst_id);
+    for (off_src, off_dst) in tgmap.srcs_cond {
+        let src_id = resolve_bb_id(off_src, &offset_id_map, &tgmap.targets);
+        let dst_id = resolve_bb_id(off_dst, &offset_id_map, &tgmap.targets);
+        edges.get_mut(&nodes[src_id]).unwrap()[1] = Some(nodes[dst_id].clone());
     }
     for ret in tgmap.deadend_uncond {
         let src_id = resolve_bb_id(ret, &offset_id_map, &tgmap.targets);
-        edges[src_id][0] = None;
+        edges.get_mut(&nodes[src_id]).unwrap()[0] = None;
     }
     for ret in tgmap.deadend_cond {
         let src_id = resolve_bb_id(ret, &offset_id_map, &tgmap.targets);
-        edges[src_id][1] = None;
+        edges.get_mut(&nodes[src_id]).unwrap()[1] = None;
     }
-    CFG {
-        nodes,
+    reachable(CFG {
+        root: nodes.first().cloned(),
         edges,
-        idmap,
-    }
+    })
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::analysis::cfg::reachable;
     use crate::analysis::{BasicBlock, Graph, CFG};
     use crate::disasm::{ArchX86, Statement};
+    use maplit::hashmap;
+    use std::collections::HashMap;
+    use std::rc::Rc;
 
-    #[test]
-    fn get_node_nonexisting() {
-        let stmts = Vec::new();
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
-        let node = cfg.node(0);
-        assert!(node.is_none())
-    }
-
-    #[test]
-    fn get_node_existing() {
-        let stmts = vec![
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x624, "ret"),
+    //digraph 0->1, 1->2, 2->3
+    fn sequence() -> CFG {
+        let nodes = (0..)
+            .take(4)
+            .map(|x| {
+                Rc::new(BasicBlock {
+                    id: x,
+                    first: 0,
+                    last: 0,
+                })
+            })
+            .collect::<Vec<_>>();
+        let edges = hashmap![
+            nodes[0].clone() => [Some(nodes[1].clone()), None],
+            nodes[1].clone() => [Some(nodes[2].clone()), None],
+            nodes[2].clone() => [Some(nodes[3].clone()), None],
+            nodes[3].clone() => [None, None],
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
-        let node = cfg.node(0);
-        assert!(node.is_some());
-        assert_eq!(node.unwrap().first, 0x61C);
+        CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        }
     }
 
-    #[test]
-    fn get_children_nonexisting() {
-        let stmts = Vec::new();
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
-        let children = cfg.children(0);
-        assert!(children.is_none())
-    }
-
-    #[test]
-    fn get_children_existing_empty() {
-        let stmts = vec![
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x624, "ret"),
+    //digraph 0->1, 2->3 (forced to skip the build_cfg otherwise reachable() will delete 2 and 3)
+    fn two_sequences() -> CFG {
+        let nodes = (0..)
+            .take(4)
+            .map(|x| {
+                Rc::new(BasicBlock {
+                    id: x,
+                    first: 0,
+                    last: 0,
+                })
+            })
+            .collect::<Vec<_>>();
+        let edges = hashmap![
+            nodes[0].clone() => [Some(nodes[1].clone()), None],
+            nodes[1].clone() => [None, None],
+            nodes[2].clone() => [Some(nodes[3].clone()), None],
+            nodes[3].clone() => [None, None],
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
-        let children = cfg.children(0);
-        assert!(children.is_some());
-        assert!(children.unwrap().is_empty());
-    }
-
-    #[test]
-    fn get_children_existing() {
-        let stmts = vec![
-            Statement::new(0x610, "test edi, edi"),
-            Statement::new(0x612, "je 0x618"),
-            Statement::new(0x614, "mov eax, 6"),
-            Statement::new(0x618, "ret"),
-        ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
-        let children = cfg.children(0);
-        assert!(children.is_some());
-        assert_eq!(children.unwrap().len(), 2);
-    }
-
-    #[test]
-    fn len() {
-        let stmts = vec![
-            Statement::new(0x610, "test edi, edi"),
-            Statement::new(0x612, "je 0x618"),
-            Statement::new(0x614, "mov eax, 6"),
-            Statement::new(0x618, "ret"),
-        ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
-        assert_eq!(cfg.len(), 3);
+        CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        }
     }
 
     #[test]
@@ -574,6 +546,56 @@ mod tests {
     }
 
     #[test]
+    fn get_children_nonexisting() {
+        let stmts = Vec::new();
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let children = cfg.children(&BasicBlock::new_sink());
+        assert!(children.is_none())
+    }
+
+    #[test]
+    fn get_children_existing_empty() {
+        let stmts = vec![
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x624, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let children = cfg.children(cfg.root().unwrap());
+        assert!(children.is_some());
+        assert!(children.unwrap().is_empty());
+    }
+
+    #[test]
+    fn get_children_existing() {
+        let stmts = vec![
+            Statement::new(0x610, "test edi, edi"),
+            Statement::new(0x612, "je 0x618"),
+            Statement::new(0x614, "mov eax, 6"),
+            Statement::new(0x618, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let children = cfg.children(cfg.root().unwrap());
+        assert!(children.is_some());
+        assert_eq!(children.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn len() {
+        let stmts = vec![
+            Statement::new(0x610, "test edi, edi"),
+            Statement::new(0x612, "je 0x618"),
+            Statement::new(0x614, "mov eax, 6"),
+            Statement::new(0x618, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert_eq!(cfg.len(), 3);
+    }
+
+    #[test]
     fn build_cfg_empty() {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
@@ -583,113 +605,136 @@ mod tests {
     }
 
     #[test]
+    fn next() {
+        let cfg = sequence();
+        let root = cfg.root();
+        assert!(cfg.next(root).is_some())
+    }
+
+    #[test]
+    fn cond() {
+        let cfg = sequence();
+        let root = cfg.root();
+        assert!(cfg.cond(root).is_none())
+    }
+
+    #[test]
     fn build_cfg_conditional_jumps() {
         let stmts = vec![
-            Statement::new(0x610, "test edi, edi"),
-            Statement::new(0x612, "je 0x620"),
-            Statement::new(0x614, "test esi, esi"),
-            Statement::new(0x616, "mov eax, 5"),
-            Statement::new(0x61b, "je 0x620"),
-            Statement::new(0x61d, "ret"),
-            Statement::new(0x620, "mov eax, 6"),
-            Statement::new(0x625, "ret"),
+            Statement::new(0x610, "test edi, edi"), //0
+            Statement::new(0x612, "je 0x620"),      //0
+            Statement::new(0x614, "test esi, esi"), //1
+            Statement::new(0x616, "mov eax, 5"),    //1
+            Statement::new(0x61b, "je 0x620"),      //1
+            Statement::new(0x61d, "ret"),           //2
+            Statement::new(0x620, "mov eax, 6"),    //3
+            Statement::new(0x625, "ret"),           //3
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         assert!(!cfg.is_empty());
         assert_eq!(cfg.len(), 4);
-        let root = cfg.root();
-        assert_eq!(cfg.next(root), cfg.node(1));
-        assert_eq!(cfg.cond(root), cfg.node(3));
-        assert_eq!(cfg.next(cfg.node(1)), cfg.node(2));
-        assert_eq!(cfg.cond(cfg.node(1)), cfg.node(3));
-        assert!(cfg.next(cfg.node(2)).is_none());
-        assert!(cfg.cond(cfg.node(2)).is_none());
-        assert!(cfg.next(cfg.node(3)).is_none());
-        assert!(cfg.cond(cfg.node(3)).is_none());
+        let node0 = cfg.root();
+        let node1 = cfg.next(node0);
+        let node2 = cfg.next(node1);
+        let node3 = cfg.cond(node1);
+        assert_eq!(node0.unwrap().first, 0x610);
+        assert_eq!(node1.unwrap().first, 0x614);
+        assert_eq!(node2.unwrap().first, 0x61D);
+        assert_eq!(node3.unwrap().first, 0x620);
+        assert!(cfg.next(node2).is_none());
+        assert!(cfg.cond(node2).is_none());
+        assert!(cfg.next(node3).is_none());
+        assert!(cfg.cond(node3).is_none());
     }
 
     #[test]
     fn build_cfg_unconditional_jumps() {
         let stmts = vec![
-            Statement::new(0x61E, "push rbp"),
-            Statement::new(0x61F, "mov rbp, rsp"),
-            Statement::new(0x622, "mov dword [var_4h], edi"),
-            Statement::new(0x625, "mov dword [var_8h], esi"),
-            Statement::new(0x628, "cmp dword [var_4h], 5"),
-            Statement::new(0x62C, "jne 0x633"),
-            Statement::new(0x62E, "mov eax, dword [var_8h]"),
-            Statement::new(0x631, "jmp 0x638"),
-            Statement::new(0x633, "mov eax, 6"),
-            Statement::new(0x638, "pop rbp"),
-            Statement::new(0x639, "ret"),
+            Statement::new(0x61E, "push rbp"),                //0
+            Statement::new(0x61F, "mov rbp, rsp"),            //0
+            Statement::new(0x622, "mov dword [var_4h], edi"), //0
+            Statement::new(0x625, "mov dword [var_8h], esi"), //0
+            Statement::new(0x628, "cmp dword [var_4h], 5"),   //0
+            Statement::new(0x62C, "jne 0x633"),               //0
+            Statement::new(0x62E, "mov eax, dword [var_8h]"), //1
+            Statement::new(0x631, "jmp 0x638"),               //1
+            Statement::new(0x633, "mov eax, 6"),              //2
+            Statement::new(0x638, "pop rbp"),                 //3
+            Statement::new(0x639, "ret"),                     //3
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 4);
-        assert_eq!(cfg.next(cfg.root()), cfg.node(1));
-        assert_eq!(cfg.cond(cfg.root()), cfg.node(2));
-        assert_eq!(cfg.next(cfg.node(1)), cfg.node(3));
-        assert!(cfg.cond(cfg.node(1)).is_none());
-        assert_eq!(cfg.next(cfg.node(2)), cfg.node(3));
-        assert!(cfg.cond(cfg.node(2)).is_none());
-        assert!(cfg.next(cfg.node(3)).is_none());
-        assert!(cfg.cond(cfg.node(3)).is_none());
+        let node0 = cfg.root();
+        let node1 = cfg.next(node0);
+        let node2 = cfg.cond(node0);
+        let node3 = cfg.next(node1);
+        assert_eq!(node0.unwrap().first, 0x61E);
+        assert_eq!(node1.unwrap().first, 0x62E);
+        assert_eq!(node2.unwrap().first, 0x633);
+        assert_eq!(node3.unwrap().first, 0x638);
+        assert!(cfg.cond(node1).is_none());
+        assert!(cfg.cond(node2).is_none());
+        assert!(cfg.next(node3).is_none());
+        assert!(cfg.cond(node3).is_none());
     }
 
     #[test]
     fn build_cfg_long_unconditional_jump() {
         // this is crafted so offsets are completely random
         let stmts = vec![
-            Statement::new(0x610, "test edi, edi"),
-            Statement::new(0x611, "je 0x613"),
-            Statement::new(0x612, "jmp 0xFFFFFFFFFFFFFFFC"),
-            Statement::new(0x613, "jmp 0x600"),
-            Statement::new(0x614, "jmp 0x615"),
-            Statement::new(0x615, "ret"),
+            Statement::new(0x610, "test edi, edi"),          //0
+            Statement::new(0x611, "je 0x613"),               //0
+            Statement::new(0x612, "jmp 0xFFFFFFFFFFFFFFFC"), //1
+            Statement::new(0x613, "jmp 0x600"),              //2
+            Statement::new(0x614, "jmp 0x615"),              //3
+            Statement::new(0x615, "ret"),                    //4
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
-        assert_eq!(cfg.len(), 5);
-        assert_eq!(cfg.next(cfg.root()), cfg.node(1));
-        assert_eq!(cfg.cond(cfg.root()), cfg.node(2));
-        assert!(cfg.next(cfg.node(1)).is_none());
-        assert!(cfg.cond(cfg.node(1)).is_none());
-        assert!(cfg.next(cfg.node(2)).is_none());
-        assert!(cfg.cond(cfg.node(2)).is_none());
+        assert_eq!(cfg.len(), 3);
+        let node0 = cfg.root();
+        let node1 = cfg.next(node0);
+        let node2 = cfg.cond(node0);
+        assert!(cfg.next(node1).is_none());
+        assert!(cfg.cond(node1).is_none());
+        assert!(cfg.next(node2).is_none());
+        assert!(cfg.cond(node2).is_none());
     }
 
     #[test]
     fn build_cfg_bb_offset() {
         let stmts = vec![
-            Statement::new(0x610, "test edi, edi"),
-            Statement::new(0x614, "je 0x628"),
-            Statement::new(0x618, "test esi, esi"),
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x620, "je 0x628"),
-            Statement::new(0x624, "ret"),
-            Statement::new(0x628, "mov eax, 6"),
-            Statement::new(0x62C, "ret"),
+            Statement::new(0x610, "test edi, edi"), //0
+            Statement::new(0x614, "je 0x628"),      //0
+            Statement::new(0x618, "test esi, esi"), //1
+            Statement::new(0x61C, "mov eax, 5"),    //1
+            Statement::new(0x620, "je 0x628"),      //2
+            Statement::new(0x624, "ret"),           //2
+            Statement::new(0x628, "mov eax, 6"),    //3
+            Statement::new(0x62C, "ret"),           //3
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 4);
-        assert_eq!(cfg.next(cfg.root()), cfg.node(1));
-        assert_eq!(cfg.cond(cfg.root()), cfg.node(3));
-        assert_eq!(cfg.next(cfg.node(1)), cfg.node(2));
-        assert_eq!(cfg.cond(cfg.node(1)), cfg.node(3));
-        assert!(cfg.next(cfg.node(2)).is_none());
-        assert!(cfg.cond(cfg.node(2)).is_none());
-        assert!(cfg.next(cfg.node(3)).is_none());
-        assert!(cfg.cond(cfg.node(3)).is_none());
-        assert_eq!(cfg[0].first, 0x610);
-        assert_eq!(cfg[0].last, 0x614);
-        assert_eq!(cfg[1].first, 0x618);
-        assert_eq!(cfg[1].last, 0x620);
-        assert_eq!(cfg[2].first, 0x624);
-        assert_eq!(cfg[2].last, 0x624);
-        assert_eq!(cfg[3].first, 0x628);
-        assert_eq!(cfg[3].last, 0x62C);
+        let node0 = cfg.root();
+        let node1 = cfg.next(node0);
+        let node2 = cfg.next(node1);
+        let node3 = cfg.cond(node0);
+        assert_eq!(cfg.cond(node1), node3);
+        assert!(cfg.next(node2).is_none());
+        assert!(cfg.cond(node2).is_none());
+        assert!(cfg.next(node3).is_none());
+        assert!(cfg.cond(node3).is_none());
+        assert_eq!(node0.unwrap().first, 0x610);
+        assert_eq!(node0.unwrap().last, 0x614);
+        assert_eq!(node1.unwrap().first, 0x618);
+        assert_eq!(node1.unwrap().last, 0x620);
+        assert_eq!(node2.unwrap().first, 0x624);
+        assert_eq!(node2.unwrap().last, 0x624);
+        assert_eq!(node3.unwrap().first, 0x628);
+        assert_eq!(node3.unwrap().last, 0x62C);
     }
 
     #[test]
@@ -754,57 +799,25 @@ mod tests {
 
     #[test]
     fn reachable_empty() {
-        let stmts = Vec::new();
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
-        let cfg_only_reachables = cfg.reachable();
+        let cfg = CFG {
+            root: None,
+            edges: HashMap::new(),
+        };
+        let cfg_only_reachables = reachable(cfg);
         assert!(cfg_only_reachables.is_empty());
     }
 
     #[test]
     fn reachable_all() {
-        let nodes = (0..)
-            .take(4)
-            .map(|x| BasicBlock {
-                id: x,
-                first: 0,
-                last: 0,
-            })
-            .collect();
-        let edges = vec![
-            [Some(1), None],
-            [Some(2), None],
-            [Some(3), None],
-            [None, None],
-        ];
-        let idmap = (0..).take(4).map(|x| (x, x)).collect();
-        let cfg = CFG {
-            nodes,
-            edges,
-            idmap,
-        };
-        let cfg_only_reachables = cfg.reachable();
+        let cfg = sequence();
+        let cfg_only_reachables = reachable(cfg.clone());
         assert_eq!(cfg_only_reachables.len(), cfg.len());
     }
 
     #[test]
     fn reachable_some() {
-        let nodes = (0..)
-            .take(4)
-            .map(|x| BasicBlock {
-                id: x,
-                first: 0,
-                last: 0,
-            })
-            .collect();
-        let edges = vec![[Some(1), None], [None, None], [Some(3), None], [None, None]];
-        let idmap = (0..).take(4).map(|x| (x, x)).collect();
-        let cfg = CFG {
-            nodes,
-            edges,
-            idmap,
-        };
-        let cfg_only_reachables = cfg.reachable();
+        let cfg = two_sequences();
+        let cfg_only_reachables = reachable(cfg);
         assert_eq!(cfg_only_reachables.len(), 2);
     }
 
@@ -812,23 +825,11 @@ mod tests {
     fn reference_unreachable() {
         // add unreachable nodes, then reference them when asking for next
         // assert no panic
-        let nodes = (0..)
-            .take(4)
-            .map(|x| BasicBlock {
-                id: x,
-                first: 0,
-                last: 0,
-            })
-            .collect();
-        let edges = vec![[Some(1), None], [None, None], [Some(3), None], [None, None]];
-        let idmap = (0..).take(4).map(|x| (x, x)).collect();
-        let cfg = CFG {
-            nodes,
-            edges,
-            idmap,
-        };
-        let cfg_only_reachables = cfg.reachable();
-        assert!(cfg.next(cfg.node(2)).is_some());
-        assert!(cfg_only_reachables.next(cfg.node(2)).is_none());
+        let cfg = two_sequences();
+        let cfg_only_reachables = reachable(cfg);
+        let node0 = cfg_only_reachables.root();
+        let node1 = cfg_only_reachables.next(node0);
+        let node2 = cfg_only_reachables.next(node1);
+        assert!(node2.is_none());
     }
 }
