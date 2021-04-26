@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::rc::Rc;
@@ -106,6 +107,108 @@ pub trait Graph {
             GraphIter { stack: Vec::new() }
         }
     }
+
+    /// Returns the list of direct predecessors for each node.
+    ///
+    /// The direct predecessors for a given node are its parent nodes.
+    ///
+    /// The map returned from this method is guaranteed to have an entry for each node in the graph.
+    fn predecessors(&self) -> HashMap<&Self::Item, HashSet<&Self::Item>>
+    where
+        Self::Item: Hash + Eq,
+    {
+        let mut pmap = HashMap::with_capacity(self.len());
+        let visit = self.preorder();
+        for node in visit {
+            // the next line is used to have a set for each node. Otherwise nodes with no children
+            // will never get their entry inside the map.
+            pmap.entry(node).or_insert_with(HashSet::new);
+            let children = self.children(node).unwrap();
+            for child in children {
+                let child_map = pmap.entry(child).or_insert_with(HashSet::new);
+                child_map.insert(node);
+            }
+        }
+        pmap
+    }
+
+    /// Calculates the strongly connected component of the current graph.
+    ///
+    /// Returns a map containing the connected component index assigned to each node belonging to
+    /// the current graph.
+    ///
+    /// This method uses an iterative version of Tarjan's algorithm with O(|V|+|E|) complexity.
+    fn scc(&self) -> HashMap<&Self::Item, usize>
+    where
+        Self::Item: Hash + Eq,
+    {
+        // assign indices to everything (array indexing will be used a lot in this method)
+        let ids = self
+            .preorder()
+            .enumerate()
+            .map(|(index, item)| (item, index))
+            .collect::<HashMap<_, _>>();
+        let mut adj = vec![Vec::new(); ids.len()];
+        for (node, index) in &ids {
+            let children = self
+                .children(node)
+                .unwrap()
+                .into_iter()
+                .flat_map(|x| ids.get(x))
+                .copied()
+                .collect();
+            adj[*index] = children;
+        }
+        let mut lowlink = vec![0; ids.len()];
+        let mut index = vec![usize::MAX; ids.len()];
+        let mut on_stack = vec![false; ids.len()];
+        let mut stack = Vec::new();
+        let mut call_stack = Vec::new();
+        let mut next_scc = 0;
+        let mut sccs = vec![usize::MAX; ids.len()];
+        let mut i = 0;
+        for v in 0..ids.len() {
+            if index[v] == usize::MAX {
+                call_stack.push((v, 0));
+                while let Some((v, mut pi)) = call_stack.pop() {
+                    if pi == 0 {
+                        index[v] = i;
+                        lowlink[v] = i;
+                        i += 1;
+                        stack.push(v);
+                        on_stack[v] = true;
+                    } else if pi > 0 {
+                        lowlink[v] = min(lowlink[v], lowlink[adj[v][pi - 1]]);
+                    }
+                    while pi < adj[v].len() && index[adj[v][pi]] != usize::MAX {
+                        let w = adj[v][pi];
+                        if on_stack[w] {
+                            lowlink[v] = min(lowlink[v], index[w]);
+                        }
+                        pi += 1;
+                    }
+                    if pi < adj[v].len() {
+                        let w = adj[v][pi];
+                        call_stack.push((v, pi + 1));
+                        call_stack.push((w, 0));
+                    } else if lowlink[v] == index[v] {
+                        loop {
+                            let w = stack.pop().unwrap();
+                            on_stack[w] = false;
+                            sccs[w] = next_scc;
+                            if w == v {
+                                break;
+                            }
+                        }
+                        next_scc += 1;
+                    }
+                }
+            }
+        }
+        ids.into_iter()
+            .map(|(node, index)| (node, sccs[index]))
+            .collect()
+    }
 }
 
 /// Generic Directed Graph.
@@ -174,7 +277,7 @@ impl<T: Hash + Eq> Graph for DirectedGraph<T> {
 #[cfg(test)]
 mod tests {
     use crate::analysis::{DirectedGraph, Graph};
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::rc::Rc;
 
     fn diamond() -> DirectedGraph<u8> {
@@ -284,5 +387,55 @@ mod tests {
         for (index, val) in graph.postorder().enumerate() {
             assert_eq!(*val, expected[index]);
         }
+    }
+
+    #[test]
+    fn predecessors_empty() {
+        let graph: DirectedGraph<u8> = DirectedGraph::default();
+        let pmap = graph.predecessors();
+        assert!(pmap.is_empty())
+    }
+
+    #[test]
+    fn predecessors() {
+        let graph = diamond();
+        let pmap = graph.predecessors();
+        assert_eq!(pmap.len(), graph.len());
+        let pred_5 = pmap.get(&5).unwrap();
+        let set = [3, 4].iter().collect::<HashSet<_>>();
+        assert_eq!(pred_5.len(), set.len());
+        for val in pred_5 {
+            assert!(set.contains(val));
+        }
+    }
+
+    #[test]
+    fn sccs_empty() {
+        let graph: DirectedGraph<u8> = DirectedGraph::default();
+        let sccs = graph.scc();
+        assert!(sccs.is_empty())
+    }
+
+    #[test]
+    fn sccs() {
+        let mut graph = diamond();
+        // edit the graph to introduce a cycle
+        let node2 = (graph.adjacency.get_key_value(&2).unwrap().0).clone();
+        let node4 = (graph.adjacency.get_key_value(&4).unwrap().0).clone();
+        let node5 = (graph.adjacency.get_key_value(&5).unwrap().0).clone();
+        let node6 = (graph.adjacency.get_key_value(&6).unwrap().0).clone();
+        graph.adjacency.insert(node4.clone(), vec![node2]);
+        graph.adjacency.insert(node5, vec![node4, node6]);
+        // asserts the sccs indices equalities/inequalities
+        let sccs = graph.scc();
+        assert_ne!(sccs.get(&0).unwrap(), sccs.get(&2).unwrap());
+        assert_ne!(sccs.get(&1).unwrap(), sccs.get(&2).unwrap());
+        assert_eq!(sccs.get(&3).unwrap(), sccs.get(&2).unwrap());
+        assert_eq!(sccs.get(&4).unwrap(), sccs.get(&2).unwrap());
+        assert_eq!(sccs.get(&5).unwrap(), sccs.get(&2).unwrap());
+        assert_ne!(sccs.get(&6).unwrap(), sccs.get(&2).unwrap());
+        assert_ne!(sccs.get(&0).unwrap(), sccs.get(&1).unwrap());
+        assert_ne!(sccs.get(&0).unwrap(), sccs.get(&6).unwrap());
+        assert_ne!(sccs.get(&1).unwrap(), sccs.get(&6).unwrap());
     }
 }
