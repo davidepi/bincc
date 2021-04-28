@@ -18,8 +18,8 @@ const SINK_ADDR: u64 = u64::MAX;
 /// This is a graph representation of all the possible execution paths in a function.
 #[derive(Debug, Clone)]
 pub struct CFG {
-    root: Option<Rc<BasicBlock>>,
-    edges: HashMap<Rc<BasicBlock>, [Option<Rc<BasicBlock>>; 2]>,
+    pub(super) root: Option<Rc<BasicBlock>>,
+    pub(super) edges: HashMap<Rc<BasicBlock>, [Option<Rc<BasicBlock>>; 2]>,
 }
 
 /// Minimum portion of code without any jump.

@@ -9,3 +9,4 @@ mod blocks;
 pub use self::blocks::AbstractBlock;
 pub use self::blocks::BlockType;
 pub use self::blocks::StructureBlock;
+mod cfs;

@@ -11,7 +11,6 @@ use std::rc::Rc;
 /// Note that the *node ID* does not refer to any particular field, it is just an identifier used
 /// to distinguish between various nodes. It is duty of the implementor to use this information
 /// and return the correct node accounting for graph modifications and out of bound requests.
-// TODO: update description after adding SCC and dominator visit
 pub trait Graph {
     /// Type of elements contained in the graph
     type Item: Hash + Eq;
@@ -132,7 +131,7 @@ pub trait Graph {
         pmap
     }
 
-    /// Calculates the strongly connected component of the current graph.
+    /// Calculates the strongly connected components of the current graph.
     ///
     /// Returns a map containing the connected component index assigned to each node belonging to
     /// the current graph.
