@@ -1,15 +1,9 @@
-use crate::analysis::blocks::BlockType::Basic;
-use crate::analysis::{AbstractBlock, BasicBlock, Graph, StructureBlock, CFG};
+use crate::analysis::{BasicBlock, Graph, StructureBlock, CFG};
 use fnv::FnvHashSet;
 use std::array::IntoIter;
-use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::cmp::max;
-use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
-use std::iter::FromIterator;
-use std::ops::Deref;
 use std::rc::Rc;
 
 pub struct CFS<H: Hasher> {
@@ -17,8 +11,20 @@ pub struct CFS<H: Hasher> {
     structure: Option<Box<StructureBlock<H>>>,
 }
 
+impl<H: Hasher> CFS<H> {
+    pub fn new(cfg: &CFG) -> CFS<H> {
+        CFS {
+            cfg: cfg.clone(),
+            structure: build_cfs(cfg),
+        }
+    }
+}
+
 fn build_cfs<H: Hasher>(cfg: &CFG) -> Option<Box<StructureBlock<H>>> {
-    None
+    let scss = cfg.scc();
+    let preds = cfg.predecessors();
+    let _nonat_cfg = remove_natural_loops(&scss, &preds, cfg.clone());
+    todo!()
 }
 
 // calculates the depth of the spanning tree at each node.
@@ -38,7 +44,7 @@ fn calculate_depth(cfg: &CFG) -> HashMap<Rc<BasicBlock>, usize> {
 }
 
 // calculates the exit nodes and target (of the exit) for a node in a particular loop
-fn exits_and_targets<'a>(
+fn exits_and_targets(
     node: &BasicBlock,
     sccs: &HashMap<&BasicBlock, usize>,
     cfg: &CFG,
@@ -84,8 +90,7 @@ fn remove_edges<'a>(
         if let Some(cond) = cfg.cond(Some(node)) {
             if targets.contains(cond) {
                 // remove edge (deferred)
-                let mut current = cfg.edges.get(node).unwrap().clone();
-                current[1] = None;
+                let current = [cfg.edges.get(node).unwrap()[0].clone(), None];
                 changes.push((node_rc.clone(), current));
             } else {
                 // don't remove edge
@@ -100,7 +105,7 @@ fn remove_edges<'a>(
         else if let Some(next) = cfg.next(Some(node)) {
             if targets.contains(next) {
                 // remove edge and swap next and cond
-                let mut current = [cfg.edges.get(node).unwrap()[1].clone(), None];
+                let current = [cfg.edges.get(node).unwrap()[1].clone(), None];
                 changes.push((node_rc.clone(), current));
             } else {
                 // don't remove edge
