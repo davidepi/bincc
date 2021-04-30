@@ -238,6 +238,19 @@ impl CFG {
             edges,
         }
     }
+
+    /// Given a node, returns it's shared reference used internally by the CFG.
+    ///
+    /// This is useful to avoid some caveats with mutability and borrowing without having to clone
+    /// the BasicBlock.
+    ///
+    /// Returns None if the input node does not belong to this graph.
+    pub fn rc(&self, node: &BasicBlock) -> Option<Rc<BasicBlock>> {
+        match self.edges.get_key_value(node) {
+            None => None,
+            Some((rc, _)) => Some(rc.clone()),
+        }
+    }
 }
 
 impl Graph for CFG {

@@ -1,11 +1,16 @@
 use crate::analysis::blocks::BlockType::Basic;
 use crate::analysis::{AbstractBlock, BasicBlock, Graph, StructureBlock, CFG};
+use fnv::FnvHashSet;
 use std::array::IntoIter;
+use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
 use std::iter::FromIterator;
+use std::ops::Deref;
+use std::rc::Rc;
 
 pub struct CFS<H: Hasher> {
     cfg: CFG,
@@ -17,7 +22,7 @@ fn build_cfs<H: Hasher>(cfg: &CFG) -> Option<Box<StructureBlock<H>>> {
 }
 
 // calculates the depth of the spanning tree at each node.
-fn calculate_depth(cfg: &CFG) -> HashMap<&BasicBlock, usize> {
+fn calculate_depth(cfg: &CFG) -> HashMap<Rc<BasicBlock>, usize> {
     let mut depth_map = HashMap::new();
     for node in cfg.postorder() {
         let children = cfg.children(node).unwrap();
@@ -27,17 +32,17 @@ fn calculate_depth(cfg: &CFG) -> HashMap<&BasicBlock, usize> {
                 depth = max(depth, child_depth + 1);
             }
         }
-        depth_map.insert(node, depth);
+        depth_map.insert(cfg.rc(node).unwrap(), depth);
     }
     depth_map
 }
 
 // calculates the exit nodes and target (of the exit) for a node in a particular loop
 fn exits_and_targets<'a>(
-    node: &'a BasicBlock,
-    sccs: &HashMap<&'a BasicBlock, usize>,
-    cfg: &'a CFG,
-) -> (Vec<&'a BasicBlock>, HashSet<&'a BasicBlock>) {
+    node: &BasicBlock,
+    sccs: &HashMap<&BasicBlock, usize>,
+    cfg: &CFG,
+) -> (Vec<Rc<BasicBlock>>, HashSet<Rc<BasicBlock>>) {
     let mut visit = vec![node];
     let mut visited = IntoIter::new([node]).collect::<HashSet<_>>();
     let mut exits = Vec::new();
@@ -48,8 +53,10 @@ fn exits_and_targets<'a>(
         for child in cfg.children(node).unwrap() {
             let child_scc_id = *sccs.get(child).unwrap();
             if child_scc_id != node_scc_id {
-                exits.push(node);
-                targets.insert(child);
+                let node_rc = cfg.rc(node).unwrap();
+                let child_rc = cfg.rc(child).unwrap();
+                exits.push(node_rc);
+                targets.insert(child_rc);
             } else if !visited.contains(child) {
                 // continue the visit only if the scc is the same and the node is not visited
                 // |-> stay in the loop
@@ -64,20 +71,22 @@ fn exits_and_targets<'a>(
 // remove all edges from a CFG that points to a list of targets
 fn remove_edges<'a>(
     node: &'a BasicBlock,
-    targets: &HashSet<&'a BasicBlock>,
+    targets: &HashSet<Rc<BasicBlock>>,
     sccs: &HashMap<&'a BasicBlock, usize>,
-    cfg: &'a CFG,
+    mut cfg: CFG,
 ) -> CFG {
-    //visit again and remove jumps to the targets, except the correct one
+    let mut changes = Vec::new();
     let mut visit = vec![node];
     let mut visited = IntoIter::new([node]).collect::<HashSet<_>>();
-    let mut new_edges = cfg.edges.clone();
     while let Some(node) = visit.pop() {
+        let node_rc = cfg.rc(node).unwrap();
         let node_scc_id = *sccs.get(node).unwrap();
         if let Some(cond) = cfg.cond(Some(node)) {
             if targets.contains(cond) {
-                // remove edge
-                new_edges.get_mut(node).unwrap()[1] = None;
+                // remove edge (deferred)
+                let mut current = cfg.edges.get(node).unwrap().clone();
+                current[1] = None;
+                changes.push((node_rc.clone(), current));
             } else {
                 // don't remove edge
                 let cond_scc_id = *sccs.get(cond).unwrap();
@@ -87,12 +96,12 @@ fn remove_edges<'a>(
                 visited.insert(cond);
             }
         }
-        if let Some(next) = cfg.next(Some(node)) {
+        // impossible that I need to edit both edge and cond: this would not be a loop
+        else if let Some(next) = cfg.next(Some(node)) {
             if targets.contains(next) {
                 // remove edge and swap next and cond
-                let edge = new_edges.get_mut(node).unwrap();
-                edge[0] = edge[1].clone();
-                edge[1] = None;
+                let mut current = [cfg.edges.get(node).unwrap()[1].clone(), None];
+                changes.push((node_rc.clone(), current));
             } else {
                 // don't remove edge
                 let next_scc_id = *sccs.get(next).unwrap();
@@ -103,24 +112,24 @@ fn remove_edges<'a>(
             }
         }
     }
-    CFG {
-        root: cfg.root.clone(),
-        edges: new_edges,
+    for (node, edge) in changes {
+        *cfg.edges.get_mut(&node).unwrap() = edge;
     }
+    cfg
 }
 
 fn denaturate_loop(
     node: &BasicBlock,
     sccs: &HashMap<&BasicBlock, usize>,
-    preds: HashMap<&BasicBlock, HashSet<&BasicBlock>>,
+    preds: &HashMap<&BasicBlock, HashSet<&BasicBlock>>,
+    depth_map: &HashMap<Rc<BasicBlock>, usize>,
     mut cfg: CFG,
 ) -> CFG {
     let (exits, mut targets) = exits_and_targets(node, sccs, &cfg);
     if exits.len() > 1 {
         // harder case, more than 2 output targets, keep the target with the highest depth
         if targets.len() >= 2 {
-            let depth_map = calculate_depth(&cfg);
-            let correct = *targets
+            let correct = targets
                 .iter()
                 .reduce(|a, b| {
                     if depth_map.get(a) > depth_map.get(b) {
@@ -129,22 +138,41 @@ fn denaturate_loop(
                         b
                     }
                 })
-                .unwrap();
-            targets.remove(correct);
-            cfg = remove_edges(node, &targets, sccs, &cfg);
+                .unwrap()
+                .clone();
+            targets.remove(&correct);
+            cfg = remove_edges(node, &targets, sccs, cfg);
         }
     }
     let (mut exits, targets) = exits_and_targets(node, sccs, &cfg);
     exits.sort_by(|a, b| {
         preds
-            .get(a)
+            .get(&**a)
             .unwrap()
             .len()
-            .cmp(&preds.get(b).unwrap().len())
+            .cmp(&preds.get(&**b).unwrap().len())
     });
     if targets.len() == 1 {
-        let correct_exit = IntoIter::new([*exits.last().unwrap()]).collect::<HashSet<_>>();
-        cfg = remove_edges(node, &correct_exit, sccs, &cfg);
+        let correct_exit = IntoIter::new([exits.last().cloned().unwrap()]).collect::<HashSet<_>>();
+        cfg = remove_edges(node, &correct_exit, sccs, cfg);
+    }
+    cfg
+}
+
+fn remove_natural_loops(
+    sccs: &HashMap<&BasicBlock, usize>,
+    preds: &HashMap<&BasicBlock, HashSet<&BasicBlock>>,
+    mut cfg: CFG,
+) -> CFG {
+    let mut loops_done = FnvHashSet::default();
+    let depth_map = calculate_depth(&cfg);
+    let nodes = cfg.edges.keys().cloned().collect::<Vec<_>>();
+    for node in nodes {
+        let scc_id = sccs.get(&*node).unwrap();
+        if !loops_done.contains(scc_id) {
+            cfg = denaturate_loop(&node, sccs, preds, &depth_map, cfg);
+            loops_done.insert(scc_id);
+        }
     }
     cfg
 }
