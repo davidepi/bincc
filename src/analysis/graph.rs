@@ -1,7 +1,6 @@
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::rc::Rc;
 
 /// A trait used to represent a generic graph.
 ///
@@ -214,13 +213,16 @@ pub trait Graph {
 ///
 /// Generic implementation of a directed graph using a vector of neighbours.
 ///
+/// This method stores multiple copies of each node: consider using primitive types or a Reference
+/// Counted pointer.
+///
 /// No constructor or specific methods are provided for this class, as one should update the nodes
 /// and edges vectors manually.
 pub struct DirectedGraph<T> {
     /// root of the graph (if rooted and not empty)
-    pub root: Option<Rc<T>>,
+    pub root: Option<T>,
     // neighbour for a given node in the graph.
-    pub adjacency: HashMap<Rc<T>, Vec<Rc<T>>>,
+    pub adjacency: HashMap<T, Vec<T>>,
 }
 
 /// Iterator for Graph elements.
@@ -260,7 +262,7 @@ impl<T: Hash + Eq> Graph for DirectedGraph<T> {
         if let Some(children) = self.adjacency.get(node) {
             let mut retval = Vec::with_capacity(children.len());
             for child in children {
-                retval.push(&**child);
+                retval.push(&*child);
             }
             Some(retval)
         } else {
@@ -277,10 +279,9 @@ impl<T: Hash + Eq> Graph for DirectedGraph<T> {
 mod tests {
     use crate::analysis::{DirectedGraph, Graph};
     use std::collections::{HashMap, HashSet};
-    use std::rc::Rc;
 
     fn diamond() -> DirectedGraph<u8> {
-        let nodes = (0..).take(7).map(Rc::new).collect::<Vec<_>>();
+        let nodes = (0..).take(7).collect::<Vec<_>>();
         let mut graph = DirectedGraph {
             root: Some(nodes[0].clone()),
             adjacency: HashMap::new(),

@@ -1,18 +1,19 @@
-use crate::analysis::{BasicBlock, Graph, StructureBlock, CFG};
+use crate::analysis::{BasicBlock, Graph, NestedBlock, CFG, DirectedGraph};
 use fnv::FnvHashSet;
 use std::array::IntoIter;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
-use std::hash::Hasher;
+use std::hash::{Hasher, Hash};
 use std::rc::Rc;
+use crate::analysis::blocks::StructureBlock;
 
-pub struct CFS<H: Hasher> {
+pub struct CFS {
     cfg: CFG,
-    structure: Option<Box<StructureBlock<H>>>,
+    structure: Option<Rc<StructureBlock>>,
 }
 
-impl<H: Hasher> CFS<H> {
-    pub fn new(cfg: &CFG) -> CFS<H> {
+impl CFS {
+    pub fn new(cfg: &CFG) -> CFS {
         CFS {
             cfg: cfg.clone(),
             structure: build_cfs(cfg),
@@ -20,11 +21,33 @@ impl<H: Hasher> CFS<H> {
     }
 }
 
-fn build_cfs<H: Hasher>(cfg: &CFG) -> Option<Box<StructureBlock<H>>> {
+fn build_cfs(cfg: &CFG) -> Option<Rc<StructureBlock>> {
     let scss = cfg.scc();
     let preds = cfg.predecessors();
-    let _nonat_cfg = remove_natural_loops(&scss, &preds, cfg.clone());
+    let nonat_cfg = remove_natural_loops(&scss, &preds, cfg.clone());
+    let mut graph = deep_copy(cfg);
+    while graph.len() > 1 {
+
+    }
     todo!()
+}
+
+fn deep_copy(cfg: &CFG) -> DirectedGraph<Rc<StructureBlock>>
+{
+    let mut graph= DirectedGraph::default();
+    let root = cfg.root.unwrap().clone() as Rc<StructureBlock>;
+    graph.root = Some(root.clone());
+    let mut stack = vec![root];
+    let mut visited = HashSet::with_capacity(cfg.len());
+    while let Some(node) = stack.pop() {
+        if !visited.contains(&node) {
+            visited.insert(node);
+            let children = cfg.edges.get(&node).iter().flat_map(|x| x).cloned().collect::<Vec<_>>();
+            graph.adjacency.insert(node.clone(), children.clone());
+            stack.extend(children);
+        }
+    }
+    graph
 }
 
 // calculates the depth of the spanning tree at each node.
