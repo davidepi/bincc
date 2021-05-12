@@ -1,15 +1,14 @@
-use crate::analysis::{BasicBlock, Graph, NestedBlock, CFG, DirectedGraph};
+use crate::analysis::{BasicBlock, Graph, CFG, DirectedGraph};
 use fnv::FnvHashSet;
 use std::array::IntoIter;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
-use std::hash::{Hasher, Hash};
 use std::rc::Rc;
 use crate::analysis::blocks::StructureBlock;
 
 pub struct CFS {
     cfg: CFG,
-    structure: Option<Rc<StructureBlock>>,
+    structure: Option<StructureBlock>,
 }
 
 impl CFS {
@@ -21,30 +20,28 @@ impl CFS {
     }
 }
 
-fn build_cfs(cfg: &CFG) -> Option<Rc<StructureBlock>> {
-    let scss = cfg.scc();
-    let preds = cfg.predecessors();
-    let nonat_cfg = remove_natural_loops(&scss, &preds, cfg.clone());
-    let mut graph = deep_copy(cfg);
+fn build_cfs(cfg: &CFG) -> Option<StructureBlock> {
+    let nonat_cfg = remove_natural_loops(&cfg.scc(), &cfg.predecessors(), cfg.clone());
+    let graph = deep_copy(&nonat_cfg);
     while graph.len() > 1 {
 
     }
     todo!()
 }
 
-fn deep_copy(cfg: &CFG) -> DirectedGraph<Rc<StructureBlock>>
+fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock>
 {
     let mut graph= DirectedGraph::default();
-    let root = cfg.root.unwrap().clone() as Rc<StructureBlock>;
-    graph.root = Some(root.clone());
+    let root = cfg.root.as_ref().unwrap().clone();
+    graph.root = Some(StructureBlock::from(root.clone()));
     let mut stack = vec![root];
     let mut visited = HashSet::with_capacity(cfg.len());
     while let Some(node) = stack.pop() {
         if !visited.contains(&node) {
-            visited.insert(node);
-            let children = cfg.edges.get(&node).iter().flat_map(|x| x).cloned().collect::<Vec<_>>();
-            graph.adjacency.insert(node.clone(), children.clone());
-            stack.extend(children);
+            visited.insert(node.clone());
+            let children = cfg.edges.get(&node).iter().flat_map(|x| x.iter()).flatten().cloned().map(StructureBlock::from).collect();
+            stack.extend(cfg.edges.get(&node).iter().flat_map(|x| x.iter()).flatten().cloned());
+            graph.adjacency.insert(StructureBlock::from(node), children);
         }
     }
     graph
