@@ -1,10 +1,10 @@
-use crate::analysis::{BasicBlock, Graph, CFG, DirectedGraph};
+use crate::analysis::blocks::StructureBlock;
+use crate::analysis::{BasicBlock, DirectedGraph, Graph, CFG};
 use fnv::FnvHashSet;
 use std::array::IntoIter;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
-use crate::analysis::blocks::StructureBlock;
 
 pub struct CFS {
     cfg: CFG,
@@ -29,9 +29,8 @@ fn build_cfs(cfg: &CFG) -> Option<StructureBlock> {
     todo!()
 }
 
-fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock>
-{
-    let mut graph= DirectedGraph::default();
+fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock> {
+    let mut graph = DirectedGraph::default();
     let root = cfg.root.as_ref().unwrap().clone();
     graph.root = Some(StructureBlock::from(root.clone()));
     let mut stack = vec![root];
@@ -39,8 +38,23 @@ fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock>
     while let Some(node) = stack.pop() {
         if !visited.contains(&node) {
             visited.insert(node.clone());
-            let children = cfg.edges.get(&node).iter().flat_map(|x| x.iter()).flatten().cloned().map(StructureBlock::from).collect();
-            stack.extend(cfg.edges.get(&node).iter().flat_map(|x| x.iter()).flatten().cloned());
+            let children = cfg
+                .edges
+                .get(&node)
+                .iter()
+                .flat_map(|x| x.iter())
+                .flatten()
+                .cloned()
+                .map(StructureBlock::from)
+                .collect();
+            stack.extend(
+                cfg.edges
+                    .get(&node)
+                    .iter()
+                    .flat_map(|x| x.iter())
+                    .flatten()
+                    .cloned(),
+            );
             graph.adjacency.insert(StructureBlock::from(node), children);
         }
     }
@@ -206,7 +220,7 @@ fn remove_natural_loops(
 mod tests {
     use crate::analysis::{cfs, BasicBlock, Graph, CFG};
     use maplit::hashmap;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
     use std::rc::Rc;
 
     fn empty() -> CFG {

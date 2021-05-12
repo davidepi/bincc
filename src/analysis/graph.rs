@@ -283,28 +283,16 @@ mod tests {
     fn diamond() -> DirectedGraph<u8> {
         let nodes = (0..).take(7).collect::<Vec<_>>();
         let mut graph = DirectedGraph {
-            root: Some(nodes[0].clone()),
+            root: Some(nodes[0]),
             adjacency: HashMap::new(),
         };
-        graph
-            .adjacency
-            .insert(nodes[0].clone(), vec![nodes[1].clone(), nodes[2].clone()]);
-        graph
-            .adjacency
-            .insert(nodes[1].clone(), vec![nodes[6].clone()]);
-        graph
-            .adjacency
-            .insert(nodes[2].clone(), vec![nodes[3].clone(), nodes[4].clone()]);
-        graph
-            .adjacency
-            .insert(nodes[3].clone(), vec![nodes[5].clone()]);
-        graph
-            .adjacency
-            .insert(nodes[4].clone(), vec![nodes[5].clone()]);
-        graph
-            .adjacency
-            .insert(nodes[5].clone(), vec![nodes[6].clone()]);
-        graph.adjacency.insert(nodes[6].clone(), vec![]);
+        graph.adjacency.insert(nodes[0], vec![nodes[1], nodes[2]]);
+        graph.adjacency.insert(nodes[1], vec![nodes[6]]);
+        graph.adjacency.insert(nodes[2], vec![nodes[3], nodes[4]]);
+        graph.adjacency.insert(nodes[3], vec![nodes[5]]);
+        graph.adjacency.insert(nodes[4], vec![nodes[5]]);
+        graph.adjacency.insert(nodes[5], vec![nodes[6]]);
+        graph.adjacency.insert(nodes[6], vec![]);
         graph
     }
 
@@ -420,11 +408,11 @@ mod tests {
     fn sccs() {
         let mut graph = diamond();
         // edit the graph to introduce a cycle
-        let node2 = (graph.adjacency.get_key_value(&2).unwrap().0).clone();
-        let node4 = (graph.adjacency.get_key_value(&4).unwrap().0).clone();
-        let node5 = (graph.adjacency.get_key_value(&5).unwrap().0).clone();
-        let node6 = (graph.adjacency.get_key_value(&6).unwrap().0).clone();
-        graph.adjacency.insert(node4.clone(), vec![node2]);
+        let node2 = *(graph.adjacency.get_key_value(&2).unwrap().0);
+        let node4 = *(graph.adjacency.get_key_value(&4).unwrap().0);
+        let node5 = *(graph.adjacency.get_key_value(&5).unwrap().0);
+        let node6 = *(graph.adjacency.get_key_value(&6).unwrap().0);
+        graph.adjacency.insert(node4, vec![node2]);
         graph.adjacency.insert(node5, vec![node4, node6]);
         // asserts the sccs indices equalities/inequalities
         let sccs = graph.scc();
