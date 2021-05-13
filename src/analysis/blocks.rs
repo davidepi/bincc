@@ -16,9 +16,9 @@ pub enum BlockType {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct NestedBlock {
-    block_type: BlockType,
-    content: Vec<StructureBlock>,
-    depth: u32,
+    pub(crate) block_type: BlockType,
+    pub(crate) content: Vec<StructureBlock>,
+    pub(crate) depth: u32,
 }
 
 impl NestedBlock {

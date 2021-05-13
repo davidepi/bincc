@@ -1,5 +1,5 @@
 use crate::analysis::blocks::StructureBlock;
-use crate::analysis::{BasicBlock, DirectedGraph, Graph, CFG};
+use crate::analysis::{BasicBlock, BlockType, DirectedGraph, Graph, NestedBlock, CFG};
 use fnv::FnvHashSet;
 use std::array::IntoIter;
 use std::cmp::max;
@@ -8,54 +8,137 @@ use std::rc::Rc;
 
 pub struct CFS {
     cfg: CFG,
-    structure: Option<StructureBlock>,
+    tree: DirectedGraph<StructureBlock>,
 }
 
 impl CFS {
     pub fn new(cfg: &CFG) -> CFS {
         CFS {
             cfg: cfg.clone(),
-            structure: build_cfs(cfg),
+            tree: build_cfs(cfg),
         }
+    }
+
+    pub fn get_tree(&self) -> Option<StructureBlock> {
+        if self.tree.len() == 1 {
+            Some(self.tree.root.clone().unwrap())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_cfg(&self) -> &CFG {
+        &self.cfg
     }
 }
 
-fn build_cfs(cfg: &CFG) -> Option<StructureBlock> {
-    let nonat_cfg = remove_natural_loops(&cfg.scc(), &cfg.predecessors(), cfg.clone());
-    let graph = deep_copy(&nonat_cfg);
-    while graph.len() > 1 {
-
+fn reduce_self_loop(
+    node: &StructureBlock,
+    graph: &DirectedGraph<StructureBlock>,
+) -> Option<(StructureBlock, StructureBlock)> {
+    match node {
+        StructureBlock::Basic(_) => {
+            let children = graph.children(node).unwrap();
+            if children.len() == 2 && children.contains(&node) {
+                let next = children.into_iter().filter(|x| x != &node).last().unwrap();
+                Some((
+                    StructureBlock::from(Rc::new(NestedBlock {
+                        block_type: BlockType::SelfLooping,
+                        content: vec![node.clone()],
+                        depth: node.get_depth() + 1,
+                    })),
+                    next.clone(),
+                ))
+            } else {
+                None
+            }
+        }
+        StructureBlock::Nested(_) => None,
     }
-    todo!()
+}
+
+fn remap_nodes(
+    old: StructureBlock,
+    new: StructureBlock,
+    next: StructureBlock,
+    graph: DirectedGraph<StructureBlock>,
+) -> DirectedGraph<StructureBlock> {
+    if !graph.is_empty() {
+        let mut new_adjacency = HashMap::new();
+        for (node, children) in graph.adjacency.into_iter() {
+            if node != old {
+                let children_replaced = children
+                    .into_iter()
+                    .map(|child| if child != old { child } else { new.clone() })
+                    .collect();
+                new_adjacency.insert(old.clone(), children_replaced);
+            } else {
+                new_adjacency.insert(new.clone(), vec![next.clone()]);
+            }
+        }
+        let new_root = if graph.root.as_ref().unwrap() != &old {
+            graph.root
+        } else {
+            Some(new)
+        };
+        DirectedGraph {
+            root: new_root,
+            adjacency: new_adjacency,
+        }
+    } else {
+        graph
+    }
+}
+
+fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
+    let nonat_cfg = remove_natural_loops(&cfg.scc(), &cfg.predecessors(), cfg.clone());
+    let mut graph = deep_copy(&nonat_cfg);
+    loop {
+        let mut modified = false;
+        for node in graph.postorder() {
+            let reduction = reduce_self_loop(node, &graph);
+            if let Some((new, next)) = reduction {
+                graph = remap_nodes(node.clone(), new, next, graph);
+                modified = true;
+                break;
+            }
+        }
+        if !modified {
+            break;
+        }
+    }
+    graph
 }
 
 fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock> {
     let mut graph = DirectedGraph::default();
-    let root = cfg.root.as_ref().unwrap().clone();
-    graph.root = Some(StructureBlock::from(root.clone()));
-    let mut stack = vec![root];
-    let mut visited = HashSet::with_capacity(cfg.len());
-    while let Some(node) = stack.pop() {
-        if !visited.contains(&node) {
-            visited.insert(node.clone());
-            let children = cfg
-                .edges
-                .get(&node)
-                .iter()
-                .flat_map(|x| x.iter())
-                .flatten()
-                .cloned()
-                .map(StructureBlock::from)
-                .collect();
-            stack.extend(
-                cfg.edges
+    if !graph.is_empty() {
+        let root = cfg.root.as_ref().unwrap().clone();
+        graph.root = Some(StructureBlock::from(root.clone()));
+        let mut stack = vec![root];
+        let mut visited = HashSet::with_capacity(cfg.len());
+        while let Some(node) = stack.pop() {
+            if !visited.contains(&node) {
+                visited.insert(node.clone());
+                let children = cfg
+                    .edges
                     .get(&node)
                     .iter()
                     .flat_map(|x| x.iter())
                     .flatten()
-                    .cloned(),
-            );
-            graph.adjacency.insert(StructureBlock::from(node), children);
+                    .cloned()
+                    .map(StructureBlock::from)
+                    .collect();
+                stack.extend(
+                    cfg.edges
+                        .get(&node)
+                        .iter()
+                        .flat_map(|x| x.iter())
+                        .flatten()
+                        .cloned(),
+                );
+                graph.adjacency.insert(StructureBlock::from(node), children);
+            }
         }
     }
     graph
@@ -218,7 +301,7 @@ fn remove_natural_loops(
 
 #[cfg(test)]
 mod tests {
-    use crate::analysis::{cfs, BasicBlock, Graph, CFG};
+    use crate::analysis::{cfs, BasicBlock, Graph, CFG, CFS};
     use maplit::hashmap;
     use std::collections::HashMap;
     use std::rc::Rc;
@@ -274,5 +357,12 @@ mod tests {
             .map(|x| *depth.get(x).unwrap())
             .collect::<Vec<_>>();
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn constructor_empty() {
+        let cfg = empty();
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_none());
     }
 }
