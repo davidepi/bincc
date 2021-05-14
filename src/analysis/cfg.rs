@@ -246,10 +246,7 @@ impl CFG {
     ///
     /// Returns None if the input node does not belong to this graph.
     pub fn rc(&self, node: &BasicBlock) -> Option<Rc<BasicBlock>> {
-        match self.edges.get_key_value(node) {
-            None => None,
-            Some((rc, _)) => Some(rc.clone()),
-        }
+        self.edges.get_key_value(node).map(|(rc, _)| rc.clone())
     }
 }
 
@@ -257,25 +254,17 @@ impl Graph for CFG {
     type Item = BasicBlock;
 
     fn root(&self) -> Option<&Self::Item> {
-        if let Some(root) = &self.root {
-            Some(&root)
-        } else {
-            None
-        }
+        self.root.as_ref().map(|root| root.as_ref())
     }
 
     fn children(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
-        if let Some(children) = self.edges.get(node) {
-            Some(
-                children
-                    .iter()
-                    .flatten()
-                    .map(|x| x.as_ref())
-                    .collect::<Vec<_>>(),
-            )
-        } else {
-            None
-        }
+        self.edges.get(node).map(|children| {
+            children
+                .iter()
+                .flatten()
+                .map(|x| x.as_ref())
+                .collect::<Vec<_>>()
+        })
     }
 
     fn len(&self) -> usize {

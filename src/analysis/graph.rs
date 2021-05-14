@@ -251,11 +251,7 @@ impl<T: Hash + Eq> Graph for DirectedGraph<T> {
     type Item = T;
 
     fn root(&self) -> Option<&Self::Item> {
-        if let Some(root) = &self.root {
-            Some(&root)
-        } else {
-            None
-        }
+        self.root.as_ref()
     }
 
     fn children(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {

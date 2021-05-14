@@ -35,7 +35,8 @@ impl CFS {
 fn reduce_self_loop(
     node: &StructureBlock,
     graph: &DirectedGraph<StructureBlock>,
-) -> Option<(StructureBlock, StructureBlock)> {
+    _: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+) -> Option<(StructureBlock, Option<StructureBlock>)> {
     match node {
         StructureBlock::Basic(_) => {
             let children = graph.children(node).unwrap();
@@ -47,7 +48,7 @@ fn reduce_self_loop(
                         content: vec![node.clone()],
                         depth: node.get_depth() + 1,
                     })),
-                    next.clone(),
+                    Some(next.clone()),
                 ))
             } else {
                 None
@@ -57,10 +58,62 @@ fn reduce_self_loop(
     }
 }
 
+fn reduce_sequence(
+    node: &StructureBlock,
+    graph: &DirectedGraph<StructureBlock>,
+    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+) -> Option<(StructureBlock, Option<StructureBlock>)> {
+    // conditions for a sequence:
+    // - current node has only one successor node
+    // - successor has only one predecessor (the current node)
+    // - successor has one or none successors
+    //   ^--- this is necessary to avoid a double exit sequence
+    let mut children = graph.children(node).unwrap();
+    if children.len() == 1 {
+        let next = children.pop().unwrap();
+        let mut nextnexts = graph.children(next).unwrap();
+        if preds.get(next).map_or(0, |x| x.len()) == 1 && nextnexts.len() <= 1 {
+            Some((
+                StructureBlock::from(Rc::new(construct_and_flatten_sequence(node, next))),
+                nextnexts.pop().cloned(),
+            ))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+fn construct_and_flatten_sequence(node: &StructureBlock, next: &StructureBlock) -> NestedBlock {
+    let flatten = |node: &StructureBlock| match node {
+        StructureBlock::Basic(_) => {
+            vec![node.clone()]
+        }
+        StructureBlock::Nested(nb) => {
+            if nb.block_type == BlockType::Sequence {
+                nb.content.clone()
+            } else {
+                vec![node.clone()]
+            }
+        }
+    };
+    let content = flatten(node)
+        .into_iter()
+        .chain(flatten(next))
+        .collect::<Vec<_>>();
+    let depth = content.iter().fold(0, |acc, val| val.get_depth().max(acc));
+    NestedBlock {
+        block_type: BlockType::Sequence,
+        content,
+        depth: depth + 1,
+    }
+}
+
 fn remap_nodes(
     old: StructureBlock,
     new: StructureBlock,
-    next: StructureBlock,
+    next: Option<StructureBlock>,
     graph: DirectedGraph<StructureBlock>,
 ) -> DirectedGraph<StructureBlock> {
     if !graph.is_empty() {
@@ -71,9 +124,13 @@ fn remap_nodes(
                     .into_iter()
                     .map(|child| if child != old { child } else { new.clone() })
                     .collect();
-                new_adjacency.insert(old.clone(), children_replaced);
+                new_adjacency.insert(node.clone(), children_replaced);
             } else {
-                new_adjacency.insert(new.clone(), vec![next.clone()]);
+                let replacement = match &next {
+                    None => vec![],
+                    Some(next_unwrapped) => vec![next_unwrapped.clone()],
+                };
+                new_adjacency.insert(new.clone(), replacement);
             }
         }
         let new_root = if graph.root.as_ref().unwrap() != &old {
@@ -81,10 +138,18 @@ fn remap_nodes(
         } else {
             Some(new)
         };
-        DirectedGraph {
+        let mut new_graph = DirectedGraph {
             root: new_root,
             adjacency: new_adjacency,
-        }
+        };
+        //remove unreachable nodes from map (they are now wrapped inside other nodes)
+        let reachables = new_graph.preorder().cloned().collect::<HashSet<_>>();
+        new_graph.adjacency = new_graph
+            .adjacency
+            .into_iter()
+            .filter(|(node, _)| reachables.contains(node))
+            .collect();
+        new_graph
     } else {
         graph
     }
@@ -95,9 +160,17 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
     let mut graph = deep_copy(&nonat_cfg);
     loop {
         let mut modified = false;
+        let preds = graph.predecessors();
         for node in graph.postorder() {
-            let reduction = reduce_self_loop(node, &graph);
-            if let Some((new, next)) = reduction {
+            let reductions = [reduce_self_loop, reduce_sequence];
+            let mut reduced = None;
+            for reduction in &reductions {
+                reduced = (reduction)(node, &graph, &preds);
+                if reduced.is_some() {
+                    break;
+                }
+            }
+            if let Some((new, next)) = reduced {
                 graph = remap_nodes(node.clone(), new, next, graph);
                 modified = true;
                 break;
@@ -112,7 +185,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
 
 fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock> {
     let mut graph = DirectedGraph::default();
-    if !graph.is_empty() {
+    if !cfg.is_empty() {
         let root = cfg.root.as_ref().unwrap().clone();
         graph.root = Some(StructureBlock::from(root.clone()));
         let mut stack = vec![root];
@@ -365,4 +438,55 @@ mod tests {
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_none());
     }
+
+    fn create_nodes(n: usize) -> Vec<Rc<BasicBlock>> {
+        (0..)
+            .take(n)
+            .map(|x| {
+                Rc::new(BasicBlock {
+                    id: x,
+                    first: 0,
+                    last: 0,
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn reduce_sequence() {
+        // 0 -> 1 -> 2 -> 3 -> 4
+        let nodes = create_nodes(5);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),None],
+            nodes[1].clone() => [Some(nodes[2].clone()),None],
+            nodes[2].clone() => [Some(nodes[3].clone()),None],
+            nodes[3].clone() => [Some(nodes[4].clone()),None],
+            nodes[4].clone() => [None,None],
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 5);
+        assert_eq!(sequence.get_depth(), 1);
+    }
+
+    // #[test]
+    // TODO: finish implementing
+    // fn reduce_self_loop() {
+    //     // 0 -> 1 -> 2 with 1 -> 1 conditional loop and 1 -> 2 unconditional
+    //     let nodes = create_nodes(3);
+    //     let edges = hashmap! {
+    //         nodes[0].clone() => [Some(nodes[1].clone()),None],
+    //         nodes[1].clone() => [Some(nodes[2].clone()), Some(nodes[1].clone())],
+    //         nodes[2].clone() => [None, None]
+    //     };
+    //     let cfg = CFG {
+    //         root: Some(nodes[0].clone()),
+    //         edges
+    //     };
+    //
+    // }
 }
