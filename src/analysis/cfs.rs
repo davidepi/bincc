@@ -338,19 +338,21 @@ fn denaturate_loop(
             targets.remove(&correct);
             cfg = remove_edges(node, &targets, sccs, cfg);
         }
+        let (mut exits, targets) = exits_and_targets(node, sccs, &cfg);
+        exits.sort_by(|a, b| {
+            preds
+                .get(&**a)
+                .unwrap()
+                .len()
+                .cmp(&preds.get(&**b).unwrap().len())
+        });
+        if targets.len() == 1 {
+            let correct_exit =
+                IntoIter::new([exits.last().cloned().unwrap()]).collect::<HashSet<_>>();
+            cfg = remove_edges(node, &correct_exit, sccs, cfg);
+        }
     }
-    let (mut exits, targets) = exits_and_targets(node, sccs, &cfg);
-    exits.sort_by(|a, b| {
-        preds
-            .get(&**a)
-            .unwrap()
-            .len()
-            .cmp(&preds.get(&**b).unwrap().len())
-    });
-    if targets.len() == 1 {
-        let correct_exit = IntoIter::new([exits.last().cloned().unwrap()]).collect::<HashSet<_>>();
-        cfg = remove_edges(node, &correct_exit, sccs, cfg);
-    }
+    //TODO: what about 1 exit and 2 targets? can be solved by the other rules?
     cfg
 }
 
@@ -374,7 +376,7 @@ fn remove_natural_loops(
 
 #[cfg(test)]
 mod tests {
-    use crate::analysis::{cfs, BasicBlock, Graph, CFG, CFS};
+    use crate::analysis::{cfs, BasicBlock, BlockType, Graph, CFG, CFS};
     use maplit::hashmap;
     use std::collections::HashMap;
     use std::rc::Rc;
@@ -445,7 +447,7 @@ mod tests {
             .map(|x| {
                 Rc::new(BasicBlock {
                     id: x,
-                    first: 0,
+                    first: x as u64,
                     last: 0,
                 })
             })
@@ -473,20 +475,26 @@ mod tests {
         assert_eq!(sequence.get_depth(), 1);
     }
 
-    // #[test]
-    // TODO: finish implementing
-    // fn reduce_self_loop() {
-    //     // 0 -> 1 -> 2 with 1 -> 1 conditional loop and 1 -> 2 unconditional
-    //     let nodes = create_nodes(3);
-    //     let edges = hashmap! {
-    //         nodes[0].clone() => [Some(nodes[1].clone()),None],
-    //         nodes[1].clone() => [Some(nodes[2].clone()), Some(nodes[1].clone())],
-    //         nodes[2].clone() => [None, None]
-    //     };
-    //     let cfg = CFG {
-    //         root: Some(nodes[0].clone()),
-    //         edges
-    //     };
-    //
-    // }
+    #[test]
+    fn reduce_self_loop() {
+        // 0 -> 1 -> 2 with 1 -> 1 conditional loop and 1 -> 2 unconditional
+        let nodes = create_nodes(3);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),None],
+            nodes[1].clone() => [Some(nodes[2].clone()), Some(nodes[1].clone())],
+            nodes[2].clone() => [None, None]
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.get_depth(), 2);
+        let children = sequence.children();
+        assert_eq!(children[0].get_type(), BlockType::Basic);
+        assert_eq!(children[1].get_type(), BlockType::SelfLooping);
+        assert_eq!(children[2].get_type(), BlockType::Basic);
+    }
 }

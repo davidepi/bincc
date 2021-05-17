@@ -107,9 +107,8 @@ impl Disassembler for R2Disasm {
                 retval = offsets
                     .iter()
                     .filter_map(|x| x.as_u64())
-                    .filter_map(|offset| match self.get_function_body(offset) {
-                        None => None,
-                        Some(value) => Some((offset, value)),
+                    .filter_map(|offset| {
+                        self.get_function_body(offset).map(|value| (offset, value))
                     })
                     .collect();
             }
