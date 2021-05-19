@@ -85,6 +85,40 @@ fn reduce_sequence(
         None
     }
 }
+
+fn ascend_if_chain<'a>(
+    mut rev_chain: Vec<&'a StructureBlock>,
+    cont: &'a StructureBlock,
+    graph: &DirectedGraph<StructureBlock>,
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
+    mut depth: u32,
+) -> (Vec<&'a StructureBlock>, u32) {
+    let mut visited = rev_chain.iter().cloned().collect::<HashSet<_>>();
+    let mut cur_head = *rev_chain.last().unwrap();
+    while preds.get(cur_head).unwrap().len() == 1 {
+        cur_head = preds.get(cur_head).unwrap().iter().last().unwrap();
+        if !visited.contains(cur_head) {
+            visited.insert(cur_head);
+            let head_children = graph.children(cur_head).unwrap();
+            if head_children.len() == 2 {
+                // one of the edges must point to the cont block.
+                // the other one obviously points to the current head
+                if head_children[0] == cont || head_children[1] == cont {
+                    rev_chain.push(cur_head);
+                    depth = depth.max(cur_head.get_depth());
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+    (rev_chain, depth)
+}
+
 fn reduce_ifthen(
     node: &StructureBlock,
     graph: &DirectedGraph<StructureBlock>,
@@ -108,38 +142,73 @@ fn reduce_ifthen(
             // we detected the innermost if-then block. Now we try to ascend the various preds
             // to see if these is a chain of if-then. In order to hold, every edge not pointing
             // to the current one should point to the exit.
-            let mut chain_rev = vec![then, head]; // the entire if chain reversed
-            let mut visited = chain_rev.iter().cloned().collect::<HashSet<_>>();
-            let mut cur_head = head;
-            let mut depth = std::cmp::max(then.get_depth(), head.get_depth());
-            while preds.get(cur_head).unwrap().len() == 1 {
-                cur_head = preds.get(cur_head).unwrap().iter().last().unwrap();
-                if !visited.contains(cur_head) {
-                    visited.insert(cur_head);
-                    let head_children = graph.children(cur_head).unwrap();
-                    if head_children.len() == 2 {
-                        // one of the edges must point to the cont block.
-                        // the other one obviously points to the current head
-                        if head_children[0] == cont || head_children[1] == cont {
-                            chain_rev.push(cur_head);
-                            depth = depth.max(cur_head.get_depth());
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            }
+            let (child_rev, depth) = ascend_if_chain(
+                vec![then, head],
+                cont,
+                graph,
+                preds,
+                std::cmp::max(then.get_depth(), head.get_depth()),
+            );
             //now creates the block itself
             let block = Rc::new(NestedBlock {
                 block_type: BlockType::IfThen,
-                content: chain_rev.into_iter().cloned().rev().collect(),
+                content: child_rev.into_iter().cloned().rev().collect(),
                 depth: depth + 1,
             });
             Some((StructureBlock::from(block), Some(cont.clone())))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+fn reduce_ifelse(
+    node: &StructureBlock,
+    graph: &DirectedGraph<StructureBlock>,
+    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+) -> Option<(StructureBlock, Option<StructureBlock>)> {
+    let node_children = graph.children(&node).unwrap();
+    if node_children.len() == 2 {
+        let mut thenb = node_children[0];
+        let mut thenb_preds = preds.get(&thenb).unwrap();
+        let mut elseb = node_children[1];
+        let mut elseb_preds = preds.get(&elseb).unwrap();
+        // check for swapped if-else blocks
+        if thenb_preds.len() > 1 {
+            if elseb_preds.len() == 1 {
+                swap(&mut thenb, &mut elseb);
+                // technically I don't use them anymore, but I can already see big bugs if I will
+                // ever modify this function without this line.
+                swap(&mut thenb_preds, &mut elseb_preds);
+            } else {
+                return None;
+            }
+        }
+        // checks that child of both then and else should go to the same node
+        let thenb_children = graph.children(&thenb).unwrap();
+        let elseb_children = graph.children(&elseb).unwrap();
+        if thenb_children.len() == 1
+            && elseb_children.len() == 1
+            && thenb_children[0] == elseb_children[0]
+        {
+            // we detected the innermost if-else block. Now we try to ascend the various preds
+            // to see if these is a chain of if-else. In order to hold, every edge not pointing
+            // to the current one should point to the else block.
+            let (child_rev, depth) = ascend_if_chain(
+                vec![elseb, thenb, node],
+                elseb,
+                graph,
+                preds,
+                (elseb.get_depth().max(thenb.get_depth())).max(node.get_depth()),
+            );
+            let block = Rc::new(NestedBlock {
+                block_type: BlockType::IfThenElse,
+                content: child_rev.into_iter().cloned().rev().collect(),
+                depth: depth + 1,
+            });
+            Some((StructureBlock::from(block), Some(elseb_children[0].clone())))
         } else {
             None
         }
@@ -231,7 +300,12 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
         let mut modified = false;
         let preds = graph.predecessors();
         for node in graph.postorder() {
-            let reductions = [reduce_self_loop, reduce_sequence, reduce_ifthen];
+            let reductions = [
+                reduce_self_loop,
+                reduce_sequence,
+                reduce_ifthen,
+                reduce_ifelse,
+            ];
             let mut reduced = None;
             for reduction in &reductions {
                 reduced = (reduction)(node, &graph, &preds);
@@ -691,5 +765,79 @@ mod tests {
         assert_eq!(children[0].get_type(), BlockType::IfThen);
         assert_eq!(children[0].len(), 4);
         assert_eq!(children[1].get_type(), BlockType::Basic);
+    }
+
+    #[test]
+    fn reduce_if_else() {
+        // 0 -> 1 -> 2 -> 4 -> 5 uncond, 3->4 uncond,  1 -> 3 cond
+        let nodes = create_nodes(6);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),None],
+            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[3].clone())],
+            nodes[2].clone() => [Some(nodes[4].clone()),None],
+            nodes[3].clone() => [Some(nodes[4].clone()),None],
+            nodes[4].clone() => [Some(nodes[5].clone()),None],
+            nodes[5].clone() => [None,None],
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 4);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        let children = sequence.children();
+        assert_eq!(children[0].get_type(), BlockType::Basic);
+        assert_eq!(children[1].get_type(), BlockType::IfThenElse);
+        assert_eq!(children[2].get_type(), BlockType::Basic);
+        assert_eq!(children[3].get_type(), BlockType::Basic);
+        assert_eq!(children[1].len(), 3);
+    }
+
+    #[test]
+    fn short_circuit_if_else() {
+        let nodes = create_nodes(6);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),Some(nodes[3].clone())],
+            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[3].clone())],
+            nodes[2].clone() => [Some(nodes[3].clone()),Some(nodes[4].clone())],
+            nodes[3].clone() => [Some(nodes[5].clone()),None],
+            nodes[4].clone() => [Some(nodes[5].clone()),None],
+            nodes[5].clone() => [None,None],
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        let children = sequence.children();
+        assert_eq!(children[0].get_type(), BlockType::IfThenElse);
+        assert_eq!(children[0].len(), 5);
+        assert_eq!(children[1].get_type(), BlockType::Basic);
+    }
+
+    #[test]
+    fn if_else_looping() {
+        // this test replicates a bug
+        // 0 -> 1 -> 3 uncond, 2 -> 3 uncond, 0 -> 2 cond, 1 -> 1 cond, 2 -> 2 cond
+        let nodes = create_nodes(4);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),Some(nodes[2].clone())],
+            nodes[1].clone() => [Some(nodes[3].clone()),Some(nodes[1].clone())],
+            nodes[2].clone() => [Some(nodes[3].clone()),Some(nodes[2].clone())],
+            nodes[3].clone() => [None,None],
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
     }
 }
