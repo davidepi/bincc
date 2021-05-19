@@ -4,6 +4,7 @@ use fnv::FnvHashSet;
 use std::array::IntoIter;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
+use std::mem::swap;
 use std::rc::Rc;
 
 pub struct CFS {
@@ -84,6 +85,68 @@ fn reduce_sequence(
         None
     }
 }
+fn reduce_ifthen(
+    node: &StructureBlock,
+    graph: &DirectedGraph<StructureBlock>,
+    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+) -> Option<(StructureBlock, Option<StructureBlock>)> {
+    let mut children = graph.children(node).unwrap();
+    if children.len() == 2 {
+        let head = node;
+        let mut cont = children.pop().unwrap();
+        let mut cont_children = graph.children(cont).unwrap();
+        let mut then = children.pop().unwrap();
+        let mut then_children = graph.children(then).unwrap();
+        let mut then_preds = preds.get(then).unwrap();
+        let mut cont_preds = preds.get(cont).unwrap();
+        if cont_children.len() == 1 && cont_children[0] == then && cont_preds.len() == 1 {
+            swap(&mut cont, &mut then);
+            swap(&mut cont_children, &mut then_children);
+            swap(&mut cont_preds, &mut then_preds);
+        }
+        if then_children.len() == 1 && then_children[0] == cont && then_preds.len() == 1 {
+            // we detected the innermost if-then block. Now we try to ascend the various preds
+            // to see if these is a chain of if-then. In order to hold, every edge not pointing
+            // to the current one should point to the exit.
+            let mut chain_rev = vec![then, head]; // the entire if chain reversed
+            let mut visited = chain_rev.iter().cloned().collect::<HashSet<_>>();
+            let mut cur_head = head;
+            let mut depth = std::cmp::max(then.get_depth(), head.get_depth());
+            while preds.get(cur_head).unwrap().len() == 1 {
+                cur_head = preds.get(cur_head).unwrap().iter().last().unwrap();
+                if !visited.contains(cur_head) {
+                    visited.insert(cur_head);
+                    let head_children = graph.children(cur_head).unwrap();
+                    if head_children.len() == 2 {
+                        // one of the edges must point to the cont block.
+                        // the other one obviously points to the current head
+                        if head_children[0] == cont || head_children[1] == cont {
+                            chain_rev.push(cur_head);
+                            depth = depth.max(cur_head.get_depth());
+                        } else {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+            //now creates the block itself
+            let block = Rc::new(NestedBlock {
+                block_type: BlockType::IfThen,
+                content: chain_rev.into_iter().cloned().rev().collect(),
+                depth: depth + 1,
+            });
+            Some((StructureBlock::from(block), Some(cont.clone())))
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
 
 fn construct_and_flatten_sequence(node: &StructureBlock, next: &StructureBlock) -> NestedBlock {
     let flatten = |node: &StructureBlock| match node {
@@ -111,29 +174,35 @@ fn construct_and_flatten_sequence(node: &StructureBlock, next: &StructureBlock) 
 }
 
 fn remap_nodes(
-    old: StructureBlock,
     new: StructureBlock,
     next: Option<StructureBlock>,
     graph: DirectedGraph<StructureBlock>,
 ) -> DirectedGraph<StructureBlock> {
     if !graph.is_empty() {
         let mut new_adjacency = HashMap::new();
+        let remove_list = new.children().iter().collect::<HashSet<_>>();
         for (node, children) in graph.adjacency.into_iter() {
-            if node != old {
+            if !remove_list.contains(&node) {
                 let children_replaced = children
                     .into_iter()
-                    .map(|child| if child != old { child } else { new.clone() })
+                    .map(|child| {
+                        if !remove_list.contains(&child) {
+                            child
+                        } else {
+                            new.clone()
+                        }
+                    })
                     .collect();
                 new_adjacency.insert(node.clone(), children_replaced);
-            } else {
-                let replacement = match &next {
-                    None => vec![],
-                    Some(next_unwrapped) => vec![next_unwrapped.clone()],
-                };
-                new_adjacency.insert(new.clone(), replacement);
             }
         }
-        let new_root = if graph.root.as_ref().unwrap() != &old {
+        let replacement = match &next {
+            None => vec![],
+            Some(next_unwrapped) => vec![next_unwrapped.clone()],
+        };
+        new_adjacency.insert(new.clone(), replacement);
+
+        let new_root = if !remove_list.contains(graph.root.as_ref().unwrap()) {
             graph.root
         } else {
             Some(new)
@@ -162,7 +231,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
         let mut modified = false;
         let preds = graph.predecessors();
         for node in graph.postorder() {
-            let reductions = [reduce_self_loop, reduce_sequence];
+            let reductions = [reduce_self_loop, reduce_sequence, reduce_ifthen];
             let mut reduced = None;
             for reduction in &reductions {
                 reduced = (reduction)(node, &graph, &preds);
@@ -171,7 +240,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
                 }
             }
             if let Some((new, next)) = reduced {
-                graph = remap_nodes(node.clone(), new, next, graph);
+                graph = remap_nodes(new, next, graph);
                 modified = true;
                 break;
             }
@@ -264,6 +333,22 @@ fn exits_and_targets(
     (exits, targets)
 }
 
+fn is_loop<'a>(sccs: &HashMap<&'a BasicBlock, usize>) -> HashMap<&'a BasicBlock, bool> {
+    let mut retval = HashMap::new();
+    let mut counting = vec![0_usize; sccs.len()];
+    for (_, scc_id) in sccs.iter() {
+        counting[*scc_id] += 1;
+    }
+    for (node, scc_id) in sccs.iter() {
+        if counting[*scc_id] <= 1 {
+            retval.insert(*node, false);
+        } else {
+            retval.insert(*node, true);
+        }
+    }
+    retval
+}
+
 // remove all edges from a CFG that points to a list of targets
 fn remove_edges<'a>(
     node: &'a BasicBlock,
@@ -321,7 +406,8 @@ fn denaturate_loop(
     mut cfg: CFG,
 ) -> CFG {
     let (exits, mut targets) = exits_and_targets(node, sccs, &cfg);
-    if exits.len() > 1 {
+    let is_loop = *is_loop(sccs).get(node).unwrap();
+    if exits.len() > 1 && is_loop {
         // harder case, more than 2 output targets, keep the target with the highest depth
         if targets.len() >= 2 {
             let correct = targets
@@ -473,6 +559,7 @@ mod tests {
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 5);
         assert_eq!(sequence.get_depth(), 1);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
     }
 
     #[test]
@@ -492,9 +579,117 @@ mod tests {
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
         let children = sequence.children();
         assert_eq!(children[0].get_type(), BlockType::Basic);
         assert_eq!(children[1].get_type(), BlockType::SelfLooping);
         assert_eq!(children[2].get_type(), BlockType::Basic);
+    }
+
+    #[test]
+    fn reduce_if_then_next() {
+        // 0 -> 1 -> 2 -> 3 -> 4 uncond, 1->3 cond
+        let nodes = create_nodes(5);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),None],
+            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[3].clone())],
+            nodes[2].clone() => [Some(nodes[3].clone()),None],
+            nodes[3].clone() => [Some(nodes[4].clone()),None],
+            nodes[4].clone() => [None,None],
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 4);
+        assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        let children = sequence.children();
+        assert_eq!(children[0].get_type(), BlockType::Basic);
+        assert_eq!(children[1].get_type(), BlockType::IfThen);
+        assert_eq!(children[2].get_type(), BlockType::Basic);
+        assert_eq!(children[3].get_type(), BlockType::Basic);
+        assert_eq!(children[1].len(), 2);
+    }
+
+    #[test]
+    fn reduce_if_then_cond() {
+        // 0 -> 1 -> 3 -> 4 uncond, 2->3 uncond, 1->2 cond
+        let nodes = create_nodes(5);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),None],
+            nodes[1].clone() => [Some(nodes[3].clone()),Some(nodes[2].clone())],
+            nodes[2].clone() => [Some(nodes[3].clone()),None],
+            nodes[3].clone() => [Some(nodes[4].clone()),None],
+            nodes[4].clone() => [None,None],
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 4);
+        assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        let children = sequence.children();
+        assert_eq!(children[0].get_type(), BlockType::Basic);
+        assert_eq!(children[1].get_type(), BlockType::IfThen);
+        assert_eq!(children[2].get_type(), BlockType::Basic);
+        assert_eq!(children[3].get_type(), BlockType::Basic);
+        assert_eq!(children[1].len(), 2);
+    }
+
+    #[test]
+    fn short_circuit_if_then() {
+        // 0 -> 1 -> 2 -> 3 uncond, 0 -> 3 cond, 1->3 cond
+        // 2 is reached iff 0 and 1 holds
+        let nodes = create_nodes(4);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),Some(nodes[3].clone())],
+            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[3].clone())],
+            nodes[2].clone() => [Some(nodes[3].clone()),None],
+            nodes[3].clone() => [None,None],
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        let children = sequence.children();
+        assert_eq!(children[0].get_type(), BlockType::IfThen);
+        assert_eq!(children[0].len(), 3);
+        assert_eq!(children[1].get_type(), BlockType::Basic);
+    }
+
+    #[test]
+    fn short_circuit_if_then_tricky() {
+        // like short_circuit_if_then, but at some point the next and cond are swapped
+        // 0 -> 1 -> 2 uncond, 3 -> 4 uncond, 2 -> 4 uncond, 0 -> 4 cond, 1 -> 4 cond, 2 -> 3 cond
+        let nodes = create_nodes(5);
+        let edges = hashmap! {
+            nodes[0].clone() => [Some(nodes[1].clone()),Some(nodes[4].clone())],
+            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[4].clone())],
+            nodes[2].clone() => [Some(nodes[4].clone()),Some(nodes[3].clone())],
+            nodes[3].clone() => [Some(nodes[4].clone()),None],
+            nodes[4].clone() => [None,None],
+        };
+        let cfg = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        let children = sequence.children();
+        assert_eq!(children[0].get_type(), BlockType::IfThen);
+        assert_eq!(children[0].len(), 4);
+        assert_eq!(children[1].get_type(), BlockType::Basic);
     }
 }

@@ -153,7 +153,7 @@ mod tests {
     #[test]
     #[serial]
     fn new_radare2_process_not_existing() {
-        let old_path = std::env::var("PATH").unwrap_or("".to_string());
+        let old_path = std::env::var("PATH").unwrap_or_else(|_| "".to_string());
         std::env::set_var("PATH", "");
         let disassembler = R2Disasm::new("/bin/ls");
         std::env::set_var("PATH", old_path);
