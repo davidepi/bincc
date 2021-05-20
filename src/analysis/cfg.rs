@@ -35,8 +35,6 @@ pub struct CFG {
 /// code.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct BasicBlock {
-    /// Numerical integer representing an unique identifier for this block.
-    pub id: usize,
     /// Offset in the original code where this basic block begins.
     pub first: u64,
     /// Offset in the original code where this basic block ends.
@@ -54,7 +52,6 @@ impl BasicBlock {
     /// Creates a new sink block.
     fn new_sink() -> BasicBlock {
         BasicBlock {
-            id: usize::MAX,
             first: SINK_ADDR,
             last: SINK_ADDR,
         }
@@ -411,9 +408,7 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
     let mut nodes_tmp = tgmap
         .targets
         .iter()
-        .enumerate()
-        .map(|(index, target)| BasicBlock {
-            id: index,
+        .map(|target| BasicBlock {
             first: *target,
             last: 0,
         })
@@ -483,13 +478,7 @@ mod tests {
     fn sequence() -> CFG {
         let nodes = (0..)
             .take(4)
-            .map(|x| {
-                Rc::new(BasicBlock {
-                    id: x,
-                    first: 0,
-                    last: 0,
-                })
-            })
+            .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
             .collect::<Vec<_>>();
         let edges = hashmap![
             nodes[0].clone() => [Some(nodes[1].clone()), None],
@@ -507,13 +496,7 @@ mod tests {
     fn two_sequences() -> CFG {
         let nodes = (0..)
             .take(4)
-            .map(|x| {
-                Rc::new(BasicBlock {
-                    id: x,
-                    first: 0,
-                    last: 0,
-                })
-            })
+            .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
             .collect::<Vec<_>>();
         let edges = hashmap![
             nodes[0].clone() => [Some(nodes[1].clone()), None],

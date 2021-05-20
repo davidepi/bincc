@@ -138,7 +138,6 @@ mod tests {
         // checks that despite having two different StructureBlock, if their content is the same Rc
         // equality returns true.
         let bb = Rc::new(BasicBlock {
-            id: 0,
             first: 0,
             last: 0xA,
         });
@@ -150,12 +149,10 @@ mod tests {
     #[test]
     fn structural_hash_different_id() {
         let bb0 = StructureBlock::from(Rc::new(BasicBlock {
-            id: 0,
             first: 0,
             last: 0xA,
         }));
         let bb1 = StructureBlock::from(Rc::new(BasicBlock {
-            id: 1,
             first: 0xA,
             last: 0xC,
         }));
@@ -165,11 +162,7 @@ mod tests {
 
     #[test]
     fn structural_hash_same_order() {
-        let bb = StructureBlock::from(Rc::new(BasicBlock {
-            id: 0,
-            first: 0,
-            last: 0,
-        }));
+        let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
         let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
         let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![
             self_loop,
@@ -184,11 +177,7 @@ mod tests {
 
     #[test]
     fn structural_hash_different_order() {
-        let bb = StructureBlock::from(Rc::new(BasicBlock {
-            id: 0,
-            first: 0,
-            last: 0,
-        }));
+        let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
         let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
         let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![
             self_loop,

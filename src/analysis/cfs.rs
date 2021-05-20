@@ -550,13 +550,7 @@ mod tests {
 
     fn sample() -> CFG {
         let nodes = (0..7)
-            .map(|x| {
-                Rc::new(BasicBlock {
-                    id: 0,
-                    first: x,
-                    last: 0,
-                })
-            })
+            .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
             .collect::<Vec<_>>();
         let adj = hashmap! {
             nodes[0].clone() => [Some(nodes[1].clone()), Some(nodes[2].clone())],
@@ -604,13 +598,7 @@ mod tests {
     fn create_nodes(n: usize) -> Vec<Rc<BasicBlock>> {
         (0..)
             .take(n)
-            .map(|x| {
-                Rc::new(BasicBlock {
-                    id: x,
-                    first: x as u64,
-                    last: 0,
-                })
-            })
+            .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
             .collect()
     }
 
