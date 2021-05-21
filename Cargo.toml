@@ -19,6 +19,9 @@ fnv = "1.0.7"
 parse_int = "0.5"
 r2pipe = { git = "https://github.com/davidepi/r2pipe.rs", branch = "http-as-feature", optional = true }
 regex = "1"
+clap="2" # used by bin only
+log = "0.4" # used by bin only
+num_cpus="1" # use by bin only
 
 [dev-dependencies]
 serial_test = "0.5.1" # needed only by radare2, but dev-dependencies are not allowed to be optional
