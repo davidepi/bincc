@@ -2,11 +2,13 @@ use crate::analysis::Graph;
 use crate::disasm::{Architecture, JumpType, Statement};
 use fnv::FnvHashMap;
 use parse_int::parse;
+use regex::Regex;
 use std::collections::{BTreeSet, HashMap, HashSet};
+use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io;
-use std::io::Write;
+use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -16,7 +18,7 @@ const SINK_ADDR: u64 = u64::MAX;
 ///
 /// Struct representing a Control Flow Graph (CFG).
 /// This is a graph representation of all the possible execution paths in a function.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CFG {
     pub(super) root: Option<Rc<BasicBlock>>,
     pub(super) edges: HashMap<Rc<BasicBlock>, [Option<Rc<BasicBlock>>; 2]>,
@@ -125,7 +127,7 @@ impl CFG {
     /// This means the target of an unconditional jump or the next block in case the current block
     /// ends with a conditional jump.
     ///
-    /// Returns None if there is no next block, the current basic block does not belong to this CFG
+    /// Returns [Option::None] if there is no next block, the current basic block does not belong to this CFG
     /// or the original BasicBlock is None.
     pub fn next(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
         if let Some(bb) = block {
@@ -148,7 +150,7 @@ impl CFG {
     ///
     /// Given an optional basic block, returns the conditional jump target.
     ///
-    /// Returns None if the current basic block does not have conditional jumps, does not belong to
+    /// Returns [Option::None] if the current basic block does not have conditional jumps, does not belong to
     /// this CFG or the original BasicBlock is None.
     pub fn cond(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
         if let Some(bb) = block {
@@ -168,36 +170,119 @@ impl CFG {
     }
 
     /// Converts the current CFG into a Graphviz dot representation.
+    ///
+    /// The generated file contains also each Basic Blocks starting and ending offset.
+    /// This information is recorded as comment for each node in the form
+    /// `(start offset, end offset)`.
+    ///
+    /// This method assumes that every node is reachable from the root. If this is not true, all
+    /// unreachable nodes will be considered as a single node with ID [usize::MAX].
     pub fn to_dot(&self) -> String {
-        let mut content = Vec::new();
-        let sink_iter = self
-            .edges
-            .iter()
-            .filter(|(node, _child)| node.is_sink())
-            .last();
-        let sink = if let Some(sink_node) = sink_iter {
-            content.push("0[style=\"dotted\"];".to_string());
-            sink_node.0.clone()
-        } else {
-            Rc::new(BasicBlock::default()) // just use any random node
-        };
+        let mut edges_string = Vec::new();
+        let mut nodes_string = Vec::new();
+        let nodes_ids = self
+            .preorder()
+            .enumerate()
+            .map(|(index, node)| (self.rc(node).unwrap(), index))
+            .collect::<HashMap<_, _>>();
         for (node, child) in self.edges.iter() {
+            let node_id = nodes_ids.get(node).unwrap_or(&usize::MAX);
+            nodes_string.push(format!(
+                "{}[comment=\"({},{})\"];",
+                node_id, node.first, node.last
+            ));
             if let Some(next) = &child[0] {
-                let dashed = if next == &sink {
-                    "[style=\"dotted\"];"
-                } else {
-                    ""
-                };
-                content.push(format!("{} -> {}{}", node.first, next.first, dashed));
+                let next_id = *nodes_ids.get(next).unwrap_or(&usize::MAX);
+                edges_string.push(format!("{}->{}", node_id, next_id));
             }
             if let Some(cond) = &child[1] {
-                content.push(format!(
-                    "{} -> {}[arrowhead=\"empty\"];",
-                    node.first, cond.first
-                ));
+                let cond_id = *nodes_ids.get(cond).unwrap_or(&usize::MAX);
+                edges_string.push(format!("{}->{}[arrowhead=\"empty\"];", node_id, cond_id));
             }
         }
-        format!("digraph {{\n{}\n}}\n", content.join("\n"))
+        format!(
+            "digraph{{\n{}\n{}\n}}\n",
+            nodes_string.join("\n"),
+            edges_string.join("\n")
+        )
+    }
+
+    /// Constructs a CFG from an external dot file.
+    ///
+    /// The input string must come from a dot file generated with the [CFG::to_dot] or
+    /// [CFG::to_file] methods. This method expects some additional metadata that otherwise is not
+    /// present in a dot file.
+    ///
+    /// This method returns [std::io::Error] in case of malformed input or [std::num::ParseIntError]
+    /// in case the input file contains non-parsable numbers.
+    pub fn from_dot(str: &str) -> Result<CFG, Box<dyn Error>> {
+        // this parser is super dumb, but even a smart one will never work with **any** .dot file
+        // because I need to store some metadata about nodes
+        let mut lines = str.lines().collect::<Vec<_>>();
+        lines.reverse();
+        if let Some(_first @ "digraph{") = lines.pop() {
+            let mut nodes = HashMap::new();
+            let mut edges_next = HashMap::new();
+            let mut edges_cond = HashMap::new();
+            let node_re = Regex::new(r#"(\d+)\[comment="\((\d+),(\d+)\)"\];"#).unwrap();
+            let edge_re = Regex::new(r#"(\d+)->(\d+)(\[.*\];)?"#).unwrap();
+            while let Some(line) = lines.pop() {
+                if let Some(cap) = node_re.captures(line) {
+                    let id = cap.get(1).unwrap().as_str().parse::<usize>()?;
+                    let first = cap.get(2).unwrap().as_str().parse::<u64>()?;
+                    let last = cap.get(3).unwrap().as_str().parse::<u64>()?;
+                    let node = BasicBlock { first, last };
+                    nodes.insert(id, Rc::new(node));
+                } else if let Some(cap) = edge_re.captures(line) {
+                    let from = cap.get(1).unwrap().as_str().parse::<usize>()?;
+                    let to = cap.get(2).unwrap().as_str().parse::<usize>()?;
+                    if cap.get(3).is_none() {
+                        edges_next.insert(from, to);
+                    } else {
+                        edges_cond.insert(from, to);
+                    }
+                }
+            }
+            let mut edges = HashMap::new();
+            // Invalid files may have inconsistent data. This error is used to avoid panicking.
+            let parse_err = || {
+                Box::new(std::io::Error::new(
+                    ErrorKind::InvalidInput,
+                    "inconsistent data",
+                ))
+            };
+            for (src, dst) in edges_next {
+                let src_node = nodes.get(&src).ok_or_else(parse_err)?.clone();
+                let dst_node = nodes.get(&dst).ok_or_else(parse_err)?.clone();
+                edges.insert(src_node, [Some(dst_node), None]);
+            }
+            for (src, dst) in edges_cond {
+                let src_node = nodes.get(&src).ok_or_else(parse_err)?.clone();
+                let dst_node = nodes.get(&dst).ok_or_else(parse_err)?.clone();
+                let existing = edges.get_mut(&src_node).ok_or_else(parse_err)?;
+                existing[1] = Some(dst_node);
+            }
+            let root = if !nodes.is_empty() {
+                Some(nodes.get(&0).unwrap().clone())
+            } else {
+                None
+            };
+            // add the exits
+            let exits = nodes
+                .into_iter()
+                .filter(|(_, node)| !edges.contains_key(node))
+                .map(|(_, node)| node)
+                .collect::<Vec<_>>();
+            for exit in exits {
+                edges.insert(exit, [None, None]);
+            }
+            Ok(CFG { root, edges })
+        } else {
+            Err(Box::new(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                "unexpected input filetype",
+            )))
+        }
     }
 
     /// Saves the current CFG into a Graphviz representation.
@@ -207,6 +292,20 @@ impl CFG {
     pub fn to_file<S: AsRef<Path>>(&self, filename: S) -> Result<(), io::Error> {
         let mut file = File::create(filename)?;
         file.write_all(self.to_dot().as_bytes())
+    }
+
+    /// Retrieves a CFG file from a Graphviz representation.
+    ///
+    /// Given a path to file, retrieves a CFG previously created with [CFG::to_file] method (or with
+    /// [CFG::to_dot] later saved to a file).
+    ///
+    /// This method returns [std::io::Error] in case of malformed input or [std::num::ParseIntError]
+    /// in case the input file contains non-parsable numbers.
+    pub fn from_file<S: AsRef<Path>>(filename: S) -> Result<CFG, Box<dyn Error>> {
+        let mut file = File::open(filename)?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        CFG::from_dot(&content)
     }
 
     /// Adds a sink to the current CFG.
@@ -241,7 +340,7 @@ impl CFG {
     /// This is useful to avoid some caveats with mutability and borrowing without having to clone
     /// the BasicBlock.
     ///
-    /// Returns None if the input node does not belong to this graph.
+    /// Returns [Option::None] if the input node does not belong to this graph.
     pub fn rc(&self, node: &BasicBlock) -> Option<Rc<BasicBlock>> {
         self.edges.get_key_value(node).map(|(rc, _)| rc.clone())
     }
@@ -472,7 +571,10 @@ mod tests {
     use crate::disasm::{ArchX86, Statement};
     use maplit::hashmap;
     use std::collections::HashMap;
+    use std::error::Error;
+    use std::io::{Read, Seek, SeekFrom, Write};
     use std::rc::Rc;
+    use tempfile::tempfile;
 
     //digraph 0->1, 1->2, 2->3
     fn sequence() -> CFG {
@@ -743,6 +845,48 @@ mod tests {
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         assert_eq!(cfg.len(), 6);
+    }
+
+    #[test]
+    fn save_and_retrieve_empty() -> Result<(), Box<dyn Error>> {
+        let stmts = Vec::new();
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let mut file = tempfile()?;
+        file.write_all(cfg.to_dot().as_bytes())?;
+        file.seek(SeekFrom::Start(0))?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        let cfg_read = CFG::from_dot(&content)?;
+        assert_eq!(cfg_read, cfg);
+        Ok(())
+    }
+
+    #[test]
+    fn save_and_retrieve() -> Result<(), Box<dyn Error>> {
+        let stmts = vec![
+            Statement::new(0x61E, "push rbp"),                //0
+            Statement::new(0x622, "mov dword [var_4h], edi"), //0
+            Statement::new(0x628, "cmp dword [var_4h], 5"),   //0
+            Statement::new(0x62C, "jne 0x633"),               //0
+            Statement::new(0x62E, "mov eax, dword [var_8h]"), //1
+            Statement::new(0x631, "jmp 0x638"),               //1
+            Statement::new(0x633, "mov eax, 6"),              //2
+            Statement::new(0x638, "pop rbp"),                 //3
+            Statement::new(0x639, "ret"),                     //3
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let mut file = tempfile()?;
+        file.write_all(cfg.to_dot().as_bytes())?;
+        file.seek(SeekFrom::Start(0))?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        println!("{}", cfg.to_dot());
+        std::io::stdout().flush().unwrap();
+        let cfg_read = CFG::from_dot(&content)?;
+        assert_eq!(cfg_read, cfg);
+        Ok(())
     }
 
     #[test]
