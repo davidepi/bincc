@@ -21,6 +21,7 @@ r2pipe = { git = "https://github.com/davidepi/r2pipe.rs", branch = "http-as-feat
 regex = "1"
 clap="2" # used by bin only
 log = "0.4" # used by bin only
+env_logger = "0.8" # used by bin only
 num_cpus="1" # use by bin only
 
 [dev-dependencies]
