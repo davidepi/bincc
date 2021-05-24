@@ -217,6 +217,14 @@ fn reduce_ifelse(
     }
 }
 
+fn reduce_loop(
+    node: &StructureBlock,
+    graph: &DirectedGraph<StructureBlock>,
+    _: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+) -> Option<(StructureBlock, Option<StructureBlock>)> {
+    None
+}
+
 fn construct_and_flatten_sequence(node: &StructureBlock, next: &StructureBlock) -> NestedBlock {
     let flatten = |node: &StructureBlock| match node {
         StructureBlock::Basic(_) => {
@@ -305,6 +313,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
                 reduce_sequence,
                 reduce_ifthen,
                 reduce_ifelse,
+                reduce_loop,
             ];
             let mut reduced = None;
             for reduction in &reductions {
@@ -541,29 +550,43 @@ mod tests {
     use std::collections::HashMap;
     use std::rc::Rc;
 
+    macro_rules! create_cfg {
+    (@single $($x:tt)*) => (());
+    (@count $($rest:expr),*) => (<[()]>::len(&[$(create_cfg!(@single $rest)),*]));
+    ($($src:expr => $value:expr,)+) => { create_cfg!($($src => $value),+) };
+    ($($src:expr => $value:expr),*) => {
+        {
+            let cap = create_cfg!(@count $($src),*);
+            let nodes = (0..)
+                        .take(cap)
+                        .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
+                        .collect::<Vec<_>>();
+            let mut edges = std::collections::HashMap::with_capacity(cap);
+            $(
+                let mut targets = $value
+                                  .iter()
+                                  .map(|x: &usize| Some(nodes[*x].clone()))
+                                  .collect::<Vec<_>>();
+                targets.resize(2, None);
+                targets.reverse();
+                edges.insert(nodes[$src].clone(), [targets.pop().unwrap(), targets.pop().unwrap()]);
+            )*
+            let root = match nodes.first() {
+                Some(x) => Some(x.clone()),
+                None => None
+            };
+            CFG {
+                root,
+                edges,
+            }
+        }
+    };
+    }
+
     fn empty() -> CFG {
         CFG {
             root: None,
             edges: HashMap::default(),
-        }
-    }
-
-    fn sample() -> CFG {
-        let nodes = (0..7)
-            .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
-            .collect::<Vec<_>>();
-        let adj = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()), Some(nodes[2].clone())],
-            nodes[1].clone() => [Some(nodes[6].clone()), None],
-            nodes[2].clone() => [Some(nodes[3].clone()), None],
-            nodes[3].clone() => [Some(nodes[5].clone()), None],
-            nodes[4].clone() => [Some(nodes[2].clone()), None],
-            nodes[5].clone() => [Some(nodes[6].clone()), Some(nodes[4].clone())],
-            nodes[6].clone() => [None, None]
-        };
-        CFG {
-            root: Some(nodes[0].clone()),
-            edges: adj,
         }
     }
 
@@ -576,7 +599,9 @@ mod tests {
 
     #[test]
     fn calculate_depth() {
-        let cfg = sample();
+        let cfg = create_cfg! {
+            0 => [1, 2], 1 => [6], 2 => [3], 3 => [5], 4 => [2], 5 => [6, 4], 6 => []
+        };
         let depth = cfs::calculate_depth(&cfg);
         let mut visit = cfg.postorder().collect::<Vec<_>>();
         visit.sort_by(|a, b| a.first.cmp(&b.first));
@@ -590,7 +615,7 @@ mod tests {
 
     #[test]
     fn constructor_empty() {
-        let cfg = empty();
+        let cfg = create_cfg! {};
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_none());
     }
@@ -604,19 +629,7 @@ mod tests {
 
     #[test]
     fn reduce_sequence() {
-        // 0 -> 1 -> 2 -> 3 -> 4
-        let nodes = create_nodes(5);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),None],
-            nodes[1].clone() => [Some(nodes[2].clone()),None],
-            nodes[2].clone() => [Some(nodes[3].clone()),None],
-            nodes[3].clone() => [Some(nodes[4].clone()),None],
-            nodes[4].clone() => [None,None],
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
-        };
+        let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3], 3 => [4], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 5);
@@ -626,17 +639,8 @@ mod tests {
 
     #[test]
     fn reduce_self_loop() {
-        // 0 -> 1 -> 2 with 1 -> 1 conditional loop and 1 -> 2 unconditional
-        let nodes = create_nodes(3);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),None],
-            nodes[1].clone() => [Some(nodes[2].clone()), Some(nodes[1].clone())],
-            nodes[2].clone() => [None, None]
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
-        };
+        let cfg = create_cfg! { 0 => [1], 1 => [2, 1], 2 => [] };
+        cfg.to_file("/Users/davide/Desktop/test.dot");
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 3);
@@ -650,19 +654,7 @@ mod tests {
 
     #[test]
     fn reduce_if_then_next() {
-        // 0 -> 1 -> 2 -> 3 -> 4 uncond, 1->3 cond
-        let nodes = create_nodes(5);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),None],
-            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[3].clone())],
-            nodes[2].clone() => [Some(nodes[3].clone()),None],
-            nodes[3].clone() => [Some(nodes[4].clone()),None],
-            nodes[4].clone() => [None,None],
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
-        };
+        let cfg = create_cfg! { 0 => [1], 1 => [2, 3], 2 => [3], 3 => [4], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 4);
@@ -678,19 +670,7 @@ mod tests {
 
     #[test]
     fn reduce_if_then_cond() {
-        // 0 -> 1 -> 3 -> 4 uncond, 2->3 uncond, 1->2 cond
-        let nodes = create_nodes(5);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),None],
-            nodes[1].clone() => [Some(nodes[3].clone()),Some(nodes[2].clone())],
-            nodes[2].clone() => [Some(nodes[3].clone()),None],
-            nodes[3].clone() => [Some(nodes[4].clone()),None],
-            nodes[4].clone() => [None,None],
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
-        };
+        let cfg = create_cfg! { 0 => [1], 1 => [3, 2], 2 => [3], 3 => [4], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 4);
@@ -706,19 +686,8 @@ mod tests {
 
     #[test]
     fn short_circuit_if_then() {
-        // 0 -> 1 -> 2 -> 3 uncond, 0 -> 3 cond, 1->3 cond
         // 2 is reached iff 0 and 1 holds
-        let nodes = create_nodes(4);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),Some(nodes[3].clone())],
-            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[3].clone())],
-            nodes[2].clone() => [Some(nodes[3].clone()),None],
-            nodes[3].clone() => [None,None],
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
-        };
+        let cfg = create_cfg! { 0 => [1, 3], 1 => [2, 3], 2 => [3], 3 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 2);
@@ -732,18 +701,8 @@ mod tests {
     #[test]
     fn short_circuit_if_then_tricky() {
         // like short_circuit_if_then, but at some point the next and cond are swapped
-        // 0 -> 1 -> 2 uncond, 3 -> 4 uncond, 2 -> 4 uncond, 0 -> 4 cond, 1 -> 4 cond, 2 -> 3 cond
-        let nodes = create_nodes(5);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),Some(nodes[4].clone())],
-            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[4].clone())],
-            nodes[2].clone() => [Some(nodes[4].clone()),Some(nodes[3].clone())],
-            nodes[3].clone() => [Some(nodes[4].clone()),None],
-            nodes[4].clone() => [None,None],
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
+        let cfg = create_cfg! {
+            0 => [1, 4], 1 => [2, 4], 2 => [4, 3], 3 => [4], 4 => []
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
@@ -757,19 +716,8 @@ mod tests {
 
     #[test]
     fn reduce_if_else() {
-        // 0 -> 1 -> 2 -> 4 -> 5 uncond, 3->4 uncond,  1 -> 3 cond
-        let nodes = create_nodes(6);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),None],
-            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[3].clone())],
-            nodes[2].clone() => [Some(nodes[4].clone()),None],
-            nodes[3].clone() => [Some(nodes[4].clone()),None],
-            nodes[4].clone() => [Some(nodes[5].clone()),None],
-            nodes[5].clone() => [None,None],
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
+        let cfg = create_cfg! {
+            0 => [1], 1 => [2, 3], 2 => [4], 3 => [4], 4 => [5], 5 => []
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
@@ -785,18 +733,8 @@ mod tests {
 
     #[test]
     fn short_circuit_if_else() {
-        let nodes = create_nodes(6);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),Some(nodes[3].clone())],
-            nodes[1].clone() => [Some(nodes[2].clone()),Some(nodes[3].clone())],
-            nodes[2].clone() => [Some(nodes[3].clone()),Some(nodes[4].clone())],
-            nodes[3].clone() => [Some(nodes[5].clone()),None],
-            nodes[4].clone() => [Some(nodes[5].clone()),None],
-            nodes[5].clone() => [None,None],
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
+        let cfg = create_cfg! {
+            0 => [1, 3], 1 => [2, 3], 2 => [3, 4], 3 => [5], 4 => [5], 5 => []
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
@@ -811,21 +749,215 @@ mod tests {
     #[test]
     fn if_else_looping() {
         // this test replicates a bug
-        // 0 -> 1 -> 3 uncond, 2 -> 3 uncond, 0 -> 2 cond, 1 -> 1 cond, 2 -> 2 cond
-        let nodes = create_nodes(4);
-        let edges = hashmap! {
-            nodes[0].clone() => [Some(nodes[1].clone()),Some(nodes[2].clone())],
-            nodes[1].clone() => [Some(nodes[3].clone()),Some(nodes[1].clone())],
-            nodes[2].clone() => [Some(nodes[3].clone()),Some(nodes[2].clone())],
-            nodes[3].clone() => [None,None],
-        };
-        let cfg = CFG {
-            root: Some(nodes[0].clone()),
-            edges,
-        };
+        let cfg = create_cfg! { 0 => [1, 2], 1 => [3, 1], 2 => [3, 2], 3 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 2);
         assert_eq!(sequence.get_type(), BlockType::Sequence);
+        let children = sequence.children();
+        assert_eq!(children[0].get_type(), BlockType::IfThenElse);
+        assert_eq!(children[0].len(), 3);
+        assert_eq!(children[0].children()[1].get_type(), BlockType::SelfLooping);
+        assert_eq!(children[0].children()[2].get_type(), BlockType::SelfLooping);
+    }
+
+    #[test]
+    fn whileb() {
+        let cfg = create_cfg! { 0 => [1], 1 => [2, 3], 2 => [1], 3 => [] };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::While);
+    }
+
+    #[test]
+    fn dowhile_type1() {
+        // only 2 nodes, head and tail form the block
+        let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [1, 3], 3 => [] };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+    }
+
+    #[test]
+    fn dowhile_type2() {
+        // three nodes form the block: head, extra, tail
+        let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3], 3 => [4, 1], 4 => [] };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+    }
+
+    #[test]
+    fn dowhile_type3() {
+        // three nodes form the block: head, tail, extra
+        let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3, 4], 3 => [1], 4 => [] };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+    }
+
+    #[test]
+    fn dowhile_type4() {
+        // four nodes form the block: head, extra, tail, extra
+        let cfg = create_cfg! {
+            0 => [1], 1 => [2], 2 => [3], 3 => [4, 5], 4 => [1], 5 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+    }
+
+    #[test]
+    fn structures_inside_loop() {
+        // test several nested structures inside a loop
+        let cfg = create_cfg! {
+            0 => [1], 1 => [2], 2 => [3, 4], 3 => [5, 3], 4 => [5], 5 => [6, 1], 6 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+    }
+
+    #[test]
+    fn nested_while() {
+        // while inside while, sharing a head-tail
+        let cfg = create_cfg! {
+            0 => [1], 1 =>[4, 2], 2 => [3, 1], 3 => [2], 4 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::While);
+        assert_eq!(
+            sequence.children()[1].children()[1].get_type(),
+            BlockType::While
+        );
+    }
+
+    #[test]
+    fn nested_dowhile_sharing() {
+        // do-while inside do-while, sharing a head-tail
+        let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3, 1], 3 => [4, 2], 4 => [] };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(
+            sequence.children()[1].children()[1].get_type(),
+            BlockType::DoWhile
+        );
+    }
+
+    #[test]
+    fn nested_dowhile() {
+        // do-while inside do-while, sharing no parts
+        let cfg = create_cfg! {
+            0 => [1], 1 => [2], 2 => [3], 3 => [4, 2], 4 => [5, 1], 5 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(
+            sequence.children()[1].children()[1].get_type(),
+            BlockType::DoWhile
+        );
+    }
+
+    #[test]
+    fn nat_loop_break_while() {
+        let cfg = create_cfg! { 0 => [1], 1 => [2, 4], 2 => [3, 4], 3 => [1], 4 => [] };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::While);
+    }
+
+    #[test]
+    fn nat_loop_break_dowhile() {
+        let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3, 4], 3 => [4, 1], 4 => [] };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 3);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+    }
+
+    #[test]
+    fn nat_loop_return_while() {
+        let cfg = create_cfg! {
+            0 => [1],
+            1 => [2, 6],
+            2 => [3, 6],
+            3 => [6, 4],
+            4 => [5, 8],
+            5 => [8, 1],
+            6 => [7],
+            7 => [8],
+            8 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 5);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::While);
+    }
+
+    #[test]
+    fn nat_loop_return_do_while() {
+        let cfg = create_cfg! {
+            0 => [1],
+            1 => [2],
+            2 => [3, 6],
+            3 => [6, 4],
+            4 => [5, 8],
+            5 => [8, 1],
+            6 => [7],
+            7 => [8],
+            8 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 5);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+    }
+
+    #[test]
+    fn nat_loop_return_orphaning() {
+        // resolving this loop will create orphan nodes
+        let cfg = create_cfg! {
+            0 => [1],
+            1 => [2, 8],
+            2 => [3, 6],
+            3 => [6, 4],
+            4 => [5, 7],
+            5 => [8, 1],
+            6 => [7],
+            7 => [9],
+            8 => [9],
+            9 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.len(), 5);
+        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
     }
 }
