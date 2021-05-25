@@ -4,6 +4,7 @@ use fnv::FnvHashSet;
 use std::array::IntoIter;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 use std::mem::swap;
 use std::rc::Rc;
 
@@ -37,6 +38,7 @@ fn reduce_self_loop(
     node: &StructureBlock,
     graph: &DirectedGraph<StructureBlock>,
     _: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+    _: &HashMap<&StructureBlock, bool>,
 ) -> Option<(StructureBlock, Option<StructureBlock>)> {
     match node {
         StructureBlock::Basic(_) => {
@@ -63,6 +65,7 @@ fn reduce_sequence(
     node: &StructureBlock,
     graph: &DirectedGraph<StructureBlock>,
     preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+    _: &HashMap<&StructureBlock, bool>,
 ) -> Option<(StructureBlock, Option<StructureBlock>)> {
     // conditions for a sequence:
     // - current node has only one successor node
@@ -123,6 +126,7 @@ fn reduce_ifthen(
     node: &StructureBlock,
     graph: &DirectedGraph<StructureBlock>,
     preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+    _: &HashMap<&StructureBlock, bool>,
 ) -> Option<(StructureBlock, Option<StructureBlock>)> {
     let mut children = graph.children(node).unwrap();
     if children.len() == 2 {
@@ -168,6 +172,7 @@ fn reduce_ifelse(
     node: &StructureBlock,
     graph: &DirectedGraph<StructureBlock>,
     preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+    _: &HashMap<&StructureBlock, bool>,
 ) -> Option<(StructureBlock, Option<StructureBlock>)> {
     let node_children = graph.children(&node).unwrap();
     if node_children.len() == 2 {
@@ -220,9 +225,103 @@ fn reduce_ifelse(
 fn reduce_loop(
     node: &StructureBlock,
     graph: &DirectedGraph<StructureBlock>,
-    _: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+    loops: &HashMap<&StructureBlock, bool>,
 ) -> Option<(StructureBlock, Option<StructureBlock>)> {
-    None
+    if *loops.get(&node).unwrap() && preds.get(&node).unwrap().len() > 1 {
+        let head_children = graph.children(&node).unwrap();
+        if head_children.len() == 2 {
+            // while loop
+            let next = head_children[0];
+            let tail = head_children[1];
+            find_while(node, next, tail, graph)
+        } else if head_children.len() == 1 {
+            // do-while loop
+            let tail = head_children[0];
+            let tail_children = graph.children(tail).unwrap();
+            find_dowhile(node, tail, &tail_children, graph)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+fn find_while(
+    node: &StructureBlock,
+    next: &StructureBlock,
+    tail: &StructureBlock,
+    graph: &DirectedGraph<StructureBlock>,
+) -> Option<(StructureBlock, Option<StructureBlock>)> {
+    let mut next = next;
+    let mut tail = tail;
+    if graph.children(&next).unwrap().contains(&node) {
+        swap(&mut next, &mut tail);
+    }
+    let tail_children = graph.children(&tail).unwrap();
+    if tail_children.len() == 1 && tail_children[0] == node {
+        let retval = StructureBlock::from(Rc::new(NestedBlock {
+            block_type: BlockType::While,
+            content: vec![node.clone(), tail.clone()],
+            depth: std::cmp::max(node.get_depth(), tail.get_depth()) + 1,
+        }));
+        Some((retval, Some(next.clone())))
+    } else {
+        None
+    }
+}
+
+fn find_dowhile(
+    node: &StructureBlock,
+    tail: &StructureBlock,
+    tail_children: &[&StructureBlock],
+    graph: &DirectedGraph<StructureBlock>,
+) -> Option<(StructureBlock, Option<StructureBlock>)> {
+    if tail_children.len() == 2 {
+        if !tail_children.contains(&node) {
+            //type 3 or 4 (single node between tail and head) or no loop
+            let post_tail_children = [
+                graph.children(tail_children[0]).unwrap(),
+                graph.children(tail_children[1]).unwrap(),
+            ];
+            let next;
+            let post_tail;
+            if post_tail_children[0].len() == 1 && post_tail_children[0][0] == node {
+                post_tail = tail_children[0];
+                next = tail_children[1];
+            } else if post_tail_children[1].len() == 1 && post_tail_children[1][0] == node {
+                post_tail = tail_children[1];
+                next = tail_children[0];
+            } else {
+                return None;
+            }
+            let depth = node
+                .get_depth()
+                .max(tail.get_depth().max(post_tail.get_depth()))
+                + 1;
+            let retval = StructureBlock::from(Rc::new(NestedBlock {
+                block_type: BlockType::DoWhile,
+                content: vec![node.clone(), tail.clone(), post_tail.clone()],
+                depth,
+            }));
+            Some((retval, Some(next.clone())))
+        } else {
+            //type 1 or 2 (single or no node between head and tail)
+            let mut next = tail_children[0];
+            if next == node {
+                next = tail_children[1];
+            }
+            let retval = StructureBlock::from(Rc::new(NestedBlock {
+                block_type: BlockType::DoWhile,
+                content: vec![node.clone(), tail.clone()],
+                depth: std::cmp::max(node.get_depth(), tail.get_depth()) + 1,
+            }));
+            Some((retval, Some(next.clone())))
+        }
+    } else {
+        None
+    }
 }
 
 fn construct_and_flatten_sequence(node: &StructureBlock, next: &StructureBlock) -> NestedBlock {
@@ -307,6 +406,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
     loop {
         let mut modified = false;
         let preds = graph.predecessors();
+        let loops = is_loop(&graph.scc());
         for node in graph.postorder() {
             let reductions = [
                 reduce_self_loop,
@@ -317,7 +417,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
             ];
             let mut reduced = None;
             for reduction in &reductions {
-                reduced = (reduction)(node, &graph, &preds);
+                reduced = (reduction)(node, &graph, &preds, &loops);
                 if reduced.is_some() {
                     break;
                 }
@@ -416,7 +516,7 @@ fn exits_and_targets(
     (exits, targets)
 }
 
-fn is_loop<'a>(sccs: &HashMap<&'a BasicBlock, usize>) -> HashMap<&'a BasicBlock, bool> {
+fn is_loop<'a, T: Hash + Eq>(sccs: &HashMap<&'a T, usize>) -> HashMap<&'a T, bool> {
     let mut retval = HashMap::new();
     let mut counting = vec![0_usize; sccs.len()];
     for (_, scc_id) in sccs.iter() {
@@ -546,7 +646,6 @@ fn remove_natural_loops(
 #[cfg(test)]
 mod tests {
     use crate::analysis::{cfs, BasicBlock, BlockType, Graph, CFG, CFS};
-    use maplit::hashmap;
     use std::collections::HashMap;
     use std::rc::Rc;
 
@@ -561,6 +660,7 @@ mod tests {
                         .take(cap)
                         .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
                         .collect::<Vec<_>>();
+            #[allow(unused_mut)]
             let mut edges = std::collections::HashMap::with_capacity(cap);
             $(
                 let mut targets = $value
@@ -620,13 +720,6 @@ mod tests {
         assert!(cfs.get_tree().is_none());
     }
 
-    fn create_nodes(n: usize) -> Vec<Rc<BasicBlock>> {
-        (0..)
-            .take(n)
-            .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
-            .collect()
-    }
-
     #[test]
     fn reduce_sequence() {
         let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3], 3 => [4], 4 => [] };
@@ -640,7 +733,6 @@ mod tests {
     #[test]
     fn reduce_self_loop() {
         let cfg = create_cfg! { 0 => [1], 1 => [2, 1], 2 => [] };
-        cfg.to_file("/Users/davide/Desktop/test.dot");
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 3);
@@ -857,7 +949,7 @@ mod tests {
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
         assert_eq!(
-            sequence.children()[1].children()[1].get_type(),
+            sequence.children()[1].children()[0].get_type(),
             BlockType::DoWhile
         );
     }
@@ -874,7 +966,7 @@ mod tests {
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
         assert_eq!(
-            sequence.children()[1].children()[1].get_type(),
+            sequence.children()[1].children()[0].children()[1].get_type(),
             BlockType::DoWhile
         );
     }

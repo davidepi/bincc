@@ -1,5 +1,6 @@
 use crate::analysis::BasicBlock;
 use std::collections::hash_map::DefaultHasher;
+use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::rc::Rc;
 
@@ -12,6 +13,20 @@ pub enum BlockType {
     IfThenElse,
     While,
     DoWhile,
+}
+
+impl Display for BlockType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BlockType::Basic => write!(f, "Basic Block"),
+            BlockType::SelfLooping => write!(f, "Self Loop"),
+            BlockType::Sequence => write!(f, "Sequence"),
+            BlockType::IfThen => write!(f, "If-Then"),
+            BlockType::IfThenElse => write!(f, "If-Then-Else"),
+            BlockType::While => write!(f, "While"),
+            BlockType::DoWhile => write!(f, "Do-While"),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
