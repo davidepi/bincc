@@ -2,6 +2,8 @@ use bcc::analysis::CFG;
 use bcc::disasm::radare2::R2Disasm;
 use bcc::disasm::Disassembler;
 use clap::{App, Arg};
+use indicatif::{ProgressBar, ProgressStyle};
+use log::LevelFilter;
 use std::error::Error;
 use std::path::Path;
 use std::process::exit;
@@ -10,11 +12,6 @@ use std::thread;
 use std::time::Instant;
 
 fn main() {
-    match std::env::var("RUST_LOG") {
-        Ok(_) => {}
-        Err(_) => std::env::set_var("RUST_LOG", "warn"),
-    }
-    env_logger::init();
     let matches = App::new("bcc")
         .version("0.1")
         .author("Davide Pizzolotto <davide.pizzolotto@gmail.com>")
@@ -46,9 +43,21 @@ fn main() {
                 .required(false)
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("log")
+                .short("l")
+                .long("log")
+                .help("Log file")
+                .required(false)
+                .takes_value(true),
+        )
         .get_matches();
+    if let Some(logfile) = matches.value_of("log") {
+        simple_logging::log_to_file(logfile, LevelFilter::Debug).expect("Could not setup log");
+    }
     let threads_no = if cfg!(debug_assertions) {
         log::warn!("Debug build, forcing 1 working thread");
+
         1
     } else if let Some(jobs) = matches.value_of("jobs") {
         match jobs.parse::<usize>() {
@@ -64,7 +73,7 @@ fn main() {
         }
     } else {
         let default_threads = num_cpus::get();
-        log::info!("Using {} jobs", default_threads);
+        log::info!("Using {} threads", default_threads);
         default_threads
     };
     let output = Path::new(matches.value_of("output").unwrap());
@@ -78,12 +87,19 @@ fn main() {
         .map(String::from)
         .collect::<Vec<_>>();
     log::debug!("Total jobs: {}", inputs.len());
+    let pb = Arc::new(ProgressBar::new(inputs.len() as u64));
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7}")
+            .progress_chars("##-"),
+    );
     let jobs = Arc::new(Mutex::new(inputs));
     let mut threads = vec![];
     for t in 0..threads_no {
+        let personal_jobs = jobs.clone();
+        let out = output.to_str().unwrap().to_string();
+        let personal_pb = pb.clone();
         threads.push(thread::spawn({
-            let personal_jobs = jobs.clone();
-            let out = output.clone().to_str().unwrap().to_string();
             move || loop {
                 if !personal_jobs.lock().unwrap().is_empty() {
                     let maybe_job = personal_jobs.lock().unwrap().pop();
@@ -97,6 +113,7 @@ fn main() {
                                 log::warn!("[{}] could not process file {}: {}", t, job, err)
                             }
                         }
+                        personal_pb.inc(1);
                     }
                 } else {
                     break;
@@ -107,6 +124,7 @@ fn main() {
     for t in threads {
         t.join().unwrap();
     }
+    pb.finish();
 }
 
 fn get_and_save_cfg(
