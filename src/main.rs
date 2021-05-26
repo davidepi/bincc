@@ -49,7 +49,8 @@ fn main() {
                 .long("log")
                 .help("Log file")
                 .required(false)
-                .takes_value(true),
+                .takes_value(true)
+                .value_name("FILE"),
         )
         .get_matches();
     if let Some(logfile) = matches.value_of("log") {
@@ -167,10 +168,14 @@ fn get_and_save_cfg(
         for (function, offset) in fnames {
             let graph_filename = format!("{}{}", function, ".dot");
             let outfile = out_dir.clone().join(Path::new(&graph_filename));
-            let cfg = CFG::new(&bodies.get(&offset).unwrap()[..], &*arch);
-            log::trace!("[{}] extracted CFG of {}::{}", tid, relative, function);
-            cfg.to_file(outfile)?;
-            ret.push(cfg)
+            if let Some(body) = bodies.get(&offset) {
+                let cfg = CFG::new(&body[..], &*arch);
+                log::trace!("[{}] extracted CFG of {}::{}", tid, relative, function);
+                cfg.to_file(outfile).unwrap_or_else(|_| {
+                    log::warn!("[{}] could not save CFG of {}::{}", tid, relative, function)
+                });
+                ret.push(cfg)
+            }
         }
         Ok(ret)
     } else {
