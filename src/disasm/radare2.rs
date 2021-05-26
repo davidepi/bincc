@@ -1,7 +1,7 @@
 use crate::disasm::architectures::{ArchARM, ArchX86, Architecture};
 use crate::disasm::{Disassembler, Statement};
 use fnv::FnvHashMap;
-use r2pipe::R2Pipe;
+use r2pipe::{R2Pipe, R2PipeSpawnOptions};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::ErrorKind;
@@ -36,7 +36,11 @@ impl R2Disasm {
     pub fn new(binary: &str) -> Result<R2Disasm, io::Error> {
         //R2Pipe.rs error handling is garbage and will panic if file does not exist
         if fs::metadata(binary).is_ok() {
-            let maybe_pipe = R2Pipe::spawn(binary, None);
+            let flags = R2PipeSpawnOptions {
+                exepath: "r2".to_string(),
+                args: vec!["-e", "io.cache=true"],
+            };
+            let maybe_pipe = R2Pipe::spawn(binary, Some(flags));
             match maybe_pipe {
                 Ok(pipe) => Ok(R2Disasm {
                     pipe: RefCell::new(pipe),

@@ -17,7 +17,7 @@ doc = false
 [dependencies]
 fnv = "1.0.7"
 parse_int = "0.5"
-r2pipe = { git = "https://github.com/davidepi/r2pipe.rs", branch = "http-as-feature", optional = true }
+r2pipe = { git = "https://github.com/radareorg/r2pipe.rs.git", branch = "master", optional = true }
 regex = "1"
 clap="2" # used by bin only
 log = "0.4" # used by bin only
@@ -36,3 +36,7 @@ radare2 = ["r2pipe"]
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[profile.release]
+opt-level=3
+lto=true
