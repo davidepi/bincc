@@ -61,10 +61,7 @@ impl Drop for R2Disasm {
 
 impl Disassembler for R2Disasm {
     fn analyse(&mut self) {
-        self.pipe
-            .get_mut()
-            .cmd("aaa")
-            .expect("Failed to analyse the binary");
+        if self.pipe.get_mut().cmd("aaa").is_ok() {}
     }
 
     fn get_arch(&self) -> Option<Box<dyn Architecture>> {
@@ -123,22 +120,20 @@ impl Disassembler for R2Disasm {
     fn get_function_body(&self, function: u64) -> Option<Vec<Statement>> {
         let mut retval = None;
         let cmd_change_offset = format!("s {}", function);
-        self.pipe
-            .borrow_mut()
-            .cmd(&cmd_change_offset)
-            .expect("Failed to set address");
-        if let Ok(json) = self.pipe.borrow_mut().cmdj("pdrj") {
-            if let Some(stmts) = json.as_array() {
-                let mut list = Vec::new();
-                for stmt in stmts {
-                    let maybe_offset = stmt["offset"].as_u64();
-                    let maybe_opcode = stmt["opcode"].as_str();
-                    if let (Some(offset), Some(opcode)) = (maybe_offset, maybe_opcode) {
-                        let stmt = Statement::new(offset, opcode);
-                        list.push(stmt);
+        if self.pipe.borrow_mut().cmd(&cmd_change_offset).is_ok() {
+            if let Ok(json) = self.pipe.borrow_mut().cmdj("pdrj") {
+                if let Some(stmts) = json.as_array() {
+                    let mut list = Vec::new();
+                    for stmt in stmts {
+                        let maybe_offset = stmt["offset"].as_u64();
+                        let maybe_opcode = stmt["opcode"].as_str();
+                        if let (Some(offset), Some(opcode)) = (maybe_offset, maybe_opcode) {
+                            let stmt = Statement::new(offset, opcode);
+                            list.push(stmt);
+                        }
                     }
+                    retval = Some(list);
                 }
-                retval = Some(list);
             }
         }
         retval
