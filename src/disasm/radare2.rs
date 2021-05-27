@@ -38,7 +38,7 @@ impl R2Disasm {
         if fs::metadata(binary).is_ok() {
             let flags = R2PipeSpawnOptions {
                 exepath: "r2".to_string(),
-                args: vec!["-e", "io.cache=true"],
+                args: vec!["-2"],
             };
             let maybe_pipe = R2Pipe::spawn(binary, Some(flags));
             match maybe_pipe {
@@ -55,13 +55,18 @@ impl R2Disasm {
 
 impl Drop for R2Disasm {
     fn drop(&mut self) {
-        self.pipe.get_mut().close()
+        self.pipe.borrow_mut().close()
     }
 }
 
 impl Disassembler for R2Disasm {
     fn analyse(&mut self) {
-        if self.pipe.get_mut().cmd("aaa").is_ok() {}
+        match self.pipe.borrow_mut().cmd("aaa") {
+            Ok(_) => {}
+            Err(error) => {
+                log::error!("{}", error);
+            }
+        }
     }
 
     fn get_arch(&self) -> Option<Box<dyn Architecture>> {
@@ -80,21 +85,29 @@ impl Disassembler for R2Disasm {
                 },
                 _ => None,
             },
-            Err(_) => None,
+            Err(error) => {
+                log::error!("{}", error);
+                None
+            }
         }
     }
 
     fn get_function_names(&self) -> HashMap<String, u64> {
         let mut retval = HashMap::new();
-        if let Ok(json) = self.pipe.borrow_mut().cmdj("aflj") {
-            if let Some(funcs) = json.as_array() {
-                for func in funcs {
-                    let maybe_offset = func["offset"].as_u64();
-                    let maybe_name = func["name"].as_str();
-                    if let (Some(offset), Some(name)) = (maybe_offset, maybe_name) {
-                        retval.insert(name.to_string(), offset);
+        match self.pipe.borrow_mut().cmdj("aflj") {
+            Ok(json) => {
+                if let Some(funcs) = json.as_array() {
+                    for func in funcs {
+                        let maybe_offset = func["offset"].as_u64();
+                        let maybe_name = func["name"].as_str();
+                        if let (Some(offset), Some(name)) = (maybe_offset, maybe_name) {
+                            retval.insert(name.to_string(), offset);
+                        }
                     }
                 }
+            }
+            Err(error) => {
+                log::error!("{}", error)
             }
         }
         retval
@@ -103,15 +116,20 @@ impl Disassembler for R2Disasm {
     fn get_function_bodies(&self) -> FnvHashMap<u64, Vec<Statement>> {
         let mut retval = FnvHashMap::default();
         let maybe_json = self.pipe.borrow_mut().cmdj("aflqj");
-        if let Ok(json) = maybe_json {
-            if let Some(offsets) = json.as_array() {
-                retval = offsets
-                    .iter()
-                    .filter_map(|x| x.as_u64())
-                    .filter_map(|offset| {
-                        self.get_function_body(offset).map(|value| (offset, value))
-                    })
-                    .collect();
+        match maybe_json {
+            Ok(json) => {
+                if let Some(offsets) = json.as_array() {
+                    retval = offsets
+                        .iter()
+                        .filter_map(|x| x.as_u64())
+                        .filter_map(|offset| {
+                            self.get_function_body(offset).map(|value| (offset, value))
+                        })
+                        .collect();
+                }
+            }
+            Err(error) => {
+                log::error!("{}", error)
             }
         }
         retval
@@ -120,20 +138,26 @@ impl Disassembler for R2Disasm {
     fn get_function_body(&self, function: u64) -> Option<Vec<Statement>> {
         let mut retval = None;
         let cmd_change_offset = format!("s {}", function);
-        if self.pipe.borrow_mut().cmd(&cmd_change_offset).is_ok() {
-            if let Ok(json) = self.pipe.borrow_mut().cmdj("pdrj") {
-                if let Some(stmts) = json.as_array() {
-                    let mut list = Vec::new();
-                    for stmt in stmts {
-                        let maybe_offset = stmt["offset"].as_u64();
-                        let maybe_opcode = stmt["opcode"].as_str();
-                        if let (Some(offset), Some(opcode)) = (maybe_offset, maybe_opcode) {
-                            let stmt = Statement::new(offset, opcode);
-                            list.push(stmt);
+        let mut pipe = self.pipe.borrow_mut();
+        match pipe.cmd(&cmd_change_offset) {
+            Ok(_) => {
+                if let Ok(json) = pipe.cmdj("pdrj") {
+                    if let Some(stmts) = json.as_array() {
+                        let mut list = Vec::new();
+                        for stmt in stmts {
+                            let maybe_offset = stmt["offset"].as_u64();
+                            let maybe_opcode = stmt["opcode"].as_str();
+                            if let (Some(offset), Some(opcode)) = (maybe_offset, maybe_opcode) {
+                                let stmt = Statement::new(offset, opcode);
+                                list.push(stmt);
+                            }
                         }
+                        retval = Some(list);
                     }
-                    retval = Some(list);
                 }
+            }
+            Err(error) => {
+                log::error!("{}", error);
             }
         }
         retval

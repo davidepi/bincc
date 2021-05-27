@@ -55,6 +55,8 @@ fn main() {
         .get_matches();
     if let Some(logfile) = matches.value_of("log") {
         simple_logging::log_to_file(logfile, LevelFilter::Debug).expect("Could not setup log");
+    } else if cfg!(debug_assertions) {
+        simple_logging::log_to_stderr(LevelFilter::Trace);
     }
     let threads_no = if cfg!(debug_assertions) {
         log::warn!("Debug build, forcing 1 working thread");
@@ -92,7 +94,7 @@ fn main() {
     pb.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7}")
-            .progress_chars("##-"),
+            .progress_chars("#>-"),
     );
     let jobs = Arc::new(Mutex::new(inputs));
     let mut threads = vec![];
@@ -111,7 +113,7 @@ fn main() {
                                 log::trace!("[{}] finished job on {}", t, job);
                             }
                             Err(err) => {
-                                log::warn!("[{}] could not process file {}: {}", t, job, err)
+                                log::error!("[{}] could not process file {}: {}", t, job, err)
                             }
                         }
                         personal_pb.inc(1);
@@ -143,20 +145,20 @@ fn get_and_save_cfg(
         out_dir.as_os_str().to_str().unwrap_or("ERR")
     );
     let mut disassembler = R2Disasm::new(relative)?;
-    log::trace!("[{}] starting disassembling", tid);
-    let start_t = Instant::now();
-    disassembler.analyse();
-    let end_t = Instant::now();
-    log::trace!("[{}] finished disassembling", tid);
-    log::info!(
-        "[{}] disassembling {} ({} bytes) took {} ms",
-        tid,
-        relative,
-        metadata.len(),
-        end_t.checked_duration_since(start_t).unwrap().as_millis()
-    );
     let mut ret = Vec::new();
     if let Some(arch) = disassembler.get_arch() {
+        log::trace!("[{}] starting disassembling", tid);
+        let start_t = Instant::now();
+        disassembler.analyse();
+        let end_t = Instant::now();
+        log::trace!("[{}] finished disassembling", tid);
+        log::info!(
+            "[{}] disassembling {} ({} bytes) took {} ms",
+            tid,
+            relative,
+            metadata.len(),
+            end_t.checked_duration_since(start_t).unwrap().as_millis()
+        );
         let fnames = disassembler.get_function_names();
         let bodies = disassembler.get_function_bodies();
         log::debug!(
@@ -172,7 +174,7 @@ fn get_and_save_cfg(
                 let cfg = CFG::new(&body[..], &*arch);
                 log::trace!("[{}] extracted CFG of {}::{}", tid, relative, function);
                 cfg.to_file(outfile).unwrap_or_else(|_| {
-                    log::warn!("[{}] could not save CFG of {}::{}", tid, relative, function)
+                    log::error!("[{}] could not save CFG of {}::{}", tid, relative, function)
                 });
                 ret.push(cfg)
             }
