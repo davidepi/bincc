@@ -4,8 +4,13 @@ use fnv::FnvHashSet;
 use std::array::IntoIter;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write as WriteFmt;
+use std::fs::File;
 use std::hash::Hash;
+use std::io;
+use std::io::Write as WriteIo;
 use std::mem::swap;
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct CFS {
@@ -31,6 +36,46 @@ impl CFS {
 
     pub fn get_cfg(&self) -> &CFG {
         &self.cfg
+    }
+
+    pub fn to_dot_tree(&self) -> String {
+        let mut dot = "digraph {\n".to_string();
+        let mut stack = self.get_tree().iter().cloned().collect::<Vec<_>>();
+        let mut ids = stack
+            .iter()
+            .cloned()
+            .map(|x| (x, 0))
+            .collect::<HashMap<_, _>>();
+        while let Some(node) = stack.pop() {
+            let ids_len = ids.len();
+            let node_id = *ids.entry(node.clone()).or_insert(ids_len);
+            match node {
+                StructureBlock::Basic(_) => write!(
+                    dot,
+                    "{}[label=\"{}\";shape=\"box\"];\n",
+                    node_id,
+                    node.get_type()
+                ),
+                StructureBlock::Nested(_) => {
+                    write!(dot, "{}[label=\"{}\"];\n", node_id, node.get_type())
+                }
+            }
+            .unwrap();
+            for child in node.children().iter().cloned() {
+                let ids_len = ids.len();
+                let child_id = *ids.entry(child.clone()).or_insert(ids_len);
+                write!(dot, "{}->{}\n", node_id, child_id).unwrap();
+                stack.push(child);
+            }
+        }
+        dot.push('}');
+        dot.push('\n');
+        dot
+    }
+
+    pub fn to_file_tree<S: AsRef<Path>>(&self, filename: S) -> Result<(), io::Error> {
+        let mut file = File::create(filename)?;
+        file.write_all(self.to_dot_tree().as_bytes())
     }
 }
 
@@ -900,6 +945,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        cfs.to_file_tree("/Users/davide/Desktop/tree.dot");
     }
 
     #[test]
