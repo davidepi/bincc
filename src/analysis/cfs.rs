@@ -490,10 +490,10 @@ fn exits_and_targets(
     node: &BasicBlock,
     sccs: &HashMap<&BasicBlock, usize>,
     cfg: &CFG,
-) -> (Vec<Rc<BasicBlock>>, HashSet<Rc<BasicBlock>>) {
+) -> (HashSet<Rc<BasicBlock>>, HashSet<Rc<BasicBlock>>) {
     let mut visit = vec![node];
     let mut visited = IntoIter::new([node]).collect::<HashSet<_>>();
-    let mut exits = Vec::new();
+    let mut exits = HashSet::new();
     let mut targets = HashSet::new();
     // checks the exits from the loop
     while let Some(node) = visit.pop() {
@@ -503,7 +503,7 @@ fn exits_and_targets(
             if child_scc_id != node_scc_id {
                 let node_rc = cfg.rc(node).unwrap();
                 let child_rc = cfg.rc(child).unwrap();
-                exits.push(node_rc);
+                exits.insert(node_rc);
                 targets.insert(child_rc);
             } else if !visited.contains(child) {
                 // continue the visit only if the scc is the same and the node is not visited
@@ -533,50 +533,27 @@ fn is_loop<'a, T: Hash + Eq>(sccs: &HashMap<&'a T, usize>) -> HashMap<&'a T, boo
 }
 
 // remove all edges from a CFG that points to a list of targets
-fn remove_edges<'a>(
-    node: &'a BasicBlock,
-    targets: &HashSet<Rc<BasicBlock>>,
-    sccs: &HashMap<&'a BasicBlock, usize>,
+fn remove_edges(
+    input_set: HashSet<Rc<BasicBlock>>,
+    targets: HashSet<Rc<BasicBlock>>,
     mut cfg: CFG,
 ) -> CFG {
-    let mut changes = Vec::new();
-    let mut visit = vec![node];
-    let mut visited = IntoIter::new([node]).collect::<HashSet<_>>();
-    while let Some(node) = visit.pop() {
-        let node_rc = cfg.rc(node).unwrap();
-        let node_scc_id = *sccs.get(node).unwrap();
-        if let Some(cond) = cfg.cond(Some(node)) {
-            if targets.contains(cond) {
-                // remove edge (deferred)
-                let current = [cfg.edges.get(node).unwrap()[0].clone(), None];
-                changes.push((node_rc.clone(), current));
-            } else {
-                // don't remove edge
-                let cond_scc_id = *sccs.get(cond).unwrap();
-                if !visited.contains(cond) && cond_scc_id == node_scc_id {
-                    visit.push(cond);
+    for (node, edges) in cfg.edges.iter_mut() {
+        if input_set.contains(node) {
+            if let Some(next) = &mut edges[0] {
+                if targets.contains(next) {
+                    edges[0] = None;
                 }
-                visited.insert(cond);
+            }
+            if let Some(cond) = &mut edges[1] {
+                if targets.contains(cond) {
+                    edges[1] = None;
+                }
+            }
+            if edges[0].is_none() && edges[1].is_some() {
+                edges.swap(0, 1);
             }
         }
-        // impossible that I need to edit both edge and cond: this would not be a loop
-        else if let Some(next) = cfg.next(Some(node)) {
-            if targets.contains(next) {
-                // remove edge and swap next and cond
-                let current = [cfg.edges.get(node).unwrap()[1].clone(), None];
-                changes.push((node_rc.clone(), current));
-            } else {
-                // don't remove edge
-                let next_scc_id = *sccs.get(next).unwrap();
-                if !visited.contains(next) && next_scc_id == node_scc_id {
-                    visit.push(next);
-                }
-                visited.insert(next);
-            }
-        }
-    }
-    for (node, edge) in changes {
-        *cfg.edges.get_mut(&node).unwrap() = edge;
     }
     cfg
 }
@@ -605,23 +582,26 @@ fn denaturate_loop(
                 .unwrap()
                 .clone();
             targets.remove(&correct);
-            cfg = remove_edges(node, &targets, sccs, cfg);
+            cfg = remove_edges(exits, targets, cfg);
         }
-        let (mut exits, targets) = exits_and_targets(node, sccs, &cfg);
-        exits.sort_by(|a, b| {
+        let (exits, target) = exits_and_targets(node, sccs, &cfg);
+        let mut exits_vec = exits.iter().cloned().collect::<Vec<_>>();
+        exits_vec.sort_by(|a, b| {
             preds
                 .get(&**a)
                 .unwrap()
                 .len()
                 .cmp(&preds.get(&**b).unwrap().len())
         });
-        if targets.len() == 1 {
-            let correct_exit =
-                IntoIter::new([exits.last().cloned().unwrap()]).collect::<HashSet<_>>();
-            cfg = remove_edges(node, &correct_exit, sccs, cfg);
-        }
+        let correct_exit =
+            IntoIter::new([exits_vec.last().cloned().unwrap()]).collect::<HashSet<_>>();
+        let wrong_exits = exits
+            .difference(&correct_exit)
+            .cloned()
+            .collect::<HashSet<_>>();
+        cfg = remove_edges(wrong_exits, target, cfg);
     }
-    //TODO: what about 1 exit and 2 targets? can be solved by the other rules?
+    // 1 exit and >1 targets can't exist in a CFG loop
     cfg
 }
 
