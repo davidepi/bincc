@@ -38,6 +38,24 @@ impl CFS {
         &self.cfg
     }
 
+    pub fn to_dot(&self) -> String {
+        let mut dot = self.cfg.to_dot();
+        let old_ids = self.cfg.node_id_map();
+        dot.pop();
+        dot.pop();
+        if let Some(root) = self.get_tree() {
+            print_subgraph(&root, 0, &old_ids, &mut dot);
+        }
+        dot.push('}');
+        dot.push('\n');
+        dot
+    }
+
+    pub fn to_file<S: AsRef<Path>>(&self, filename: S) -> Result<(), io::Error> {
+        let mut file = File::create(filename)?;
+        file.write_all(self.to_dot().as_bytes())
+    }
+
     pub fn to_dot_tree(&self) -> String {
         let mut dot = "digraph {\n".to_string();
         let mut stack = self.get_tree().iter().cloned().collect::<Vec<_>>();
@@ -76,6 +94,26 @@ impl CFS {
     pub fn to_file_tree<S: AsRef<Path>>(&self, filename: S) -> Result<(), io::Error> {
         let mut file = File::create(filename)?;
         file.write_all(self.to_dot_tree().as_bytes())
+    }
+}
+
+fn print_subgraph<T: std::fmt::Write>(
+    node: &StructureBlock,
+    id: usize,
+    cfg_ids: &HashMap<Rc<BasicBlock>, usize>,
+    fmt: &mut T,
+) {
+    match node {
+        StructureBlock::Basic(bb) => {
+            write!(fmt, "{};\n", *cfg_ids.get(bb).unwrap());
+        }
+        StructureBlock::Nested(nb) => {
+            write!(fmt, "subgraph cluster_{}{{\n", id);
+            for (child_no, child) in node.children().iter().enumerate() {
+                print_subgraph(child, id + child_no + 1, cfg_ids, fmt);
+            }
+            write!(fmt, "label=\"{}\";\n}}\n", node.get_type());
+        }
     }
 }
 
@@ -945,7 +983,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        cfs.to_file_tree("/Users/davide/Desktop/tree.dot");
+        cfs.to_file("/Users/davide/Desktop/structs.dot");
     }
 
     #[test]

@@ -116,6 +116,22 @@ impl StructureBlock {
     pub fn is_empty(&self) -> bool {
         self.children().is_empty()
     }
+
+    pub fn get_type_name(&self) -> &'static str {
+        let bt = match self {
+            StructureBlock::Basic(_) => BlockType::Basic,
+            StructureBlock::Nested(nb) => nb.block_type,
+        };
+        match bt {
+            BlockType::Basic => "Basic Block",
+            BlockType::SelfLooping => "Self Loop",
+            BlockType::Sequence => "Sequence",
+            BlockType::IfThen => "If-Then",
+            BlockType::IfThenElse => "If-Then-Else",
+            BlockType::While => "While",
+            BlockType::DoWhile => "Do-While",
+        }
+    }
 }
 
 impl From<Rc<BasicBlock>> for StructureBlock {

@@ -180,11 +180,7 @@ impl CFG {
     pub fn to_dot(&self) -> String {
         let mut edges_string = Vec::new();
         let mut nodes_string = Vec::new();
-        let nodes_ids = self
-            .preorder()
-            .enumerate()
-            .map(|(index, node)| (self.rc(node).unwrap(), index))
-            .collect::<HashMap<_, _>>();
+        let nodes_ids = self.node_id_map();
         for (node, child) in self.edges.iter() {
             let node_id = nodes_ids.get(node).unwrap_or(&usize::MAX);
             nodes_string.push(format!(
@@ -343,6 +339,17 @@ impl CFG {
     /// Returns [Option::None] if the input node does not belong to this graph.
     pub fn rc(&self, node: &BasicBlock) -> Option<Rc<BasicBlock>> {
         self.edges.get_key_value(node).map(|(rc, _)| rc.clone())
+    }
+
+    /// Assigns an unique ID to each node in the CFG.
+    ///
+    /// Unless the CFG changes, the id assigned by this method will always be the same, and based on
+    /// a preorder visit of the CFG.
+    pub fn node_id_map(&self) -> HashMap<Rc<BasicBlock>, usize> {
+        self.preorder()
+            .enumerate()
+            .map(|(index, node)| (self.rc(node).unwrap(), index))
+            .collect::<HashMap<_, _>>()
     }
 }
 
