@@ -68,21 +68,21 @@ impl CFS {
             let ids_len = ids.len();
             let node_id = *ids.entry(node.clone()).or_insert(ids_len);
             match node {
-                StructureBlock::Basic(_) => write!(
+                StructureBlock::Basic(_) => writeln!(
                     dot,
-                    "{}[label=\"{}\";shape=\"box\"];\n",
+                    "{}[label=\"{}\";shape=\"box\"];",
                     node_id,
                     node.get_type()
                 ),
                 StructureBlock::Nested(_) => {
-                    write!(dot, "{}[label=\"{}\"];\n", node_id, node.get_type())
+                    writeln!(dot, "{}[label=\"{}\"];", node_id, node.get_type())
                 }
             }
             .unwrap();
             for child in node.children().iter().cloned() {
                 let ids_len = ids.len();
                 let child_id = *ids.entry(child.clone()).or_insert(ids_len);
-                write!(dot, "{}->{}\n", node_id, child_id).unwrap();
+                writeln!(dot, "{}->{}", node_id, child_id).unwrap();
                 stack.push(child);
             }
         }
@@ -105,14 +105,14 @@ fn print_subgraph<T: std::fmt::Write>(
 ) {
     match node {
         StructureBlock::Basic(bb) => {
-            write!(fmt, "{};\n", *cfg_ids.get(bb).unwrap());
+            writeln!(fmt, "{};", *cfg_ids.get(bb).unwrap()).unwrap();
         }
-        StructureBlock::Nested(nb) => {
-            write!(fmt, "subgraph cluster_{}{{\n", id);
+        StructureBlock::Nested(_) => {
+            writeln!(fmt, "subgraph cluster_{}{{", id).unwrap();
             for (child_no, child) in node.children().iter().enumerate() {
                 print_subgraph(child, id + child_no + 1, cfg_ids, fmt);
             }
-            write!(fmt, "label=\"{}\";\n}}\n", node.get_type());
+            writeln!(fmt, "label=\"{}\";\n}}", node.get_type()).unwrap();
         }
     }
 }
@@ -734,10 +734,7 @@ mod tests {
                 targets.reverse();
                 edges.insert(nodes[$src].clone(), [targets.pop().unwrap(), targets.pop().unwrap()]);
             )*
-            let root = match nodes.first() {
-                Some(x) => Some(x.clone()),
-                None => None
-            };
+            let root = nodes.first().map(|x| x.clone());
             CFG {
                 root,
                 edges,
@@ -983,7 +980,6 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        cfs.to_file("/Users/davide/Desktop/structs.dot");
     }
 
     #[test]
