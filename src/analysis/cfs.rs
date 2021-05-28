@@ -2,7 +2,7 @@ use crate::analysis::blocks::StructureBlock;
 use crate::analysis::{BasicBlock, BlockType, DirectedGraph, Graph, NestedBlock, CFG};
 use fnv::FnvHashSet;
 use std::array::IntoIter;
-use std::cmp::max;
+use std::cmp::{max, Ordering};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as WriteFmt;
 use std::fs::File;
@@ -649,6 +649,13 @@ fn denaturate_loop(
     depth_map: &HashMap<Rc<BasicBlock>, usize>,
     mut cfg: CFG,
 ) -> CFG {
+    let distance = |x, y| {
+        if x < y {
+            y - x
+        } else {
+            x - y
+        }
+    };
     let (exits, mut targets) = exits_and_targets(node, sccs, &cfg);
     let is_loop = *is_loop(sccs).get(node).unwrap();
     if exits.len() > 1 && is_loop {
@@ -657,10 +664,22 @@ fn denaturate_loop(
             let correct = targets
                 .iter()
                 .reduce(|a, b| {
-                    if depth_map.get(a) > depth_map.get(b) {
-                        a
-                    } else {
-                        b
+                    // keep the deepest. If two or more have the same depth keep closest to me
+                    match depth_map.get(a).cmp(&depth_map.get(b)) {
+                        Ordering::Less => b,
+                        Ordering::Equal => {
+                            let difference_a = distance(node.first, a.first);
+                            let difference_b = distance(node.first, b.first);
+                            match difference_a.cmp(&difference_b) {
+                                Ordering::Less => a,
+                                Ordering::Equal => {
+                                    /* bb offsets should be UNIQUE */
+                                    panic!()
+                                }
+                                Ordering::Greater => b,
+                            }
+                        }
+                        Ordering::Greater => a,
                     }
                 })
                 .unwrap()
@@ -669,16 +688,39 @@ fn denaturate_loop(
             cfg = remove_edges(exits, targets, cfg);
         }
         let (exits, target) = exits_and_targets(node, sccs, &cfg);
-        let mut exits_vec = exits.iter().cloned().collect::<Vec<_>>();
-        exits_vec.sort_by(|a, b| {
-            preds
-                .get(&**a)
-                .unwrap()
-                .len()
-                .cmp(&preds.get(&**b).unwrap().len())
-        });
-        let correct_exit =
-            IntoIter::new([exits_vec.last().cloned().unwrap()]).collect::<HashSet<_>>();
+        let correct_exit = if let Some(head) = exits.get(node) {
+            // keep the exit which is either: the head (while case)
+            let mut set = HashSet::new();
+            set.insert(head.clone());
+            set
+        } else {
+            // or farther away from the entry point (do-while case) -> highest predecessor number
+            let max_preds = exits
+                .iter()
+                .fold(0, |acc, x| acc.max(preds.get(&**x).unwrap().len()));
+            let exits_vec = exits
+                .iter()
+                .cloned()
+                .filter(|x| preds.get(&**x).unwrap().len() == max_preds)
+                .collect::<Vec<_>>();
+            let exit = if exits_vec.len() == 1 {
+                exits_vec.last().cloned().unwrap()
+            } else {
+                //two or more exits with same amount of predecessors to the same target
+                //keep the one with further offset
+                let (_, index_max_diff) = exits_vec
+                    .iter()
+                    .map(|x| distance(node.first, x.first))
+                    .enumerate()
+                    .map(|(index, value)| (value, index))
+                    .max()
+                    .unwrap();
+                exits_vec[index_max_diff].clone()
+            };
+            let mut set = HashSet::new();
+            set.insert(exit);
+            set
+        };
         let wrong_exits = exits
             .difference(&correct_exit)
             .cloned()
@@ -696,7 +738,10 @@ fn remove_natural_loops(
 ) -> CFG {
     let mut loops_done = FnvHashSet::default();
     let depth_map = calculate_depth(&cfg);
-    let nodes = cfg.edges.keys().cloned().collect::<Vec<_>>();
+    let nodes = cfg
+        .preorder()
+        .map(|x| cfg.rc(x).unwrap())
+        .collect::<Vec<_>>();
     for node in nodes {
         let scc_id = sccs.get(&*node).unwrap();
         if !loops_done.contains(scc_id) {
