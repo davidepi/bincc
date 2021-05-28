@@ -10,3 +10,5 @@ pub use self::blocks::BlockType;
 pub use self::blocks::NestedBlock;
 mod cfs;
 pub use self::cfs::CFS;
+mod comparator;
+pub use self::comparator::CFSComparator;

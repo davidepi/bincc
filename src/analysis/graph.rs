@@ -218,6 +218,7 @@ pub trait Graph {
 ///
 /// No constructor or specific methods are provided for this class, as one should update the nodes
 /// and edges vectors manually.
+#[derive(Clone)]
 pub struct DirectedGraph<T> {
     /// root of the graph (if rooted and not empty)
     pub root: Option<T>,

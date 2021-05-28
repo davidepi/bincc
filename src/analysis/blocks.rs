@@ -109,6 +109,30 @@ impl StructureBlock {
         self.get_type().hash(state);
     }
 
+    pub fn structural_equality(&self, b: &StructureBlock) -> bool {
+        if self.get_type() == b.get_type() {
+            let children_a = self.children();
+            let children_b = b.children();
+            if children_a.is_empty() && children_b.is_empty() {
+                true //basic block
+            } else if children_a.len() == children_b.len() {
+                let mut retval = true;
+                let mut i = 0;
+                while retval && i < children_a.len() {
+                    let child_a = &children_a[i];
+                    let child_b = &children_b[i];
+                    retval &= child_a.structural_equality(child_b);
+                    i += 1;
+                }
+                retval
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.children().len()
     }
@@ -148,6 +172,7 @@ impl From<Rc<NestedBlock>> for StructureBlock {
 
 #[cfg(test)]
 mod tests {
+    use crate::analysis::blocks::BlockType::Basic;
     use crate::analysis::blocks::StructureBlock;
     use crate::analysis::{BasicBlock, NestedBlock};
     use std::collections::hash_map::DefaultHasher;
@@ -165,7 +190,7 @@ mod tests {
     }
 
     #[test]
-    fn structure_block_equality() {
+    fn structure_block_strong_equality() {
         // checks that despite having two different StructureBlock, if their content is the same Rc
         // equality returns true.
         let bb = Rc::new(BasicBlock {
@@ -175,6 +200,23 @@ mod tests {
         let sb0 = StructureBlock::from(bb.clone());
         let sb1 = StructureBlock::from(bb);
         assert_eq!(sb0, sb1);
+    }
+
+    #[test]
+    fn structure_block_structural_equality() {
+        // two basic blocks with different content, but structural equality should be the same
+        let bb0 = Rc::new(BasicBlock {
+            first: 0,
+            last: 0xA,
+        });
+        let bb1 = Rc::new(BasicBlock {
+            first: 0,
+            last: 0xB,
+        });
+        let sb0 = StructureBlock::from(bb0);
+        let sb1 = StructureBlock::from(bb1);
+        assert_ne!(sb0, sb1);
+        assert!(sb0.structural_equality(&sb1));
     }
 
     #[test]
@@ -207,6 +249,20 @@ mod tests {
     }
 
     #[test]
+    fn structural_equality_same_order() {
+        let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
+        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![
+            self_loop,
+            bb.clone(),
+        ])));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
+        let sequence1 =
+            StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![self_loop, bb])));
+        assert!(sequence0.structural_equality(&sequence1));
+    }
+
+    #[test]
     fn structural_hash_different_order() {
         let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
         let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
@@ -219,5 +275,19 @@ mod tests {
             StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![bb, self_loop])));
         let hashes = calculate_hashes(sequence0, sequence1);
         assert_ne!(hashes.0, hashes.1)
+    }
+
+    #[test]
+    fn structural_equality_different_order() {
+        let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
+        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![
+            self_loop,
+            bb.clone(),
+        ])));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
+        let sequence1 =
+            StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![bb, self_loop])));
+        assert!(!sequence0.structural_equality(&sequence1));
     }
 }

@@ -13,6 +13,7 @@ use std::mem::swap;
 use std::path::Path;
 use std::rc::Rc;
 
+#[derive(Clone)]
 pub struct CFS {
     cfg: CFG,
     tree: DirectedGraph<StructureBlock>,
