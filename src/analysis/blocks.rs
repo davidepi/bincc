@@ -172,7 +172,6 @@ impl From<Rc<NestedBlock>> for StructureBlock {
 
 #[cfg(test)]
 mod tests {
-    use crate::analysis::blocks::BlockType::Basic;
     use crate::analysis::blocks::StructureBlock;
     use crate::analysis::{BasicBlock, NestedBlock};
     use std::collections::hash_map::DefaultHasher;

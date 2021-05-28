@@ -844,9 +844,11 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 2);
+        assert_eq!(sequence.get_depth(), 2);
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         let children = sequence.children();
         assert_eq!(children[0].get_type(), BlockType::IfThen);
+        assert_eq!(children[0].get_depth(), 1);
         assert_eq!(children[0].len(), 3);
         assert_eq!(children[1].get_type(), BlockType::Basic);
     }
@@ -865,6 +867,7 @@ mod tests {
         assert_eq!(children[0].get_type(), BlockType::IfThen);
         assert_eq!(children[0].len(), 4);
         assert_eq!(children[1].get_type(), BlockType::Basic);
+        assert_eq!(sequence.get_depth(), 2);
     }
 
     #[test]
@@ -882,6 +885,7 @@ mod tests {
         assert_eq!(children[2].get_type(), BlockType::Basic);
         assert_eq!(children[3].get_type(), BlockType::Basic);
         assert_eq!(children[1].len(), 3);
+        assert_eq!(sequence.get_depth(), 2);
     }
 
     #[test]
@@ -897,6 +901,7 @@ mod tests {
         assert_eq!(children[0].get_type(), BlockType::IfThenElse);
         assert_eq!(children[0].len(), 5);
         assert_eq!(children[1].get_type(), BlockType::Basic);
+        assert_eq!(sequence.get_depth(), 2);
     }
 
     #[test]
@@ -912,6 +917,8 @@ mod tests {
         assert_eq!(children[0].len(), 3);
         assert_eq!(children[0].children()[1].get_type(), BlockType::SelfLooping);
         assert_eq!(children[0].children()[2].get_type(), BlockType::SelfLooping);
+        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(children[0].get_depth(), 2);
     }
 
     #[test]
@@ -922,6 +929,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::While);
+        assert_eq!(sequence.get_depth(), 2);
     }
 
     #[test]
@@ -933,6 +941,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.get_depth(), 2);
     }
 
     #[test]
@@ -944,6 +953,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.get_depth(), 3);
     }
 
     #[test]
@@ -955,6 +965,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.get_depth(), 2);
     }
 
     #[test]
@@ -968,6 +979,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.get_depth(), 3);
     }
 
     #[test]
@@ -981,6 +993,8 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.get_depth(), 5);
+        assert_eq!(sequence.children()[1].get_depth(), 4);
     }
 
     #[test]
@@ -998,6 +1012,8 @@ mod tests {
             sequence.children()[1].children()[1].get_type(),
             BlockType::While
         );
+        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].get_depth(), 2);
     }
 
     #[test]
@@ -1013,6 +1029,8 @@ mod tests {
             sequence.children()[1].children()[0].get_type(),
             BlockType::DoWhile
         );
+        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].get_depth(), 2);
     }
 
     #[test]
@@ -1030,6 +1048,7 @@ mod tests {
             sequence.children()[1].children()[0].children()[1].get_type(),
             BlockType::DoWhile
         );
+        assert_eq!(sequence.get_depth(), 4);
     }
 
     #[test]
@@ -1040,6 +1059,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::While);
+        assert_eq!(sequence.get_depth(), 3);
     }
 
     #[test]
@@ -1050,6 +1070,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.get_depth(), 3);
     }
 
     #[test]
@@ -1070,6 +1091,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 5);
         assert_eq!(sequence.children()[1].get_type(), BlockType::While);
+        assert_eq!(sequence.get_depth(), 3);
     }
 
     #[test]
@@ -1090,6 +1112,7 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 5);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.get_depth(), 3);
     }
 
     #[test]
@@ -1112,5 +1135,6 @@ mod tests {
         assert_eq!(sequence.get_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 5);
         assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.get_depth(), 3);
     }
 }

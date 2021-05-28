@@ -20,7 +20,7 @@ impl CFSComparator {
                     node.structural_hash(&mut hasher);
                     let hash = hasher.finish();
                     map.insert(hash, node.clone());
-                    let mut children = node.children().iter().cloned().collect::<Vec<_>>();
+                    let mut children = node.children().to_vec();
                     stack.append(&mut children)
                 }
             }
@@ -47,7 +47,7 @@ impl CFSComparator {
                             ret.push((original.clone(), node.clone()));
                         }
                     }
-                    let mut children = node.children().iter().cloned().collect::<Vec<_>>();
+                    let mut children = node.children().to_vec();
                     stack.append(&mut children)
                 }
             }
@@ -59,6 +59,4 @@ impl CFSComparator {
 }
 
 #[cfg(test)]
-mod tests {
-
-}
+mod tests {}
