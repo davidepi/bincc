@@ -2,11 +2,59 @@ use crate::analysis::blocks::StructureBlock;
 use crate::analysis::CFS;
 use fnv::FnvHashMap;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ClonePair {
+    a: StructureBlock,
+    aname: String,
+    b: StructureBlock,
+    bname: String,
+}
+
+impl ClonePair {
+    pub fn new(a: StructureBlock, a_name: &str, b: StructureBlock, b_name: &str) -> ClonePair {
+        ClonePair {
+            a,
+            b,
+            aname: a_name.to_string(),
+            bname: b_name.to_string(),
+        }
+    }
+
+    pub fn first(&self) -> (&str, &StructureBlock) {
+        (&self.aname, &self.a)
+    }
+
+    pub fn first_name(&self) -> &str {
+        &self.aname
+    }
+
+    pub fn first_tree(&self) -> &StructureBlock {
+        &self.a
+    }
+
+    pub fn second(&self) -> (&str, &StructureBlock) {
+        (&self.bname, &self.b)
+    }
+
+    pub fn second_name(&self) -> &str {
+        &self.bname
+    }
+
+    pub fn second_tree(&self) -> &StructureBlock {
+        &self.b
+    }
+
+    pub fn depth(&self) -> u32 {
+        self.a.depth() // b should be same depth
+    }
+}
 
 pub struct CFSComparator {
     hashes: FnvHashMap<u64, StructureBlock>,
+    names: HashMap<StructureBlock, String>,
     mindepth: u32,
 }
 
@@ -14,27 +62,34 @@ impl CFSComparator {
     pub fn new(mindepth: u32) -> CFSComparator {
         CFSComparator {
             hashes: FnvHashMap::default(),
+            names: HashMap::new(),
             mindepth,
         }
     }
 
-    pub fn insert(&mut self, other: &CFS) -> Option<Vec<(StructureBlock, StructureBlock)>> {
+    pub fn insert(&mut self, other: &CFS, identifier: &str) -> Option<Vec<ClonePair>> {
         if let Some(root) = other.get_tree() {
             let mut stack = vec![root];
             let mut ret = Vec::new();
             while let Some(node) = stack.pop() {
-                if node.get_depth() >= self.mindepth {
+                if node.depth() >= self.mindepth {
                     let mut hasher = DefaultHasher::new();
                     node.structural_hash(&mut hasher);
                     let hash = hasher.finish();
                     if let Some(original) = self.hashes.get(&hash) {
                         if original.structural_equality(&node) {
-                            ret.push((original.clone(), node.clone()));
+                            // pick only a_name: b is never inserted in the hashmap because it's the
+                            // clone! so its name is used only in this pair and never recorded
+                            let a_name = self.names.get(original).unwrap().as_str();
+                            let pair =
+                                ClonePair::new(original.clone(), a_name, node.clone(), identifier);
+                            ret.push(pair);
                         } else {
                             log::warn!("Same structural hash but different structure.");
                         }
                     } else {
                         self.hashes.insert(hash, node.clone());
+                        self.names.insert(node.clone(), identifier.to_string());
                     }
                     let mut children = node.children().to_vec();
                     stack.append(&mut children)
@@ -50,27 +105,25 @@ impl CFSComparator {
     }
 }
 
-fn remove_overlapping(
-    mut clone_list: Vec<(StructureBlock, StructureBlock)>,
-) -> Vec<(StructureBlock, StructureBlock)> {
+fn remove_overlapping(mut clone_list: Vec<ClonePair>) -> Vec<ClonePair> {
     // drop intervals that are contained inside each other
     // partially overlapping intervals can not exists (can't think of an example)
     // probably not efficient O(n^2)? but I don't expect a big list here and deadline
     // is close
     let mut todo = clone_list.clone();
     // this minimizes the number of comparisons (sorting is nlogn, the removal is n^2)
-    todo.sort_unstable_by(|a, b| b.0.get_depth().cmp(&a.0.get_depth()));
+    todo.sort_unstable_by(|a, b| b.depth().cmp(&a.depth()));
     let mut removed = HashSet::new();
     while !todo.is_empty() {
         let current = todo.pop().unwrap();
         let mut keep = Vec::with_capacity(clone_list.len());
         while let Some(compare) = clone_list.pop() {
             if !removed.contains(&compare) {
-                if current.0.get_depth() != compare.0.get_depth()
-                    && current.0.starting_offset() <= compare.0.starting_offset()
-                    && current.1.starting_offset() <= compare.1.starting_offset()
-                    && current.0.ending_offset() >= compare.0.ending_offset()
-                    && current.1.ending_offset() >= compare.1.ending_offset()
+                if current.depth() != compare.depth()
+                    && current.a.starting_offset() <= compare.a.starting_offset()
+                    && current.b.starting_offset() <= compare.b.starting_offset()
+                    && current.a.ending_offset() >= compare.a.ending_offset()
+                    && current.b.ending_offset() >= compare.b.ending_offset()
                 {
                     // not same depth (otherwise I remove myself),
                     // and one is contained inside the other one
@@ -123,21 +176,38 @@ mod tests {
     }
 
     #[test]
+    fn cloned_failed_cfs() {
+        let stmts = vec![
+            Statement::new(0x0, "jge 0x2"),
+            Statement::new(0x1, "xor eax, eax"),
+            Statement::new(0x2, "jmp 0x1"),
+        ];
+        let cfg = CFG::new(&stmts, &ArchX86::new_amd64()).add_sink();
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_none());
+        let mut diff = CFSComparator::new(5);
+        let first = diff.insert(&cfs, "failed");
+        assert!(first.is_none());
+    }
+
+    #[test]
     fn cloned_full() {
         let stmts = create_function();
         let cfg = CFG::new(&stmts, &ArchX86::new_amd64()).add_sink();
         let cfs = CFS::new(&cfg);
         let mut diff = CFSComparator::new(5);
-        let first = diff.insert(&cfs);
+        let first = diff.insert(&cfs, "first");
         assert!(first.is_some());
         assert!(first.unwrap().is_empty());
-        let second = diff.insert(&cfs);
+        let second = diff.insert(&cfs, "other");
         assert!(second.is_some());
         let s = second.unwrap();
         assert_eq!(s.len(), 1);
-        let (pair_a, pair_b) = s.last().unwrap();
-        assert_eq!(pair_a.starting_offset(), 0);
-        assert_eq!(pair_b.ending_offset(), SINK_ADDR)
+        let pair = s.last().unwrap();
+        assert_eq!(pair.first_tree().starting_offset(), 0);
+        assert_eq!(pair.first_tree().ending_offset(), SINK_ADDR);
+        assert_eq!(s[0].first_name(), "first");
+        assert_eq!(s[0].second_name(), "other");
     }
 
     #[test]
@@ -146,7 +216,7 @@ mod tests {
         let cfg0 = CFG::new(&stmts, &ArchX86::new_amd64()).add_sink();
         let cfs0 = CFS::new(&cfg0);
         let mut diff = CFSComparator::new(2);
-        let first = diff.insert(&cfs0);
+        let first = diff.insert(&cfs0, "first");
         assert!(first.is_some());
         assert!(first.unwrap().is_empty());
         stmts = create_function();
@@ -157,9 +227,11 @@ mod tests {
         stmts[12] = Statement::new(0x30, "nop");
         let cfg1 = CFG::new(&stmts, &ArchX86::new_amd64()).add_sink();
         let cfs1 = CFS::new(&cfg1);
-        let second = diff.insert(&cfs1);
+        let second = diff.insert(&cfs1, "second");
         assert!(second.is_some());
         let s = second.unwrap();
         assert_eq!(s.len(), 2);
+        assert_eq!(s[0].first_name(), "first");
+        assert_eq!(s[0].second_name(), "second");
     }
 }

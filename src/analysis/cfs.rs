@@ -73,10 +73,10 @@ impl CFS {
                     dot,
                     "{}[label=\"{}\";shape=\"box\"];",
                     node_id,
-                    node.get_type()
+                    node.block_type()
                 ),
                 StructureBlock::Nested(_) => {
-                    writeln!(dot, "{}[label=\"{}\"];", node_id, node.get_type())
+                    writeln!(dot, "{}[label=\"{}\"];", node_id, node.block_type())
                 }
             }
             .unwrap();
@@ -113,7 +113,7 @@ fn print_subgraph<T: std::fmt::Write>(
             for (child_no, child) in node.children().iter().enumerate() {
                 print_subgraph(child, id + child_no + 1, cfg_ids, fmt);
             }
-            writeln!(fmt, "label=\"{}\";\n}}", node.get_type()).unwrap();
+            writeln!(fmt, "label=\"{}\";\n}}", node.block_type()).unwrap();
         }
     }
 }
@@ -798,8 +798,8 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 5);
-        assert_eq!(sequence.get_depth(), 1);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.depth(), 1);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
     }
 
     #[test]
@@ -808,12 +808,12 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.get_depth(), 2);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.depth(), 2);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         let children = sequence.children();
-        assert_eq!(children[0].get_type(), BlockType::Basic);
-        assert_eq!(children[1].get_type(), BlockType::SelfLooping);
-        assert_eq!(children[2].get_type(), BlockType::Basic);
+        assert_eq!(children[0].block_type(), BlockType::Basic);
+        assert_eq!(children[1].block_type(), BlockType::SelfLooping);
+        assert_eq!(children[2].block_type(), BlockType::Basic);
     }
 
     #[test]
@@ -822,13 +822,13 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 4);
-        assert_eq!(sequence.get_depth(), 2);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.depth(), 2);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         let children = sequence.children();
-        assert_eq!(children[0].get_type(), BlockType::Basic);
-        assert_eq!(children[1].get_type(), BlockType::IfThen);
-        assert_eq!(children[2].get_type(), BlockType::Basic);
-        assert_eq!(children[3].get_type(), BlockType::Basic);
+        assert_eq!(children[0].block_type(), BlockType::Basic);
+        assert_eq!(children[1].block_type(), BlockType::IfThen);
+        assert_eq!(children[2].block_type(), BlockType::Basic);
+        assert_eq!(children[3].block_type(), BlockType::Basic);
         assert_eq!(children[1].len(), 2);
     }
 
@@ -838,13 +838,13 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 4);
-        assert_eq!(sequence.get_depth(), 2);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.depth(), 2);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         let children = sequence.children();
-        assert_eq!(children[0].get_type(), BlockType::Basic);
-        assert_eq!(children[1].get_type(), BlockType::IfThen);
-        assert_eq!(children[2].get_type(), BlockType::Basic);
-        assert_eq!(children[3].get_type(), BlockType::Basic);
+        assert_eq!(children[0].block_type(), BlockType::Basic);
+        assert_eq!(children[1].block_type(), BlockType::IfThen);
+        assert_eq!(children[2].block_type(), BlockType::Basic);
+        assert_eq!(children[3].block_type(), BlockType::Basic);
         assert_eq!(children[1].len(), 2);
     }
 
@@ -855,13 +855,13 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 2);
-        assert_eq!(sequence.get_depth(), 2);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.depth(), 2);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         let children = sequence.children();
-        assert_eq!(children[0].get_type(), BlockType::IfThen);
-        assert_eq!(children[0].get_depth(), 1);
+        assert_eq!(children[0].block_type(), BlockType::IfThen);
+        assert_eq!(children[0].depth(), 1);
         assert_eq!(children[0].len(), 3);
-        assert_eq!(children[1].get_type(), BlockType::Basic);
+        assert_eq!(children[1].block_type(), BlockType::Basic);
     }
 
     #[test]
@@ -873,12 +873,12 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 2);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         let children = sequence.children();
-        assert_eq!(children[0].get_type(), BlockType::IfThen);
+        assert_eq!(children[0].block_type(), BlockType::IfThen);
         assert_eq!(children[0].len(), 4);
-        assert_eq!(children[1].get_type(), BlockType::Basic);
-        assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(children[1].block_type(), BlockType::Basic);
+        assert_eq!(sequence.depth(), 2);
     }
 
     #[test]
@@ -889,14 +889,14 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 4);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         let children = sequence.children();
-        assert_eq!(children[0].get_type(), BlockType::Basic);
-        assert_eq!(children[1].get_type(), BlockType::IfThenElse);
-        assert_eq!(children[2].get_type(), BlockType::Basic);
-        assert_eq!(children[3].get_type(), BlockType::Basic);
+        assert_eq!(children[0].block_type(), BlockType::Basic);
+        assert_eq!(children[1].block_type(), BlockType::IfThenElse);
+        assert_eq!(children[2].block_type(), BlockType::Basic);
+        assert_eq!(children[3].block_type(), BlockType::Basic);
         assert_eq!(children[1].len(), 3);
-        assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(sequence.depth(), 2);
     }
 
     #[test]
@@ -907,12 +907,12 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 2);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         let children = sequence.children();
-        assert_eq!(children[0].get_type(), BlockType::IfThenElse);
+        assert_eq!(children[0].block_type(), BlockType::IfThenElse);
         assert_eq!(children[0].len(), 5);
-        assert_eq!(children[1].get_type(), BlockType::Basic);
-        assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(children[1].block_type(), BlockType::Basic);
+        assert_eq!(sequence.depth(), 2);
     }
 
     #[test]
@@ -922,14 +922,20 @@ mod tests {
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.len(), 2);
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         let children = sequence.children();
-        assert_eq!(children[0].get_type(), BlockType::IfThenElse);
+        assert_eq!(children[0].block_type(), BlockType::IfThenElse);
         assert_eq!(children[0].len(), 3);
-        assert_eq!(children[0].children()[1].get_type(), BlockType::SelfLooping);
-        assert_eq!(children[0].children()[2].get_type(), BlockType::SelfLooping);
-        assert_eq!(sequence.get_depth(), 3);
-        assert_eq!(children[0].get_depth(), 2);
+        assert_eq!(
+            children[0].children()[1].block_type(),
+            BlockType::SelfLooping
+        );
+        assert_eq!(
+            children[0].children()[2].block_type(),
+            BlockType::SelfLooping
+        );
+        assert_eq!(sequence.depth(), 3);
+        assert_eq!(children[0].depth(), 2);
     }
 
     #[test]
@@ -937,10 +943,10 @@ mod tests {
         let cfg = create_cfg! { 0 => [1], 1 => [2, 3], 2 => [1], 3 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::While);
-        assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::While);
+        assert_eq!(sequence.depth(), 2);
     }
 
     #[test]
@@ -949,10 +955,10 @@ mod tests {
         let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [1, 3], 3 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
+        assert_eq!(sequence.depth(), 2);
     }
 
     #[test]
@@ -961,10 +967,10 @@ mod tests {
         let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3], 3 => [4, 1], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
+        assert_eq!(sequence.depth(), 3);
     }
 
     #[test]
@@ -973,10 +979,10 @@ mod tests {
         let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3, 4], 3 => [1], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        assert_eq!(sequence.get_depth(), 2);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
+        assert_eq!(sequence.depth(), 2);
     }
 
     #[test]
@@ -987,10 +993,10 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
+        assert_eq!(sequence.depth(), 3);
     }
 
     #[test]
@@ -1001,11 +1007,11 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        assert_eq!(sequence.get_depth(), 5);
-        assert_eq!(sequence.children()[1].get_depth(), 4);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
+        assert_eq!(sequence.depth(), 5);
+        assert_eq!(sequence.children()[1].depth(), 4);
     }
 
     #[test]
@@ -1016,15 +1022,15 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::While);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::While);
         assert_eq!(
-            sequence.children()[1].children()[1].get_type(),
+            sequence.children()[1].children()[1].block_type(),
             BlockType::While
         );
-        assert_eq!(sequence.get_depth(), 3);
-        assert_eq!(sequence.children()[1].get_depth(), 2);
+        assert_eq!(sequence.depth(), 3);
+        assert_eq!(sequence.children()[1].depth(), 2);
     }
 
     #[test]
@@ -1033,15 +1039,15 @@ mod tests {
         let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3, 1], 3 => [4, 2], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
         assert_eq!(
-            sequence.children()[1].children()[0].get_type(),
+            sequence.children()[1].children()[0].block_type(),
             BlockType::DoWhile
         );
-        assert_eq!(sequence.get_depth(), 3);
-        assert_eq!(sequence.children()[1].get_depth(), 2);
+        assert_eq!(sequence.depth(), 3);
+        assert_eq!(sequence.children()[1].depth(), 2);
     }
 
     #[test]
@@ -1052,14 +1058,14 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
         assert_eq!(
-            sequence.children()[1].children()[0].children()[1].get_type(),
+            sequence.children()[1].children()[0].children()[1].block_type(),
             BlockType::DoWhile
         );
-        assert_eq!(sequence.get_depth(), 4);
+        assert_eq!(sequence.depth(), 4);
     }
 
     #[test]
@@ -1067,10 +1073,10 @@ mod tests {
         let cfg = create_cfg! { 0 => [1], 1 => [2, 4], 2 => [3, 4], 3 => [1], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::While);
-        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::While);
+        assert_eq!(sequence.depth(), 3);
     }
 
     #[test]
@@ -1078,10 +1084,10 @@ mod tests {
         let cfg = create_cfg! { 0 => [1], 1 => [2], 2 => [3, 4], 3 => [4, 1], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 3);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
+        assert_eq!(sequence.depth(), 3);
     }
 
     #[test]
@@ -1099,10 +1105,10 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 5);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::While);
-        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::While);
+        assert_eq!(sequence.depth(), 3);
     }
 
     #[test]
@@ -1120,10 +1126,10 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 5);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
+        assert_eq!(sequence.depth(), 3);
     }
 
     #[test]
@@ -1143,9 +1149,9 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
-        assert_eq!(sequence.get_type(), BlockType::Sequence);
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
         assert_eq!(sequence.len(), 5);
-        assert_eq!(sequence.children()[1].get_type(), BlockType::DoWhile);
-        assert_eq!(sequence.get_depth(), 3);
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
+        assert_eq!(sequence.depth(), 3);
     }
 }

@@ -13,3 +13,4 @@ mod cfs;
 pub use self::cfs::CFS;
 mod comparator;
 pub use self::comparator::CFSComparator;
+pub use self::comparator::ClonePair;

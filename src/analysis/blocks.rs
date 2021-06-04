@@ -40,7 +40,7 @@ pub struct NestedBlock {
 
 impl NestedBlock {
     pub fn new(bt: BlockType, children: Vec<StructureBlock>) -> NestedBlock {
-        let old_depth = children.iter().fold(0, |max, val| max.max(val.get_depth()));
+        let old_depth = children.iter().fold(0, |max, val| max.max(val.depth()));
         let lower_bound = children
             .iter()
             .fold(u64::MAX, |min, val| min.min(val.starting_offset()));
@@ -64,14 +64,14 @@ pub enum StructureBlock {
 }
 
 impl StructureBlock {
-    pub fn get_type(&self) -> BlockType {
+    pub fn block_type(&self) -> BlockType {
         match self {
             StructureBlock::Basic(_) => BlockType::Basic,
             StructureBlock::Nested(nb) => nb.block_type,
         }
     }
 
-    pub fn get_depth(&self) -> u32 {
+    pub fn depth(&self) -> u32 {
         match self {
             StructureBlock::Basic(_) => 0,
             StructureBlock::Nested(nb) => nb.depth,
@@ -89,11 +89,11 @@ impl StructureBlock {
         self.children()
             .iter()
             .for_each(|x| x.structural_hash(state));
-        self.get_type().hash(state);
+        self.block_type().hash(state);
     }
 
     pub fn structural_equality(&self, b: &StructureBlock) -> bool {
-        if self.get_type() == b.get_type() {
+        if self.block_type() == b.block_type() {
             let children_a = self.children();
             let children_b = b.children();
             if children_a.is_empty() && children_b.is_empty() {
