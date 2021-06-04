@@ -12,7 +12,8 @@ use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
 use std::rc::Rc;
 
-const SINK_ADDR: u64 = u64::MAX;
+/// Offset of an artificially created node
+pub const SINK_ADDR: u64 = u64::MAX;
 
 /// A Control Flow Graph.
 ///

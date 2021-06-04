@@ -129,14 +129,8 @@ fn reduce_self_loop(
             let children = graph.children(node).unwrap();
             if children.len() == 2 && children.contains(&node) {
                 let next = children.into_iter().filter(|x| x != &node).last().unwrap();
-                Some((
-                    StructureBlock::from(Rc::new(NestedBlock {
-                        block_type: BlockType::SelfLooping,
-                        content: vec![node.clone()],
-                        depth: node.get_depth() + 1,
-                    })),
-                    Some(next.clone()),
-                ))
+                let block = Rc::new(NestedBlock::new(BlockType::SelfLooping, vec![node.clone()]));
+                Some((StructureBlock::from(block), Some(next.clone())))
             } else {
                 None
             }
@@ -178,8 +172,7 @@ fn ascend_if_chain<'a>(
     cont: &'a StructureBlock,
     graph: &DirectedGraph<StructureBlock>,
     preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
-    mut depth: u32,
-) -> (Vec<&'a StructureBlock>, u32) {
+) -> Vec<&'a StructureBlock> {
     let mut visited = rev_chain.iter().cloned().collect::<HashSet<_>>();
     let mut cur_head = *rev_chain.last().unwrap();
     while preds.get(cur_head).unwrap().len() == 1 {
@@ -192,7 +185,6 @@ fn ascend_if_chain<'a>(
                 // the other one obviously points to the current head
                 if head_children[0] == cont || head_children[1] == cont {
                     rev_chain.push(cur_head);
-                    depth = depth.max(cur_head.get_depth());
                 } else {
                     break;
                 }
@@ -203,7 +195,7 @@ fn ascend_if_chain<'a>(
             break;
         }
     }
-    (rev_chain, depth)
+    rev_chain
 }
 
 fn reduce_ifthen(
@@ -230,19 +222,12 @@ fn reduce_ifthen(
             // we detected the innermost if-then block. Now we try to ascend the various preds
             // to see if these is a chain of if-then. In order to hold, every edge not pointing
             // to the current one should point to the exit.
-            let (child_rev, depth) = ascend_if_chain(
-                vec![then, head],
-                cont,
-                graph,
-                preds,
-                std::cmp::max(then.get_depth(), head.get_depth()),
-            );
+            let child_rev = ascend_if_chain(vec![then, head], cont, graph, preds);
             //now creates the block itself
-            let block = Rc::new(NestedBlock {
-                block_type: BlockType::IfThen,
-                content: child_rev.into_iter().cloned().rev().collect(),
-                depth: depth + 1,
-            });
+            let block = Rc::new(NestedBlock::new(
+                BlockType::IfThen,
+                child_rev.into_iter().cloned().rev().collect(),
+            ));
             Some((StructureBlock::from(block), Some(cont.clone())))
         } else {
             None
@@ -285,18 +270,11 @@ fn reduce_ifelse(
             // we detected the innermost if-else block. Now we try to ascend the various preds
             // to see if these is a chain of if-else. In order to hold, every edge not pointing
             // to the current one should point to the else block.
-            let (child_rev, depth) = ascend_if_chain(
-                vec![elseb, thenb, node],
-                elseb,
-                graph,
-                preds,
-                (elseb.get_depth().max(thenb.get_depth())).max(node.get_depth()),
-            );
-            let block = Rc::new(NestedBlock {
-                block_type: BlockType::IfThenElse,
-                content: child_rev.into_iter().cloned().rev().collect(),
-                depth: depth + 1,
-            });
+            let child_rev = ascend_if_chain(vec![elseb, thenb, node], elseb, graph, preds);
+            let block = Rc::new(NestedBlock::new(
+                BlockType::IfThenElse,
+                child_rev.into_iter().cloned().rev().collect(),
+            ));
             Some((StructureBlock::from(block), Some(elseb_children[0].clone())))
         } else {
             None
@@ -345,12 +323,11 @@ fn find_while(
     }
     let tail_children = graph.children(&tail).unwrap();
     if tail_children.len() == 1 && tail_children[0] == node {
-        let retval = StructureBlock::from(Rc::new(NestedBlock {
-            block_type: BlockType::While,
-            content: vec![node.clone(), tail.clone()],
-            depth: std::cmp::max(node.get_depth(), tail.get_depth()) + 1,
-        }));
-        Some((retval, Some(next.clone())))
+        let block = Rc::new(NestedBlock::new(
+            BlockType::While,
+            vec![node.clone(), tail.clone()],
+        ));
+        Some((StructureBlock::from(block), Some(next.clone())))
     } else {
         None
     }
@@ -380,28 +357,22 @@ fn find_dowhile(
             } else {
                 return None;
             }
-            let depth = node
-                .get_depth()
-                .max(tail.get_depth().max(post_tail.get_depth()))
-                + 1;
-            let retval = StructureBlock::from(Rc::new(NestedBlock {
-                block_type: BlockType::DoWhile,
-                content: vec![node.clone(), tail.clone(), post_tail.clone()],
-                depth,
-            }));
-            Some((retval, Some(next.clone())))
+            let block = Rc::new(NestedBlock::new(
+                BlockType::DoWhile,
+                vec![node.clone(), tail.clone(), post_tail.clone()],
+            ));
+            Some((StructureBlock::from(block), Some(next.clone())))
         } else {
             //type 1 or 2 (single or no node between head and tail)
             let mut next = tail_children[0];
             if next == node {
                 next = tail_children[1];
             }
-            let retval = StructureBlock::from(Rc::new(NestedBlock {
-                block_type: BlockType::DoWhile,
-                content: vec![node.clone(), tail.clone()],
-                depth: std::cmp::max(node.get_depth(), tail.get_depth()) + 1,
-            }));
-            Some((retval, Some(next.clone())))
+            let block = Rc::new(NestedBlock::new(
+                BlockType::DoWhile,
+                vec![node.clone(), tail.clone()],
+            ));
+            Some((StructureBlock::from(block), Some(next.clone())))
         }
     } else {
         None
@@ -425,12 +396,7 @@ fn construct_and_flatten_sequence(node: &StructureBlock, next: &StructureBlock) 
         .into_iter()
         .chain(flatten(next))
         .collect::<Vec<_>>();
-    let depth = content.iter().fold(0, |acc, val| val.get_depth().max(acc));
-    NestedBlock {
-        block_type: BlockType::Sequence,
-        content,
-        depth: depth + 1,
-    }
+    NestedBlock::new(BlockType::Sequence, content)
 }
 
 fn remap_nodes(

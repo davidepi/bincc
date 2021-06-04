@@ -5,6 +5,7 @@ pub use self::graph::GraphIter;
 mod cfg;
 pub use self::cfg::BasicBlock;
 pub use self::cfg::CFG;
+pub use self::cfg::SINK_ADDR;
 mod blocks;
 pub use self::blocks::BlockType;
 pub use self::blocks::NestedBlock;

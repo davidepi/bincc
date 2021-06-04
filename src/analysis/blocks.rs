@@ -31,46 +31,29 @@ impl Display for BlockType {
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct NestedBlock {
+    pub(crate) first: u64,
+    pub(crate) last: u64,
     pub(crate) block_type: BlockType,
     pub(crate) content: Vec<StructureBlock>,
     pub(crate) depth: u32,
 }
 
 impl NestedBlock {
-    pub fn new_self_loop(child: StructureBlock) -> NestedBlock {
-        let old_depth = child.get_depth();
-        NestedBlock {
-            block_type: BlockType::SelfLooping,
-            content: vec![child],
-            depth: old_depth + 1,
-        }
-    }
-
-    pub fn new_sequence(children: Vec<StructureBlock>) -> NestedBlock {
+    pub fn new(bt: BlockType, children: Vec<StructureBlock>) -> NestedBlock {
         let old_depth = children.iter().fold(0, |max, val| max.max(val.get_depth()));
+        let lower_bound = children
+            .iter()
+            .fold(u64::MAX, |min, val| min.min(val.starting_offset()));
+        let upper_bound = children
+            .iter()
+            .fold(0, |max, val| max.max(val.ending_offset()));
         NestedBlock {
-            block_type: BlockType::Sequence,
+            first: lower_bound,
+            last: upper_bound,
+            block_type: bt,
             content: children,
             depth: old_depth + 1,
         }
-    }
-
-    pub fn new_if_then(ifb: StructureBlock, thenb: StructureBlock) -> NestedBlock {
-        let children = vec![ifb, thenb];
-        let mut block = Self::new_sequence(children);
-        block.block_type = BlockType::IfThenElse;
-        block
-    }
-
-    pub fn new_if_then_else(
-        ifb: StructureBlock,
-        thenb: StructureBlock,
-        elseb: StructureBlock,
-    ) -> NestedBlock {
-        let children = vec![ifb, thenb, elseb];
-        let mut block = Self::new_sequence(children);
-        block.block_type = BlockType::IfThenElse;
-        block
     }
 }
 
@@ -156,6 +139,20 @@ impl StructureBlock {
             BlockType::DoWhile => "Do-While",
         }
     }
+
+    pub fn starting_offset(&self) -> u64 {
+        match self {
+            StructureBlock::Basic(bb) => bb.first,
+            StructureBlock::Nested(nb) => nb.first,
+        }
+    }
+
+    pub fn ending_offset(&self) -> u64 {
+        match self {
+            StructureBlock::Basic(bb) => bb.last,
+            StructureBlock::Nested(nb) => nb.last,
+        }
+    }
 }
 
 impl From<Rc<BasicBlock>> for StructureBlock {
@@ -173,7 +170,7 @@ impl From<Rc<NestedBlock>> for StructureBlock {
 #[cfg(test)]
 mod tests {
     use crate::analysis::blocks::StructureBlock;
-    use crate::analysis::{BasicBlock, NestedBlock};
+    use crate::analysis::{BasicBlock, BlockType, NestedBlock};
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
     use std::rc::Rc;
@@ -235,14 +232,22 @@ mod tests {
     #[test]
     fn structural_hash_same_order() {
         let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
-        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![
-            self_loop,
-            bb.clone(),
-        ])));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
-        let sequence1 =
-            StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![self_loop, bb])));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::SelfLooping,
+            vec![bb.clone()],
+        )));
+        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![self_loop, bb.clone()],
+        )));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::SelfLooping,
+            vec![bb.clone()],
+        )));
+        let sequence1 = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![self_loop, bb],
+        )));
         let hashes = calculate_hashes(sequence0, sequence1);
         assert_eq!(hashes.0, hashes.1)
     }
@@ -250,28 +255,44 @@ mod tests {
     #[test]
     fn structural_equality_same_order() {
         let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
-        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![
-            self_loop,
-            bb.clone(),
-        ])));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
-        let sequence1 =
-            StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![self_loop, bb])));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::SelfLooping,
+            vec![bb.clone()],
+        )));
+        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![self_loop, bb.clone()],
+        )));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::SelfLooping,
+            vec![bb.clone()],
+        )));
+        let sequence1 = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![self_loop, bb],
+        )));
         assert!(sequence0.structural_equality(&sequence1));
     }
 
     #[test]
     fn structural_hash_different_order() {
         let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
-        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![
-            self_loop,
-            bb.clone(),
-        ])));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
-        let sequence1 =
-            StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![bb, self_loop])));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::SelfLooping,
+            vec![bb.clone()],
+        )));
+        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![self_loop, bb.clone()],
+        )));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::SelfLooping,
+            vec![bb.clone()],
+        )));
+        let sequence1 = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![bb, self_loop],
+        )));
         let hashes = calculate_hashes(sequence0, sequence1);
         assert_ne!(hashes.0, hashes.1)
     }
@@ -279,14 +300,22 @@ mod tests {
     #[test]
     fn structural_equality_different_order() {
         let bb = StructureBlock::from(Rc::new(BasicBlock { first: 0, last: 0 }));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
-        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![
-            self_loop,
-            bb.clone(),
-        ])));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new_self_loop(bb.clone())));
-        let sequence1 =
-            StructureBlock::from(Rc::new(NestedBlock::new_sequence(vec![bb, self_loop])));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::SelfLooping,
+            vec![bb.clone()],
+        )));
+        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![self_loop, bb.clone()],
+        )));
+        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::SelfLooping,
+            vec![bb.clone()],
+        )));
+        let sequence1 = StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![bb, self_loop],
+        )));
         assert!(!sequence0.structural_equality(&sequence1));
     }
 }
