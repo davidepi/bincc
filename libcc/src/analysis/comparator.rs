@@ -112,7 +112,7 @@ fn remove_overlapping(mut clone_list: Vec<ClonePair>) -> Vec<ClonePair> {
     // is close
     let mut todo = clone_list.clone();
     // this minimizes the number of comparisons (sorting is nlogn, the removal is n^2)
-    todo.sort_unstable_by(|a, b| b.depth().cmp(&a.depth()));
+    todo.sort_unstable_by_key(|a| std::cmp::Reverse(a.depth()));
     let mut removed = HashSet::new();
     while !todo.is_empty() {
         let current = todo.pop().unwrap();
