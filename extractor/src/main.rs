@@ -5,23 +5,17 @@ use clap::{App, Arg};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::LevelFilter;
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
 
 fn main() {
-    let matches = App::new("bcc")
+    let matches = App::new("bcc extractor")
         .version("0.1")
         .author("Davide Pizzolotto <davide.pizzolotto@gmail.com>")
-        .about("Structural comparison of source and binary files")
-        .arg(
-            Arg::with_name("extract")
-                .long("extract")
-                .help("Perform the CFG extraction only")
-                .takes_value(false),
-        )
+        .about("Extracts CFG from binary files")
         .arg(
             Arg::with_name("input")
                 .help("Input file(s)")
@@ -60,7 +54,6 @@ fn main() {
     }
     let threads_no = if cfg!(debug_assertions) {
         log::warn!("Debug build, forcing 1 working thread");
-
         1
     } else if let Some(jobs) = matches.value_of("jobs") {
         match jobs.parse::<usize>() {
@@ -90,26 +83,34 @@ fn main() {
         .map(String::from)
         .collect::<Vec<_>>();
     log::debug!("Total jobs: {}", inputs.len());
-    let pb = Arc::new(ProgressBar::new(inputs.len() as u64));
+    extract_dot(inputs, output.to_str().unwrap().to_owned(), threads_no);
+}
+
+fn extract_dot(binaries: Vec<String>, output_dir: String, threads_no: usize) -> Vec<PathBuf> {
+    println!("Extracting CFGs...");
+    let pb = Arc::new(ProgressBar::new(binaries.len() as u64));
     pb.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7}")
             .progress_chars("#>-"),
     );
-    let jobs = Arc::new(Mutex::new(inputs));
+    let jobs = Arc::new(Mutex::new(binaries));
+    let ret = Arc::new(Mutex::new(Vec::new()));
     let mut threads = vec![];
     for t in 0..threads_no {
         let personal_jobs = jobs.clone();
-        let out = output.to_str().unwrap().to_string();
+        let personal_ret = ret.clone();
         let personal_pb = pb.clone();
+        let personal_outdir = output_dir.clone();
         threads.push(thread::spawn({
             move || loop {
                 if !personal_jobs.lock().unwrap().is_empty() {
                     let maybe_job = personal_jobs.lock().unwrap().pop();
                     if let Some(job) = maybe_job {
                         log::trace!("[{}] starting job on {}", t, job);
-                        match get_and_save_cfg(&job, &out, t) {
-                            Ok(_) => {
+                        match get_and_save_cfg(&job, &personal_outdir, t) {
+                            Ok(path) => {
+                                personal_ret.lock().unwrap().push(path);
                                 log::trace!("[{}] finished job on {}", t, job);
                             }
                             Err(err) => {
@@ -128,13 +129,15 @@ fn main() {
         t.join().unwrap();
     }
     pb.finish();
+    let x = ret.lock().unwrap().clone();
+    x
 }
 
 fn get_and_save_cfg(
     relative: &str,
     output_dir: &str,
     tid: usize,
-) -> Result<Vec<CFG>, Box<dyn Error>> {
+) -> Result<PathBuf, Box<dyn Error>> {
     let relative_path = Path::new(relative);
     let filename = relative_path.file_name().unwrap();
     let out_dir = Path::new(output_dir).join(Path::new(filename));
@@ -145,7 +148,6 @@ fn get_and_save_cfg(
         out_dir.as_os_str().to_str().unwrap_or("ERR")
     );
     let mut disassembler = R2Disasm::new(relative)?;
-    let mut ret = Vec::new();
     if let Some(arch) = disassembler.get_arch() {
         log::trace!("[{}] starting disassembling", tid);
         let start_t = Instant::now();
@@ -176,10 +178,9 @@ fn get_and_save_cfg(
                 cfg.to_file(outfile).unwrap_or_else(|_| {
                     log::error!("[{}] could not save CFG of {}::{}", tid, relative, function)
                 });
-                ret.push(cfg)
             }
         }
-        Ok(ret)
+        Ok(out_dir)
     } else {
         Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,

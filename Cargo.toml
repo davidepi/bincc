@@ -1,41 +1,8 @@
-[package]
-name = "bcc"
-description = "Checks for similarities among different binaries."
-version = "0.1.0"
-authors = [
-    "Davide Pizzolotto <davide.pizzolotto@gmail.com>"
+[workspace]
+members = [
+    "libcc",
+    "extractor",
 ]
-edition = "2018"
-license = "MIT"
-publish = false
-
-[[bin]]
-name = "bcc"
-path = "src/main.rs"
-doc = false
-
-[dependencies]
-fnv = "1.0.7"
-parse_int = "0.5"
-r2pipe = { git = "https://github.com/radareorg/r2pipe.rs.git", branch = "master", optional = true }
-regex = "1"
-clap="2" # used by bin only
-log = "0.4" # used by bin only
-simple-logging = "2" # used by bin only
-num_cpus="1" # used by bin only
-indicatif="0.16" # used by bin only
-
-[dev-dependencies]
-serial_test = "0.5.1" # needed only by radare2, but dev-dependencies are not allowed to be optional
-maplit = "1.0.2" # macro literal creation in tests
-tempfile="3"
-
-[features]
-radare2 = ["r2pipe"]
-
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
 
 [profile.release]
 opt-level=3

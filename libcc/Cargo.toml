@@ -1,0 +1,29 @@
+[package]
+name = "bcc"
+description = "Checks for similarities among different binaries."
+version = "0.1.0"
+authors = [
+    "Davide Pizzolotto <davide.pizzolotto@gmail.com>"
+]
+edition = "2018"
+license = "MIT"
+publish = false
+
+[dependencies]
+fnv = "1.0.7"
+parse_int = "0.5"
+r2pipe = { git = "https://github.com/radareorg/r2pipe.rs.git", branch = "master", optional = true }
+regex = "1"
+log = "0.4"
+
+[dev-dependencies]
+serial_test = "0.5.1" # needed only by radare2, but dev-dependencies are not allowed to be optional
+maplit = "1.0.2" # macro literal creation in tests
+tempfile="3"
+
+[features]
+radare2 = ["r2pipe"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

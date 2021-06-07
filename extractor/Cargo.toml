@@ -1,0 +1,26 @@
+[package]
+name = "extractor"
+description = "Extracts CFG as .dot files from binaries."
+version = "0.1.0"
+authors = [
+    "Davide Pizzolotto <davide.pizzolotto@gmail.com>"
+]
+edition = "2018"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "extractor"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
+fnv = "1.0.7"
+parse_int = "0.5"
+bcc = {path="../libcc", features=["radare2"]}
+regex = "1"
+clap="2"
+log = "0.4"
+simple-logging = "2"
+num_cpus="1"
+indicatif="0.16"
