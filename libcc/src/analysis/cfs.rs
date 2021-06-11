@@ -387,11 +387,15 @@ fn find_dowhile(
             if next == node {
                 next = tail_children[1];
             }
-            let block = Rc::new(NestedBlock::new(
-                BlockType::DoWhile,
-                vec![node.clone(), tail.clone()],
-            ));
-            Some((StructureBlock::from(block), Some(next.clone())))
+            if node != next && tail != next {
+                let block = Rc::new(NestedBlock::new(
+                    BlockType::DoWhile,
+                    vec![node.clone(), tail.clone()],
+                ));
+                Some((StructureBlock::from(block), Some(next.clone())))
+            } else {
+                None
+            }
         }
     } else {
         None
@@ -741,6 +745,7 @@ fn remove_natural_loops(
 mod tests {
     use crate::analysis::{cfs, BasicBlock, BlockType, Graph, CFG, CFS};
     use std::collections::HashMap;
+    use std::fs::create_dir;
     use std::rc::Rc;
 
     macro_rules! create_cfg {
@@ -1198,5 +1203,44 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_some());
+    }
+
+    #[test]
+    fn proper_interval() {
+        let cfg = create_cfg! {
+          0 => [1, 2],
+          1 => [3],
+          2 => [1 ,3],
+          3 => []
+        };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_none());
+    }
+
+    #[test]
+    fn proper_interval_recursive() {
+        let cfg = create_cfg! {
+          0 => [1, 2],
+          1 => [3],
+          2 => [3, 4],
+          3 => [5],
+          4 => [5],
+          5 => []
+        };
+        let cfs = CFS::new(&cfg);
+        cfs.to_file("/Users/davide/Desktop/test.dot");
+        assert!(cfs.get_tree().is_none());
+    }
+
+    #[test]
+    fn improper_interval() {
+        let cfg = create_cfg! {
+          0 => [1, 2],
+          1 => [2, 3],
+          2 => [1 ,3],
+          3 => []
+        };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_none());
     }
 }
