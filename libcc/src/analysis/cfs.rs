@@ -290,11 +290,22 @@ fn reduce_ifelse(
             // to see if these is a chain of if-else. In order to hold, every edge not pointing
             // to the current one should point to the else block.
             let child_rev = ascend_if_chain(vec![elseb, thenb, node], elseb, graph, preds);
-            let block = Rc::new(NestedBlock::new(
-                BlockType::IfThenElse,
-                child_rev.into_iter().cloned().rev().collect(),
-            ));
-            Some((StructureBlock::from(block), Some(elseb_children[0].clone())))
+            let child_set = child_rev.iter().collect::<HashSet<_>>();
+            let preds_ok = elseb_preds
+                .iter()
+                .fold(true, |acc, x| acc & child_set.contains(x));
+            if preds_ok {
+                // in most cases the preds will be ok. However, to avoid wrong resolution due to
+                // visiting order, this check is inserted (mostly to avoid resolving a "proper
+                // interval" to a "if-then-else")
+                let block = Rc::new(NestedBlock::new(
+                    BlockType::IfThenElse,
+                    child_rev.into_iter().cloned().rev().collect(),
+                ));
+                Some((StructureBlock::from(block), Some(elseb_children[0].clone())))
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -745,7 +756,6 @@ fn remove_natural_loops(
 mod tests {
     use crate::analysis::{cfs, BasicBlock, BlockType, Graph, CFG, CFS};
     use std::collections::HashMap;
-    use std::fs::create_dir;
     use std::rc::Rc;
 
     macro_rules! create_cfg {
@@ -1228,7 +1238,6 @@ mod tests {
           5 => []
         };
         let cfs = CFS::new(&cfg);
-        cfs.to_file("/Users/davide/Desktop/test.dot");
         assert!(cfs.get_tree().is_none());
     }
 
