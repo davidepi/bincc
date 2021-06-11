@@ -154,11 +154,30 @@ fn reduce_sequence(
     if children.len() == 1 {
         let next = children.pop().unwrap();
         let mut nextnexts = graph.children(next).unwrap();
-        if preds.get(next).map_or(0, |x| x.len()) == 1 && nextnexts.len() <= 1 {
-            Some((
-                StructureBlock::from(Rc::new(construct_and_flatten_sequence(node, next))),
-                nextnexts.pop().cloned(),
-            ))
+        if preds.get(next).map_or(0, |x| x.len()) == 1 {
+            match nextnexts.len() {
+                0 => Some((
+                    StructureBlock::from(Rc::new(construct_and_flatten_sequence(node, next))),
+                    None,
+                )),
+                1 => {
+                    let nextnext = nextnexts.pop().unwrap();
+                    if nextnext != node {
+                        Some((
+                            StructureBlock::from(Rc::new(construct_and_flatten_sequence(
+                                node, next,
+                            ))),
+                            Some(nextnext.clone()),
+                        ))
+                    } else {
+                        // particular type of looping sequence, still don't know how to handle this
+                        let mut seq = construct_and_flatten_sequence(node, next);
+                        seq.block_type = BlockType::SelfLooping;
+                        Some((StructureBlock::from(Rc::new(seq)), None))
+                    }
+                }
+                _ => None,
+            }
         } else {
             None
         }
@@ -460,10 +479,10 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
         for node in graph.postorder() {
             let reductions = [
                 reduce_self_loop,
-                reduce_sequence,
+                reduce_loop,
                 reduce_ifthen,
                 reduce_ifelse,
-                reduce_loop,
+                reduce_sequence,
             ];
             let mut reduced = None;
             for reduction in &reductions {
@@ -1153,5 +1172,31 @@ mod tests {
         assert_eq!(sequence.len(), 5);
         assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
         assert_eq!(sequence.depth(), 3);
+    }
+
+    #[test]
+    fn looping_sequence() {
+        // this caused a panic, assert it is not the case anymore
+        let cfg = create_cfg! {
+            13 => [ 7]    ,
+            14 => [ 7]    ,
+            15 => [ 5]    ,
+             8 => [ 9, 11],
+             6 => [ 7]    ,
+            12 => [13, 14],
+             9 => [10]    ,
+            16 => [ 3]    ,
+             4 => [ 5]    ,
+             0 => [ 1, 16],
+            11 => [ 3]    ,
+             1 => [ 2, 16],
+            10 => [11, 10],
+             2 => [ 3]    ,
+             3 => [ 4, 15],
+             5 => [ 6, 12],
+             7 => [ 8, 11],
+        };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_some());
     }
 }
