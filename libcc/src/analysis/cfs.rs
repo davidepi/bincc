@@ -440,7 +440,31 @@ fn remap_nodes(
 ) -> DirectedGraph<StructureBlock> {
     if !graph.is_empty() {
         let mut new_adjacency = HashMap::new();
-        let remove_list = new.children().iter().collect::<HashSet<_>>();
+        let mut remove_list = new.children().iter().collect::<HashSet<_>>();
+        let extended_from = if new.block_type() == BlockType::Sequence {
+            // checks if the newly created node was an extension of a previous sequence. if this is
+            // the case it is IMPORTANT to add the previous sequence to the remove_list, otherwise
+            // infinite loop ;)
+            graph
+                .adjacency
+                .iter()
+                .filter(|(node, _)| node.block_type() == BlockType::Sequence)
+                //todo: may I add additional checks to limit as much as possible the next filter?
+                .filter(|(node, _)| {
+                    node.children()
+                        .iter()
+                        .collect::<HashSet<_>>()
+                        .difference(&remove_list)
+                        .count()
+                        == 0
+                })
+                .map(|(node, _)| node)
+                .cloned()
+                .collect()
+        } else {
+            HashSet::new()
+        };
+        remove_list.extend(extended_from.iter());
         for (node, children) in graph.adjacency.into_iter() {
             if !remove_list.contains(&node) {
                 let children_replaced = children
@@ -1251,5 +1275,20 @@ mod tests {
         };
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_none());
+    }
+
+    #[test]
+    fn sequence_extension() {
+        let cfg = create_cfg! {
+          0 => [1, 2],
+          1 => [2],
+          2 => [3],
+          3 => [4, 6],
+          4 => [5, 6],
+          5 => [0],
+          6 => []
+        };
+        CFS::new(&cfg);
+        // should not panic
     }
 }
