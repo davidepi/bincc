@@ -5,5 +5,5 @@ members = [
 ]
 
 [profile.release]
-opt-level=3
-lto=true
+opt-level = 3
+lto = true

@@ -44,8 +44,9 @@ impl CFS {
         let old_ids = self.cfg.node_id_map();
         dot.pop();
         dot.pop();
-        if let Some(root) = self.get_tree() {
-            print_subgraph(&root, 0, &old_ids, &mut dot);
+        let mut id = 0;
+        for (node, _) in self.tree.adjacency.iter() {
+            id = print_subgraph(node, id, &old_ids, &mut dot);
         }
         dot.push('}');
         dot.push('\n');
@@ -103,7 +104,8 @@ fn print_subgraph<T: std::fmt::Write>(
     id: usize,
     cfg_ids: &HashMap<Rc<BasicBlock>, usize>,
     fmt: &mut T,
-) {
+) -> usize {
+    let mut latest = id;
     match node {
         StructureBlock::Basic(bb) => {
             writeln!(fmt, "{};", *cfg_ids.get(bb).unwrap()).unwrap();
@@ -111,11 +113,12 @@ fn print_subgraph<T: std::fmt::Write>(
         StructureBlock::Nested(_) => {
             writeln!(fmt, "subgraph cluster_{}{{", id).unwrap();
             for (child_no, child) in node.children().iter().enumerate() {
-                print_subgraph(child, id + child_no + 1, cfg_ids, fmt);
+                latest = print_subgraph(child, id + child_no + 1, cfg_ids, fmt);
             }
             writeln!(fmt, "label=\"{}\";\n}}", node.block_type()).unwrap();
         }
     }
+    latest
 }
 
 fn reduce_self_loop(
