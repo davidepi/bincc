@@ -362,18 +362,15 @@ impl CFG {
     /// one or more predecessors.
     #[must_use]
     pub fn add_entry_point(mut self) -> CFG {
-        if let Some(oep) = self.root.clone() {
-            let oep_has_preds = self
-                .edges
-                .iter()
-                .flat_map(|(_, edge)| edge)
-                .flatten()
-                .any(|x| x == &oep);
-            if oep_has_preds {
-                let eep = Rc::new(BasicBlock::new_entry_point());
-                self.root = Some(eep.clone());
-                self.edges.insert(eep, [Some(oep), None]);
-            }
+        let oep_has_preds = self
+            .edges
+            .iter()
+            .flat_map(|(_, edge)| edge)
+            .any(|x| x == &self.root);
+        if oep_has_preds {
+            let eep = Rc::new(BasicBlock::new_entry_point());
+            self.edges.insert(eep.clone(), [self.root.take(), None]);
+            self.root = Some(eep);
         }
         self
     }
