@@ -1,6 +1,7 @@
 use crate::analysis::blocks::StructureBlock;
 use crate::analysis::{BasicBlock, BlockType, DirectedGraph, Graph, NestedBlock, CFG};
 use fnv::FnvHashSet;
+use maplit::hashset;
 use std::array::IntoIter;
 use std::cmp::{max, Ordering};
 use std::collections::{HashMap, HashSet};
@@ -121,19 +122,35 @@ fn print_subgraph<T: std::fmt::Write>(
     latest
 }
 
-fn reduce_self_loop(
-    node: &StructureBlock,
-    graph: &DirectedGraph<StructureBlock>,
-    _: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+// result of a reduce_xxx method
+struct Reduction<'a> {
+    // old nodes that will be removed. Not necessary equal to new.children()
+    // for example structures may expand previous structures, forcing the previous structure to
+    // be discarded and a new one to be created.
+    old: HashSet<&'a StructureBlock>,
+    // new node that will replace the old one
+    new: StructureBlock,
+    // successor of the newly created node
+    next: Option<&'a StructureBlock>,
+}
+
+fn reduce_self_loop<'a>(
+    node: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+    _: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
     _: &HashMap<&StructureBlock, bool>,
-) -> Option<(StructureBlock, Option<StructureBlock>)> {
+) -> Option<Reduction<'a>> {
     match node {
         StructureBlock::Basic(_) => {
             let children = graph.children(node).unwrap();
             if children.len() == 2 && children.contains(&node) {
                 let next = children.into_iter().filter(|x| x != &node).last().unwrap();
                 let block = Rc::new(NestedBlock::new(BlockType::SelfLooping, vec![node.clone()]));
-                Some((StructureBlock::from(block), Some(next.clone())))
+                Some(Reduction {
+                    old: hashset![node],
+                    new: StructureBlock::from(block),
+                    next: Some(next),
+                })
             } else {
                 None
             }
@@ -142,12 +159,12 @@ fn reduce_self_loop(
     }
 }
 
-fn reduce_sequence(
-    node: &StructureBlock,
-    graph: &DirectedGraph<StructureBlock>,
-    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+fn reduce_sequence<'a>(
+    node: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
     _: &HashMap<&StructureBlock, bool>,
-) -> Option<(StructureBlock, Option<StructureBlock>)> {
+) -> Option<Reduction<'a>> {
     // conditions for a sequence:
     // - current node has only one successor node
     // - successor has only one predecessor (the current node)
@@ -158,26 +175,23 @@ fn reduce_sequence(
         let next = children.pop().unwrap();
         let mut nextnexts = graph.children(next).unwrap();
         if preds.get(next).map_or(0, |x| x.len()) == 1 {
+            let mut reduction = construct_and_flatten_sequence(node, next);
             match nextnexts.len() {
-                0 => Some((
-                    StructureBlock::from(Rc::new(construct_and_flatten_sequence(node, next))),
-                    None,
-                )),
+                0 => Some(reduction),
                 1 => {
                     let nextnext = nextnexts.pop().unwrap();
                     if nextnext != node {
-                        Some((
-                            StructureBlock::from(Rc::new(construct_and_flatten_sequence(
-                                node, next,
-                            ))),
-                            Some(nextnext.clone()),
-                        ))
+                        reduction.next = Some(nextnext);
                     } else {
                         // particular type of looping sequence, still don't know how to handle this
-                        let mut seq = construct_and_flatten_sequence(node, next);
-                        seq.block_type = BlockType::SelfLooping;
-                        Some((StructureBlock::from(Rc::new(seq)), None))
+                        match reduction.new {
+                            StructureBlock::Nested(ref mut nb) => {
+                                Rc::get_mut(nb).unwrap().block_type = BlockType::SelfLooping
+                            }
+                            _ => panic!(),
+                        }
                     }
+                    Some(reduction)
                 }
                 _ => None,
             }
@@ -220,12 +234,12 @@ fn ascend_if_chain<'a>(
     rev_chain
 }
 
-fn reduce_ifthen(
-    node: &StructureBlock,
-    graph: &DirectedGraph<StructureBlock>,
-    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+fn reduce_ifthen<'a>(
+    node: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
     _: &HashMap<&StructureBlock, bool>,
-) -> Option<(StructureBlock, Option<StructureBlock>)> {
+) -> Option<Reduction<'a>> {
     let mut children = graph.children(node).unwrap();
     if children.len() == 2 {
         let head = node;
@@ -248,9 +262,13 @@ fn reduce_ifthen(
             //now creates the block itself
             let block = Rc::new(NestedBlock::new(
                 BlockType::IfThen,
-                child_rev.into_iter().cloned().rev().collect(),
+                child_rev.iter().cloned().cloned().rev().collect(),
             ));
-            Some((StructureBlock::from(block), Some(cont.clone())))
+            Some(Reduction {
+                old: child_rev.into_iter().collect(),
+                new: StructureBlock::from(block),
+                next: Some(cont),
+            })
         } else {
             None
         }
@@ -259,12 +277,12 @@ fn reduce_ifthen(
     }
 }
 
-fn reduce_ifelse(
-    node: &StructureBlock,
-    graph: &DirectedGraph<StructureBlock>,
-    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+fn reduce_ifelse<'a>(
+    node: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
     _: &HashMap<&StructureBlock, bool>,
-) -> Option<(StructureBlock, Option<StructureBlock>)> {
+) -> Option<Reduction<'a>> {
     let node_children = graph.children(&node).unwrap();
     if node_children.len() == 2 {
         let mut thenb = node_children[0];
@@ -303,9 +321,13 @@ fn reduce_ifelse(
                 // interval" to a "if-then-else")
                 let block = Rc::new(NestedBlock::new(
                     BlockType::IfThenElse,
-                    child_rev.into_iter().cloned().rev().collect(),
+                    child_rev.iter().cloned().cloned().rev().collect(),
                 ));
-                Some((StructureBlock::from(block), Some(elseb_children[0].clone())))
+                Some(Reduction {
+                    old: child_rev.into_iter().collect(),
+                    new: StructureBlock::from(block),
+                    next: Some(elseb_children[0]),
+                })
             } else {
                 None
             }
@@ -317,12 +339,12 @@ fn reduce_ifelse(
     }
 }
 
-fn reduce_loop(
-    node: &StructureBlock,
-    graph: &DirectedGraph<StructureBlock>,
-    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+fn reduce_loop<'a>(
+    node: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
     loops: &HashMap<&StructureBlock, bool>,
-) -> Option<(StructureBlock, Option<StructureBlock>)> {
+) -> Option<Reduction<'a>> {
     if *loops.get(&node).unwrap() && preds.get(&node).unwrap().len() > 1 {
         let head_children = graph.children(&node).unwrap();
         if head_children.len() == 2 {
@@ -343,12 +365,12 @@ fn reduce_loop(
     }
 }
 
-fn find_while(
-    node: &StructureBlock,
-    next: &StructureBlock,
-    tail: &StructureBlock,
-    graph: &DirectedGraph<StructureBlock>,
-) -> Option<(StructureBlock, Option<StructureBlock>)> {
+fn find_while<'a>(
+    node: &'a StructureBlock,
+    next: &'a StructureBlock,
+    tail: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+) -> Option<Reduction<'a>> {
     let mut next = next;
     let mut tail = tail;
     if graph.children(&next).unwrap().contains(&node) {
@@ -360,18 +382,22 @@ fn find_while(
             BlockType::While,
             vec![node.clone(), tail.clone()],
         ));
-        Some((StructureBlock::from(block), Some(next.clone())))
+        Some(Reduction {
+            old: hashset![node, tail],
+            new: StructureBlock::from(block),
+            next: Some(next),
+        })
     } else {
         None
     }
 }
 
-fn find_dowhile(
-    node: &StructureBlock,
-    tail: &StructureBlock,
-    tail_children: &[&StructureBlock],
-    graph: &DirectedGraph<StructureBlock>,
-) -> Option<(StructureBlock, Option<StructureBlock>)> {
+fn find_dowhile<'a>(
+    node: &'a StructureBlock,
+    tail: &'a StructureBlock,
+    tail_children: &[&'a StructureBlock],
+    graph: &'a DirectedGraph<StructureBlock>,
+) -> Option<Reduction<'a>> {
     if tail_children.len() == 2 {
         if !tail_children.contains(&node) {
             //type 3 or 4 (single node between tail and head) or no loop
@@ -394,7 +420,11 @@ fn find_dowhile(
                 BlockType::DoWhile,
                 vec![node.clone(), tail.clone(), post_tail.clone()],
             ));
-            Some((StructureBlock::from(block), Some(next.clone())))
+            Some(Reduction {
+                old: hashset![node, tail, post_tail],
+                new: StructureBlock::from(block),
+                next: Some(next),
+            })
         } else {
             //type 1 or 2 (single or no node between head and tail)
             let mut next = tail_children[0];
@@ -406,7 +436,11 @@ fn find_dowhile(
                     BlockType::DoWhile,
                     vec![node.clone(), tail.clone()],
                 ));
-                Some((StructureBlock::from(block), Some(next.clone())))
+                Some(Reduction {
+                    old: hashset![node, tail],
+                    new: StructureBlock::from(block),
+                    next: Some(next),
+                })
             } else {
                 None
             }
@@ -416,98 +450,81 @@ fn find_dowhile(
     }
 }
 
-fn construct_and_flatten_sequence(node: &StructureBlock, next: &StructureBlock) -> NestedBlock {
-    let flatten = |node: &StructureBlock| match node {
+fn construct_and_flatten_sequence<'a>(
+    node: &'a StructureBlock,
+    next: &'a StructureBlock,
+) -> Reduction<'a> {
+    let flatten = |node: &'a StructureBlock| match node {
         StructureBlock::Basic(_) => {
-            vec![node.clone()]
+            vec![node]
         }
         StructureBlock::Nested(nb) => {
             if nb.block_type == BlockType::Sequence {
-                nb.content.clone()
+                nb.content.iter().collect()
             } else {
-                vec![node.clone()]
+                vec![node]
             }
         }
     };
-    let content = flatten(node)
-        .into_iter()
-        .chain(flatten(next))
-        .collect::<Vec<_>>();
-    NestedBlock::new(BlockType::Sequence, content)
+    let mut reduction = Reduction {
+        old: flatten(node).into_iter().chain(flatten(next)).collect(),
+        new: StructureBlock::from(Rc::new(NestedBlock::new(
+            BlockType::Sequence,
+            flatten(node)
+                .into_iter()
+                .chain(flatten(next))
+                .cloned()
+                .collect(),
+        ))),
+        next: None,
+    };
+    if node.block_type() == BlockType::Sequence {
+        reduction.old.insert(node);
+    }
+    if next.block_type() == BlockType::Sequence {
+        reduction.old.insert(next);
+    }
+    reduction
 }
 
 fn remap_nodes(
-    new: StructureBlock,
-    next: Option<StructureBlock>,
-    graph: DirectedGraph<StructureBlock>,
+    reduction: Reduction,
+    graph: &DirectedGraph<StructureBlock>,
 ) -> DirectedGraph<StructureBlock> {
     if !graph.is_empty() {
         let mut new_adjacency = HashMap::new();
-        let mut remove_list = new.children().iter().collect::<HashSet<_>>();
-        let extended_from = if new.block_type() == BlockType::Sequence {
-            // checks if the newly created node was an extension of a previous sequence. if this is
-            // the case it is IMPORTANT to add the previous sequence to the remove_list, otherwise
-            // infinite loop ;)
-            graph
-                .adjacency
-                .iter()
-                .filter(|(node, _)| node.block_type() == BlockType::Sequence)
-                //todo: may I add additional checks to limit as much as possible the next filter?
-                .filter(|(node, _)| {
-                    node.children()
-                        .iter()
-                        .collect::<HashSet<_>>()
-                        .difference(&remove_list)
-                        .count()
-                        == 0
-                })
-                .map(|(node, _)| node)
-                .cloned()
-                .collect()
-        } else {
-            HashSet::new()
-        };
-        remove_list.extend(extended_from.iter());
-        for (node, children) in graph.adjacency.into_iter() {
-            if !remove_list.contains(&node) {
+        for (node, children) in graph.adjacency.iter() {
+            if !reduction.old.contains(&node) {
                 let children_replaced = children
-                    .into_iter()
+                    .iter()
                     .map(|child| {
-                        if !remove_list.contains(&child) {
-                            child
+                        if !reduction.old.contains(&child) {
+                            child.clone()
                         } else {
-                            new.clone()
+                            reduction.new.clone()
                         }
                     })
                     .collect();
                 new_adjacency.insert(node.clone(), children_replaced);
             }
         }
-        let replacement = match &next {
+        let replacement = match reduction.next {
             None => vec![],
             Some(next_unwrapped) => vec![next_unwrapped.clone()],
         };
-        new_adjacency.insert(new.clone(), replacement);
+        new_adjacency.insert(reduction.new.clone(), replacement);
 
-        let new_root = if !remove_list.contains(graph.root.as_ref().unwrap()) {
-            graph.root
+        let new_root = if !reduction.old.contains(graph.root.as_ref().unwrap()) {
+            graph.root.clone()
         } else {
-            Some(new)
+            Some(reduction.new)
         };
-        let mut new_graph = DirectedGraph {
+        DirectedGraph {
             root: new_root,
             adjacency: new_adjacency,
-        };
-        //remove unreachable nodes from map (they are now wrapped inside other nodes)
-        let reachables = new_graph.preorder().cloned().collect::<HashSet<_>>();
-        new_graph.adjacency = new_graph
-            .adjacency
-            .into_iter()
-            .filter(|(node, _)| reachables.contains(node))
-            .collect();
-        new_graph
+        }
     } else {
-        graph
+        graph.clone()
     }
 }
 
@@ -533,8 +550,8 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
                     break;
                 }
             }
-            if let Some((new, next)) = reduced {
-                graph = remap_nodes(new, next, graph);
+            if let Some(reduction) = reduced {
+                graph = remap_nodes(reduction, &graph);
                 modified = true;
                 break;
             }
