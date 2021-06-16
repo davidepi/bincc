@@ -12,8 +12,10 @@ use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
 use std::rc::Rc;
 
-/// Offset of an artificially created node
+/// Offset of an artificially created exit node.
 pub const SINK_ADDR: u64 = u64::MAX;
+/// Offset of an artificially created entry point.
+pub const ENTRY_ADDR: u64 = 0;
 
 /// A Control Flow Graph.
 ///
@@ -52,11 +54,27 @@ impl BasicBlock {
         self.first == self.last && self.first == SINK_ADDR
     }
 
+    /// Returns true if the current block is an artificially added entry point for a CFG.
+    ///
+    /// **NOTE:** The original entry point **WILL NOT** return true with this method; this method
+    /// applies only to the node added with the [CFG::add_entry_point()] method.
+    pub fn is_entry_point(&self) -> bool {
+        self.first == self.last && self.first == ENTRY_ADDR
+    }
+
     /// Creates a new sink block.
     fn new_sink() -> BasicBlock {
         BasicBlock {
             first: SINK_ADDR,
             last: SINK_ADDR,
+        }
+    }
+
+    /// Creates a new artificial entry point.
+    fn new_entry_point() -> BasicBlock {
+        BasicBlock {
+            first: ENTRY_ADDR,
+            last: ENTRY_ADDR,
         }
     }
 }
@@ -184,9 +202,14 @@ impl CFG {
         let nodes_ids = self.node_id_map();
         for (node, child) in self.edges.iter() {
             let node_id = nodes_ids.get(node).unwrap_or(&usize::MAX);
+            let shape = if node.is_entry_point() || node.is_sink() {
+                r#",shape="point""#
+            } else {
+                ""
+            };
             nodes_string.push(format!(
-                "{}[comment=\"({},{})\"];",
-                node_id, node.first, node.last
+                "{}[comment=\"({},{})\"{}];",
+                node_id, node.first, node.last, shape
             ));
             if let Some(next) = &child[0] {
                 let next_id = *nodes_ids.get(next).unwrap_or(&usize::MAX);
@@ -221,8 +244,9 @@ impl CFG {
             let mut nodes = HashMap::new();
             let mut edges_next = HashMap::new();
             let mut edges_cond = HashMap::new();
-            let node_re = Regex::new(r#"(\d+)\[comment="\((\d+),(\d+)\)"\];"#).unwrap();
-            let edge_re = Regex::new(r#"(\d+)->(\d+)(\[.*\];)?"#).unwrap();
+            let node_re =
+                Regex::new(r#"(\d+)\[comment="\((\d+),(\d+)\)"(?:,shape="point")?];"#).unwrap();
+            let edge_re = Regex::new(r#"(\d+)->(\d+)(\[.*];)?"#).unwrap();
             while let Some(line) = lines.pop() {
                 if let Some(cap) = node_re.captures(line) {
                     let id = cap.get(1).unwrap().as_str().parse::<usize>()?;
@@ -310,26 +334,48 @@ impl CFG {
     /// In some cases, a CFG may have multiple nodes without children (like in the case of multiple
     /// return statements). This method merges those nodes by attaching them to a sink. The sink
     /// is recognizable by calling [BasicBlock::is_sink()].
-    pub fn add_sink(&self) -> CFG {
+    #[must_use]
+    pub fn add_sink(mut self) -> CFG {
         let exit_nodes = self
             .edges
             .iter()
             .filter(|(_, child)| child[0].is_none() && child[1].is_none())
             .count();
-        let mut edges = self.edges.clone();
         if exit_nodes > 1 {
             let sink = Rc::new(BasicBlock::new_sink());
-            for (_, child) in edges.iter_mut() {
+            for (_, child) in self.edges.iter_mut() {
                 if child[0].is_none() && child[1].is_none() {
                     child[0] = Some(sink.clone());
                 }
             }
-            edges.insert(sink, [None, None]);
+            self.edges.insert(sink, [None, None]);
         }
-        CFG {
-            root: self.root.clone(),
-            edges,
+        self
+    }
+
+    ///Adds an additional entry point to the current CFG.
+    ///
+    /// Some transformation requires CFG nodes to have an exact number of entry edges and will fail
+    /// for the root node. This method add an additional, bogus root node that allows CFG
+    /// transformations to complete successfully. The new artificial entry node is recognizable by
+    /// calling [BasicBlock::is_entry_point()] and is added **iff** the original entry point has
+    /// one or more predecessors.
+    #[must_use]
+    pub fn add_entry_point(mut self) -> CFG {
+        if let Some(oep) = self.root.clone() {
+            let oep_has_preds = self
+                .edges
+                .iter()
+                .flat_map(|(_, edge)| edge)
+                .flatten()
+                .any(|x| x == &oep);
+            if oep_has_preds {
+                let eep = Rc::new(BasicBlock::new_entry_point());
+                self.root = Some(eep.clone());
+                self.edges.insert(eep, [Some(oep), None]);
+            }
         }
+        self
     }
 
     /// Given a node, returns it's shared reference used internally by the CFG.
@@ -890,10 +936,32 @@ mod tests {
         file.seek(SeekFrom::Start(0))?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
-        println!("{}", cfg.to_dot());
-        std::io::stdout().flush().unwrap();
         let cfg_read = CFG::from_dot(&content)?;
         assert_eq!(cfg_read, cfg);
+        Ok(())
+    }
+
+    #[test]
+    fn save_and_retrieve_with_entry_point() -> Result<(), Box<dyn Error>> {
+        let stmts = vec![
+            Statement::new(0x61E, "push rbp"),                //0
+            Statement::new(0x622, "mov dword [var_4h], edi"), //0
+            Statement::new(0x62C, "jne 0x638"),               //0
+            Statement::new(0x62E, "ret"),                     //1
+            Statement::new(0x638, "pop rbp"),                 //2
+            Statement::new(0x639, "ret"),                     //2
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        let cfg_sink_eep = cfg.clone().add_entry_point().add_sink();
+        assert_ne!(cfg, cfg_sink_eep);
+        let mut file = tempfile()?;
+        file.write_all(cfg_sink_eep.to_dot().as_bytes())?;
+        file.seek(SeekFrom::Start(0))?;
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        let cfg_read = CFG::from_dot(&content)?;
+        assert_eq!(cfg_read, cfg_sink_eep);
         Ok(())
     }
 
@@ -930,8 +998,50 @@ mod tests {
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
-        let cfg_with_sink = cfg.add_sink();
+        let cfg_with_sink = cfg.clone().add_sink();
         assert_eq!(cfg.len(), cfg_with_sink.len());
+    }
+
+    #[test]
+    fn add_extra_entry_point() {
+        let stmts = vec![
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x620, "jmp 0x61c"),
+            Statement::new(0x624, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert_eq!(cfg.len(), 1);
+        let cfg_with_eep = cfg.clone().add_entry_point();
+        assert_eq!(cfg_with_eep.len(), 2);
+        assert!(cfg_with_eep.root().unwrap().is_entry_point());
+        assert_eq!(
+            cfg_with_eep.next(cfg_with_eep.root()).unwrap(),
+            cfg.root().unwrap()
+        );
+    }
+
+    #[test]
+    fn add_extra_entry_point_empty() {
+        let cfg = CFG {
+            root: None,
+            edges: HashMap::new(),
+        };
+        let cfg_with_eep = cfg.add_entry_point();
+        assert!(cfg_with_eep.is_empty());
+    }
+
+    #[test]
+    fn add_extra_entry_point_unnecessary() {
+        let stmts = vec![
+            Statement::new(0x61C, "mov eax, 5"),
+            Statement::new(0x624, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert_eq!(cfg.len(), 1);
+        let cfg_with_eep = cfg.clone().add_entry_point();
+        assert_eq!(cfg_with_eep, cfg);
     }
 
     #[test]

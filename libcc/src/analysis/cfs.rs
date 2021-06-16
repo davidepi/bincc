@@ -794,7 +794,7 @@ mod tests {
             let cap = create_cfg!(@count $($src),*);
             let nodes = (0..)
                         .take(cap)
-                        .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
+                        .map(|x| Rc::new(BasicBlock { first: x, last: x+1 }))
                         .collect::<Vec<_>>();
             #[allow(unused_mut)]
             let mut edges = std::collections::HashMap::with_capacity(cap);
@@ -1000,6 +1000,15 @@ mod tests {
     }
 
     #[test]
+    fn while_no_entry() {
+        let cfg = create_cfg! { 0 => [1, 2], 1 => [0], 2 => [] };
+        let cfs = CFS::new(&cfg.add_entry_point());
+        assert!(cfs.get_tree().is_some());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.children()[1].block_type(), BlockType::While);
+    }
+
+    #[test]
     fn whileb() {
         let cfg = create_cfg! { 0 => [1], 1 => [2, 3], 2 => [1], 3 => [] };
         let cfs = CFS::new(&cfg);
@@ -1008,6 +1017,15 @@ mod tests {
         assert_eq!(sequence.len(), 3);
         assert_eq!(sequence.children()[1].block_type(), BlockType::While);
         assert_eq!(sequence.depth(), 2);
+    }
+
+    #[test]
+    fn dowhile_no_entry() {
+        let cfg = create_cfg! { 0 => [1], 1 => [0, 2], 2 => [] };
+        let cfs = CFS::new(&cfg.add_entry_point());
+        assert!(cfs.get_tree().is_some());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.children()[1].block_type(), BlockType::DoWhile);
     }
 
     #[test]
@@ -1282,6 +1300,9 @@ mod tests {
 
     #[test]
     fn sequence_extension() {
+        // some interesting stuff here:
+        // - loop with no evident entry point
+        // - sequence extension
         let cfg = create_cfg! {
           0 => [1, 2],
           1 => [2],
@@ -1291,7 +1312,7 @@ mod tests {
           5 => [0],
           6 => []
         };
-        CFS::new(&cfg);
-        // should not panic
+        let cfs = CFS::new(&cfg.add_entry_point());
+        assert!(cfs.get_tree().is_some());
     }
 }
