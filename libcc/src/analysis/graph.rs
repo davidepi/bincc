@@ -1,5 +1,5 @@
 use std::cmp::min;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 
 /// A trait used to represent a generic graph.
@@ -35,7 +35,41 @@ pub trait Graph {
         self.len() == 0
     }
 
-    /// Visits the graph nodes in pre-order.
+    /// Visits the graph nodes in a breadth-first fashion.
+    ///
+    /// Returns an iterator visiting every node reachable from [Graph::root()] using a
+    /// breadth-first pre-order visit. All the nodes at the same depth are thus visited before
+    /// moving to the next depth level.
+    ///
+    /// In the default implementation this visit is iterative.
+    ///
+    /// This method panics if the graph representation is inconsistent,
+    /// i.e. if [Graph::neighbours()] method returns non-existing IDs.
+    fn bfs(&self) -> GraphIter<'_, Self::Item> {
+        if let Some(root) = self.root() {
+            let mut queue = VecDeque::with_capacity(self.len());
+            let mut retval = Vec::with_capacity(self.len());
+            queue.push_back(root);
+            retval.push(root);
+            let mut marked = HashSet::with_capacity(self.len());
+            while let Some(node) = queue.pop_front() {
+                let neighbours = self.neighbours(node).unwrap();
+                for nbor in neighbours.into_iter() {
+                    if !marked.contains(nbor) {
+                        marked.insert(nbor);
+                        queue.push_back(nbor);
+                        retval.push(nbor);
+                    }
+                }
+            }
+            retval.reverse();
+            GraphIter { stack: retval }
+        } else {
+            GraphIter { stack: Vec::new() }
+        }
+    }
+
+    /// Visits the graph nodes using a depth-first search in pre-order.
     ///
     /// Returns an iterator visiting every node reachable from [Graph::root()] using a
     /// depth-first pre-order.
@@ -45,8 +79,8 @@ pub trait Graph {
     /// This method panics if the graph representation is inconsistent,
     /// i.e. if [Graph::neighbours()] method returns non-existing IDs.
     fn dfs_preorder(&self) -> GraphIter<'_, Self::Item> {
-        if !self.is_empty() {
-            let mut buffer = vec![self.root().unwrap()];
+        if let Some(root) = self.root() {
+            let mut buffer = vec![root];
             let mut retval = Vec::with_capacity(self.len());
             let mut marked = HashSet::with_capacity(self.len());
             while let Some(current) = buffer.pop() {
@@ -67,7 +101,7 @@ pub trait Graph {
         }
     }
 
-    /// Visits the graph nodes in post-order.
+    /// Visits the graph nodes using a depth-first search in post-order.
     ///
     /// Returns an iterator visiting every node reachable from [Graph::root()] using a
     /// depth-first post-order visit.
@@ -77,8 +111,8 @@ pub trait Graph {
     /// This method panics if the graph representation is inconsistent,
     /// i.e. if [Graph::neighbours()] method returns non-existing IDs.
     fn dfs_postorder(&self) -> GraphIter<'_, Self::Item> {
-        if !self.is_empty() {
-            let mut buffer = vec![self.root().unwrap()];
+        if let Some(root) = self.root() {
+            let mut buffer = vec![root];
             let mut retval = Vec::with_capacity(self.len());
             let mut marked = HashSet::with_capacity(self.len());
             while let Some(current) = buffer.last() {
@@ -340,6 +374,22 @@ mod tests {
     fn graph_is_not_empty() {
         let graph = sample();
         assert!(!graph.is_empty());
+    }
+
+    #[test]
+    fn bfs_empty() {
+        let graph: DirectedGraph<u8> = DirectedGraph::default();
+        let order = graph.bfs();
+        assert_eq!(order.count(), 0);
+    }
+
+    #[test]
+    fn bfs() {
+        let graph = sample();
+        let expected = vec![0, 1, 2, 6, 3, 4, 5];
+        for (index, val) in graph.bfs().enumerate() {
+            assert_eq!(*val, expected[index]);
+        }
     }
 
     #[test]
