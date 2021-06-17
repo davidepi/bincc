@@ -1,7 +1,8 @@
 use crate::disasm::architectures::{ArchARM, ArchX86, Architecture};
-use crate::disasm::{Disassembler, Statement};
+use crate::disasm::{BareCFG, Disassembler, Statement};
 use fnv::FnvHashMap;
 use r2pipe::{R2Pipe, R2PipeSpawnOptions};
+use regex::Regex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::ErrorKind;
@@ -162,13 +163,82 @@ impl Disassembler for R2Disasm {
         }
         retval
     }
+
+    fn get_function_cfg(&self, function: u64) -> Option<BareCFG> {
+        let mut retval = None;
+        let cmd_change_offset = format!("s {}", function);
+        let mut pipe = self.pipe.borrow_mut();
+        match pipe.cmd(&cmd_change_offset) {
+            Ok(_) => {
+                if let Ok(dot) = pipe.cmd("agfd") {
+                    if !dot.is_empty() {
+                        retval = Some(radare_dot_to_bare_cfg(&dot));
+                    }
+                }
+            }
+            Err(error) => {
+                log::error!("{}", error);
+            }
+        }
+        retval
+    }
+}
+
+fn radare_dot_to_bare_cfg(dot: &str) -> BareCFG {
+    let mut blocks = Vec::new();
+    let mut block_labels = Vec::new();
+    let mut edges = Vec::new();
+    let block_re = Regex::new(r#""0[xX][0-9a-fA-F]+"\s*\[.*label\s*=\s*"(.*)".*].*"#).unwrap();
+    let insn_re = Regex::new(r#"^0[xX]([0-9a-fA-F]+).*"#).unwrap();
+    let edge_re = Regex::new(r#""0[xX]([0-9a-fA-F]+)"\s*->\s*"0[xX]([0-9a-fA-F]+)".*"#).unwrap();
+    for line in dot.lines() {
+        if let Some(cap) = block_re.captures(line) {
+            block_labels.push(cap.get(1).unwrap().as_str());
+        } else if let Some(cap) = edge_re.captures(line) {
+            let src = u64::from_str_radix(cap.get(1).unwrap().as_str(), 16);
+            let dst = u64::from_str_radix(cap.get(2).unwrap().as_str(), 16);
+            if let (Ok(src), Ok(dst)) = (src, dst) {
+                edges.push((src, dst));
+            } else {
+                log::error!(
+                    "While reading the radare2 CFG, failed to parse the offsets in \
+                line \"{}\". Continuing, but the CFG may be wrong",
+                    line
+                );
+            }
+        }
+    }
+    for label in block_labels {
+        let mut insn = Vec::new();
+        for line in label.split("\\l") {
+            if let Some(off_str) = insn_re.captures(line) {
+                let insn_offset = u64::from_str_radix(off_str.get(1).unwrap().as_str(), 16);
+                if let Ok(offset) = insn_offset {
+                    insn.push(offset);
+                } else {
+                    log::error!(
+                        "While reading the radare2 CFG, failed to parse the offsets in \
+                    line \"{}\". Continuing, but the CFG may be wrong",
+                        line
+                    );
+                }
+            }
+        }
+        insn.sort_unstable();
+        match insn.len() {
+            0 => log::warn!("Parsed a CFG that had a node with no instructions"),
+            1 => blocks.push((*insn.last().unwrap(), *insn.last().unwrap())),
+            _ => blocks.push((*insn.first().unwrap(), *insn.last().unwrap())),
+        }
+    }
+    BareCFG { blocks, edges }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::disasm::architectures::{ArchARM, ArchX86};
     use crate::disasm::radare2::R2Disasm;
-    use crate::disasm::{Architecture, Disassembler};
+    use crate::disasm::{Architecture, BareCFG, Disassembler};
     use serial_test::serial;
     use std::io::ErrorKind;
     use std::{fs, io};
@@ -341,6 +411,33 @@ mod tests {
         let bodies = disassembler.get_function_bodies();
         let last_body = disassembler.get_function_body(0x1000);
         assert_eq!(bodies.get(&0x1000).unwrap(), &last_body.unwrap());
+        Ok(())
+    }
+
+    #[test]
+    fn function_cfg_not_exist() -> Result<(), io::Error> {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
+        let disassembler = R2Disasm::new(&x86_64)?;
+        let cfg = disassembler.get_function_cfg(0x1000);
+        assert!(cfg.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn function_cfg_exits() -> Result<(), io::Error> {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
+        let mut disassembler = R2Disasm::new(&x86_64)?;
+        disassembler.analyse();
+        let cfg = disassembler.get_function_cfg(0x1000);
+        assert!(cfg.is_some());
+        let cfg = cfg.unwrap();
+        let expected = BareCFG {
+            blocks: vec![(0x1000, 0x1012), (0x1014, 0x1014), (0x1016, 0x101A)],
+            edges: vec![(0x1000, 0x1016), (0x1000, 0x1014), (0x1014, 0x1016)],
+        };
+        assert_eq!(cfg, expected);
         Ok(())
     }
 }

@@ -3,6 +3,7 @@ pub use self::statement::Statement;
 mod function;
 pub use self::function::Function;
 mod disassembler;
+pub use self::disassembler::BareCFG;
 pub use self::disassembler::Disassembler;
 mod architectures;
 pub use self::architectures::ArchARM;

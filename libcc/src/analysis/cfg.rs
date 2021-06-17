@@ -40,9 +40,9 @@ pub struct CFG {
 /// code.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct BasicBlock {
-    /// Offset in the original code where this basic block begins.
+    /// Offset, in the original code, of the **first** instruction belonging to this basic block.
     pub first: u64,
-    /// Offset in the original code where this basic block ends.
+    /// Offset, in the original code, of the **last** instruction belonging to this basic block.
     pub last: u64,
 }
 
