@@ -22,10 +22,10 @@ pub trait Graph {
     /// Returns None if the graph is empty.
     fn root(&self) -> Option<&Self::Item>;
 
-    /// Given a node, returns a vector with its children.
+    /// Given a node, returns a vector with its neighbours.
     ///
     /// Returns *None* if the input node does not exist in the graph.
-    fn children(&self, node: &Self::Item) -> Option<Vec<&Self::Item>>;
+    fn neighbours(&self, node: &Self::Item) -> Option<Vec<&Self::Item>>;
 
     /// Returns the size of the graph in the number of nodes.
     fn len(&self) -> usize;
@@ -37,14 +37,14 @@ pub trait Graph {
 
     /// Visits the graph nodes in pre-order.
     ///
-    /// Returns an iterator visiting every node reachable from the CFG root using a
+    /// Returns an iterator visiting every node reachable from [Graph::root()] using a
     /// depth-first pre-order.
     ///
     /// In the default implementation this visit is iterative.
     ///
     /// This method panics if the graph representation is inconsistent,
-    /// i.e. if [Graph::children()] method returns non-existing IDs.
-    fn preorder(&self) -> GraphIter<'_, Self::Item> {
+    /// i.e. if [Graph::neighbours()] method returns non-existing IDs.
+    fn dfs_preorder(&self) -> GraphIter<'_, Self::Item> {
         if !self.is_empty() {
             let mut buffer = vec![self.root().unwrap()];
             let mut retval = Vec::with_capacity(self.len());
@@ -52,11 +52,11 @@ pub trait Graph {
             while let Some(current) = buffer.pop() {
                 retval.push(current);
                 marked.insert(current);
-                let children = self.children(current).unwrap();
-                for child in children.into_iter().rev() {
-                    if !marked.contains(child) {
-                        marked.insert(child);
-                        buffer.push(child);
+                let neighbours = self.neighbours(current).unwrap();
+                for nbor in neighbours.into_iter().rev() {
+                    if !marked.contains(nbor) {
+                        marked.insert(nbor);
+                        buffer.push(nbor);
                     }
                 }
             }
@@ -69,14 +69,14 @@ pub trait Graph {
 
     /// Visits the graph nodes in post-order.
     ///
-    /// Returns an iterator visiting every node reachable from the CFG root using a
-    /// depth-first post-order.
+    /// Returns an iterator visiting every node reachable from [Graph::root()] using a
+    /// depth-first post-order visit.
     ///
     /// In the default implementation this visit is iterative.
     ///
     /// This method panics if the graph representation is inconsistent,
-    /// i.e. if [Graph::children()] method returns non-existing IDs.
-    fn postorder(&self) -> GraphIter<'_, Self::Item> {
+    /// i.e. if [Graph::neighbours()] method returns non-existing IDs.
+    fn dfs_postorder(&self) -> GraphIter<'_, Self::Item> {
         if !self.is_empty() {
             let mut buffer = vec![self.root().unwrap()];
             let mut retval = Vec::with_capacity(self.len());
@@ -84,11 +84,11 @@ pub trait Graph {
             while let Some(current) = buffer.last() {
                 let mut to_push = Vec::new();
                 marked.insert(*current);
-                let children = self.children(*current).unwrap();
-                for child in children.into_iter().rev() {
-                    if !marked.contains(child) {
-                        marked.insert(child);
-                        to_push.push(child);
+                let neighbours = self.neighbours(*current).unwrap();
+                for nbor in neighbours.into_iter().rev() {
+                    if !marked.contains(nbor) {
+                        marked.insert(nbor);
+                        to_push.push(nbor);
                     }
                 }
                 // if all children has been processed, push current node
@@ -116,14 +116,14 @@ pub trait Graph {
         Self::Item: Hash + Eq,
     {
         let mut pmap = HashMap::with_capacity(self.len());
-        let visit = self.preorder();
+        let visit = self.dfs_preorder();
         for node in visit {
             // the next line is used to have a set for each node. Otherwise nodes with no children
             // will never get their entry inside the map.
             pmap.entry(node).or_insert_with(HashSet::new);
-            let children = self.children(node).unwrap();
-            for child in children {
-                let child_map = pmap.entry(child).or_insert_with(HashSet::new);
+            let neighbours = self.neighbours(node).unwrap();
+            for nbor in neighbours {
+                let child_map = pmap.entry(nbor).or_insert_with(HashSet::new);
                 child_map.insert(node);
             }
         }
@@ -142,20 +142,20 @@ pub trait Graph {
     {
         // assign indices to everything (array indexing will be used a lot in this method)
         let ids = self
-            .preorder()
+            .dfs_preorder()
             .enumerate()
             .map(|(index, item)| (item, index))
             .collect::<HashMap<_, _>>();
         let mut adj = vec![Vec::new(); ids.len()];
         for (node, index) in &ids {
-            let children = self
-                .children(node)
+            let neighbours = self
+                .neighbours(node)
                 .unwrap()
                 .into_iter()
                 .flat_map(|x| ids.get(x))
                 .copied()
                 .collect();
-            adj[*index] = children;
+            adj[*index] = neighbours;
         }
         let mut lowlink = vec![0; ids.len()];
         let mut index = vec![usize::MAX; ids.len()];
@@ -255,11 +255,11 @@ impl<T: Hash + Eq> Graph for DirectedGraph<T> {
         self.root.as_ref()
     }
 
-    fn children(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
-        if let Some(children) = self.adjacency.get(node) {
-            let mut retval = Vec::with_capacity(children.len());
-            for child in children {
-                retval.push(&*child);
+    fn neighbours(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
+        if let Some(neighbours) = self.adjacency.get(node) {
+            let mut retval = Vec::with_capacity(neighbours.len());
+            for nbor in neighbours {
+                retval.push(&*nbor);
             }
             Some(retval)
         } else {
@@ -277,7 +277,7 @@ mod tests {
     use crate::analysis::{DirectedGraph, Graph};
     use std::collections::{HashMap, HashSet};
 
-    fn diamond() -> DirectedGraph<u8> {
+    fn sample() -> DirectedGraph<u8> {
         let nodes = (0..).take(7).collect::<Vec<_>>();
         let mut graph = DirectedGraph {
             root: Some(nodes[0]),
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn directed_graph_root_existing() {
-        let graph = diamond();
+        let graph = sample();
         let node = graph.root();
         assert!(node.is_some());
         assert_eq!(*node.unwrap(), 0)
@@ -311,21 +311,21 @@ mod tests {
     #[test]
     fn directed_graph_children_empty() {
         let graph: DirectedGraph<u8> = DirectedGraph::default();
-        let children = graph.children(&0);
+        let children = graph.neighbours(&0);
         assert!(children.is_none());
     }
 
     #[test]
     fn directed_graph_children_existing() {
-        let graph = diamond();
-        let children = graph.children(graph.root().unwrap());
+        let graph = sample();
+        let children = graph.neighbours(graph.root().unwrap());
         assert!(children.is_some());
         assert_eq!(*children.unwrap()[0], 1);
     }
 
     #[test]
     fn directed_graph_len() {
-        let graph = diamond();
+        let graph = sample();
         assert_eq!(graph.len(), 7);
     }
 
@@ -338,38 +338,38 @@ mod tests {
 
     #[test]
     fn graph_is_not_empty() {
-        let graph = diamond();
+        let graph = sample();
         assert!(!graph.is_empty());
     }
 
     #[test]
-    fn preorder_empty() {
+    fn dfs_preorder_empty() {
         let graph: DirectedGraph<u8> = DirectedGraph::default();
-        let order = graph.preorder();
+        let order = graph.dfs_preorder();
         assert_eq!(order.count(), 0);
     }
 
     #[test]
-    fn preorder() {
-        let graph = diamond();
+    fn dfs_preorder() {
+        let graph = sample();
         let expected = vec![0, 1, 6, 2, 3, 5, 4];
-        for (index, val) in graph.preorder().enumerate() {
+        for (index, val) in graph.dfs_preorder().enumerate() {
             assert_eq!(*val, expected[index]);
         }
     }
 
     #[test]
-    fn postorder_empty() {
+    fn dfs_postorder_empty() {
         let graph: DirectedGraph<u8> = DirectedGraph::default();
-        let order = graph.postorder();
+        let order = graph.dfs_postorder();
         assert_eq!(order.count(), 0);
     }
 
     #[test]
-    fn postorder() {
-        let graph = diamond();
+    fn dfs_postorder() {
+        let graph = sample();
         let expected = vec![6, 1, 5, 3, 4, 2, 0];
-        for (index, val) in graph.postorder().enumerate() {
+        for (index, val) in graph.dfs_postorder().enumerate() {
             assert_eq!(*val, expected[index]);
         }
     }
@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn predecessors() {
-        let graph = diamond();
+        let graph = sample();
         let pmap = graph.predecessors();
         assert_eq!(pmap.len(), graph.len());
         let pred_5 = pmap.get(&5).unwrap();
@@ -403,7 +403,7 @@ mod tests {
 
     #[test]
     fn sccs() {
-        let mut graph = diamond();
+        let mut graph = sample();
         // edit the graph to introduce a cycle
         let node2 = *(graph.adjacency.get_key_value(&2).unwrap().0);
         let node4 = *(graph.adjacency.get_key_value(&4).unwrap().0);

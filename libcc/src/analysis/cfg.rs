@@ -390,7 +390,7 @@ impl CFG {
     /// Unless the CFG changes, the id assigned by this method will always be the same, and based on
     /// a preorder visit of the CFG.
     pub fn node_id_map(&self) -> HashMap<Rc<BasicBlock>, usize> {
-        self.preorder()
+        self.dfs_preorder()
             .enumerate()
             .map(|(index, node)| (self.rc(node).unwrap(), index))
             .collect::<HashMap<_, _>>()
@@ -404,7 +404,7 @@ impl Graph for CFG {
         self.root.as_ref().map(|root| root.as_ref())
     }
 
-    fn children(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
+    fn neighbours(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
         self.edges.get(node).map(|children| {
             children
                 .iter()
@@ -508,7 +508,7 @@ fn get_targets(stmts: &[Statement], arch: &dyn Architecture) -> TargetMap {
 /// created when there are indirect jumps in the original statement list.
 fn reachable(cfg: CFG) -> CFG {
     if !cfg.is_empty() {
-        let reachables = cfg.preorder().collect::<HashSet<_>>();
+        let reachables = cfg.dfs_preorder().collect::<HashSet<_>>();
         // need to clone edges map that uses Rc instead of the reachables set
         let edges = cfg
             .edges
@@ -688,7 +688,7 @@ mod tests {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
-        let children = cfg.children(&BasicBlock::new_sink());
+        let children = cfg.neighbours(&BasicBlock::new_sink());
         assert!(children.is_none())
     }
 
@@ -700,7 +700,7 @@ mod tests {
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
-        let children = cfg.children(cfg.root().unwrap());
+        let children = cfg.neighbours(cfg.root().unwrap());
         assert!(children.is_some());
         assert!(children.unwrap().is_empty());
     }
@@ -715,7 +715,7 @@ mod tests {
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
-        let children = cfg.children(cfg.root().unwrap());
+        let children = cfg.neighbours(cfg.root().unwrap());
         assert!(children.is_some());
         assert_eq!(children.unwrap().len(), 2);
     }

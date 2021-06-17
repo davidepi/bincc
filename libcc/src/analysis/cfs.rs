@@ -142,7 +142,7 @@ fn reduce_self_loop<'a>(
 ) -> Option<Reduction<'a>> {
     match node {
         StructureBlock::Basic(_) => {
-            let children = graph.children(node).unwrap();
+            let children = graph.neighbours(node).unwrap();
             if children.len() == 2 && children.contains(&node) {
                 let next = children.into_iter().filter(|x| x != &node).last().unwrap();
                 let block = Rc::new(NestedBlock::new(BlockType::SelfLooping, vec![node.clone()]));
@@ -170,10 +170,10 @@ fn reduce_sequence<'a>(
     // - successor has only one predecessor (the current node)
     // - successor has one or none successors
     //   ^--- this is necessary to avoid a double exit sequence
-    let mut children = graph.children(node).unwrap();
+    let mut children = graph.neighbours(node).unwrap();
     if children.len() == 1 {
         let next = children.pop().unwrap();
-        let mut nextnexts = graph.children(next).unwrap();
+        let mut nextnexts = graph.neighbours(next).unwrap();
         if preds.get(next).map_or(0, |x| x.len()) == 1 {
             let mut reduction = construct_and_flatten_sequence(node, next);
             match nextnexts.len() {
@@ -215,7 +215,7 @@ fn ascend_if_chain<'a>(
         cur_head = preds.get(cur_head).unwrap().iter().last().unwrap();
         if !visited.contains(cur_head) {
             visited.insert(cur_head);
-            let head_children = graph.children(cur_head).unwrap();
+            let head_children = graph.neighbours(cur_head).unwrap();
             if head_children.len() == 2 {
                 // one of the edges must point to the cont block.
                 // the other one obviously points to the current head
@@ -240,13 +240,13 @@ fn reduce_ifthen<'a>(
     preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
     _: &HashMap<&StructureBlock, bool>,
 ) -> Option<Reduction<'a>> {
-    let mut children = graph.children(node).unwrap();
+    let mut children = graph.neighbours(node).unwrap();
     if children.len() == 2 {
         let head = node;
         let mut cont = children.pop().unwrap();
-        let mut cont_children = graph.children(cont).unwrap();
+        let mut cont_children = graph.neighbours(cont).unwrap();
         let mut then = children.pop().unwrap();
-        let mut then_children = graph.children(then).unwrap();
+        let mut then_children = graph.neighbours(then).unwrap();
         let mut then_preds = preds.get(then).unwrap();
         let mut cont_preds = preds.get(cont).unwrap();
         if cont_children.len() == 1 && cont_children[0] == then && cont_preds.len() == 1 {
@@ -283,7 +283,7 @@ fn reduce_ifelse<'a>(
     preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
     _: &HashMap<&StructureBlock, bool>,
 ) -> Option<Reduction<'a>> {
-    let node_children = graph.children(&node).unwrap();
+    let node_children = graph.neighbours(&node).unwrap();
     if node_children.len() == 2 {
         let mut thenb = node_children[0];
         let mut thenb_preds = preds.get(&thenb).unwrap();
@@ -301,8 +301,8 @@ fn reduce_ifelse<'a>(
             }
         }
         // checks that child of both then and else should go to the same node
-        let thenb_children = graph.children(&thenb).unwrap();
-        let elseb_children = graph.children(&elseb).unwrap();
+        let thenb_children = graph.neighbours(&thenb).unwrap();
+        let elseb_children = graph.neighbours(&elseb).unwrap();
         if thenb_children.len() == 1
             && elseb_children.len() == 1
             && thenb_children[0] == elseb_children[0]
@@ -346,7 +346,7 @@ fn reduce_loop<'a>(
     loops: &HashMap<&StructureBlock, bool>,
 ) -> Option<Reduction<'a>> {
     if *loops.get(&node).unwrap() && preds.get(&node).unwrap().len() > 1 {
-        let head_children = graph.children(&node).unwrap();
+        let head_children = graph.neighbours(&node).unwrap();
         if head_children.len() == 2 {
             // while loop
             let next = head_children[0];
@@ -355,7 +355,7 @@ fn reduce_loop<'a>(
         } else if head_children.len() == 1 {
             // do-while loop
             let tail = head_children[0];
-            let tail_children = graph.children(tail).unwrap();
+            let tail_children = graph.neighbours(tail).unwrap();
             find_dowhile(node, tail, &tail_children, graph)
         } else {
             None
@@ -373,10 +373,10 @@ fn find_while<'a>(
 ) -> Option<Reduction<'a>> {
     let mut next = next;
     let mut tail = tail;
-    if graph.children(&next).unwrap().contains(&node) {
+    if graph.neighbours(&next).unwrap().contains(&node) {
         swap(&mut next, &mut tail);
     }
-    let tail_children = graph.children(&tail).unwrap();
+    let tail_children = graph.neighbours(&tail).unwrap();
     if tail_children.len() == 1 && tail_children[0] == node {
         let block = Rc::new(NestedBlock::new(
             BlockType::While,
@@ -402,8 +402,8 @@ fn find_dowhile<'a>(
         if !tail_children.contains(&node) {
             //type 3 or 4 (single node between tail and head) or no loop
             let post_tail_children = [
-                graph.children(tail_children[0]).unwrap(),
-                graph.children(tail_children[1]).unwrap(),
+                graph.neighbours(tail_children[0]).unwrap(),
+                graph.neighbours(tail_children[1]).unwrap(),
             ];
             let next;
             let post_tail;
@@ -535,7 +535,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
         let mut modified = false;
         let preds = graph.predecessors();
         let loops = is_loop(&graph.scc());
-        for node in graph.postorder() {
+        for node in graph.dfs_postorder() {
             let reductions = [
                 reduce_self_loop,
                 reduce_loop,
@@ -600,8 +600,8 @@ fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock> {
 // calculates the depth of the spanning tree at each node.
 fn calculate_depth(cfg: &CFG) -> HashMap<Rc<BasicBlock>, usize> {
     let mut depth_map = HashMap::new();
-    for node in cfg.postorder() {
-        let children = cfg.children(node).unwrap();
+    for node in cfg.dfs_postorder() {
+        let children = cfg.neighbours(node).unwrap();
         let mut depth = 0;
         for child in children {
             if let Some(child_depth) = depth_map.get(child) {
@@ -626,7 +626,7 @@ fn exits_and_targets(
     // checks the exits from the loop
     while let Some(node) = visit.pop() {
         let node_scc_id = *sccs.get(node).unwrap();
-        for child in cfg.children(node).unwrap() {
+        for child in cfg.neighbours(node).unwrap() {
             let child_scc_id = *sccs.get(child).unwrap();
             if child_scc_id != node_scc_id {
                 let node_rc = cfg.rc(node).unwrap();
@@ -783,7 +783,7 @@ fn remove_natural_loops(
     let mut loops_done = FnvHashSet::default();
     let depth_map = calculate_depth(&cfg);
     let nodes = cfg
-        .preorder()
+        .dfs_preorder()
         .map(|x| cfg.rc(x).unwrap())
         .collect::<Vec<_>>();
     for node in nodes {
@@ -853,7 +853,7 @@ mod tests {
             0 => [1, 2], 1 => [6], 2 => [3], 3 => [5], 4 => [2], 5 => [6, 4], 6 => []
         };
         let depth = cfs::calculate_depth(&cfg);
-        let mut visit = cfg.postorder().collect::<Vec<_>>();
+        let mut visit = cfg.dfs_postorder().collect::<Vec<_>>();
         visit.sort_by(|a, b| a.first.cmp(&b.first));
         let expected = vec![4_usize, 1, 3, 2, 0, 1, 0];
         let actual = visit
@@ -1113,9 +1113,7 @@ mod tests {
     #[test]
     fn nested_while() {
         // while inside while, sharing a head-tail
-        let cfg = create_cfg! {
-            0 => [1], 1 =>[4, 2], 2 => [3, 1], 3 => [2], 4 => []
-        };
+        let cfg = create_cfg! { 0 => [1], 1 =>[4, 2], 2 => [3, 1], 3 => [2], 4 => [] };
         let cfs = CFS::new(&cfg);
         let sequence = cfs.get_tree().unwrap();
         assert_eq!(sequence.block_type(), BlockType::Sequence);
@@ -1279,12 +1277,7 @@ mod tests {
 
     #[test]
     fn proper_interval() {
-        let cfg = create_cfg! {
-          0 => [1, 2],
-          1 => [3],
-          2 => [1 ,3],
-          3 => []
-        };
+        let cfg = create_cfg! { 0 => [1, 2], 1 => [3], 2 => [1 ,3], 3 => [] };
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_none());
     }
@@ -1292,12 +1285,7 @@ mod tests {
     #[test]
     fn proper_interval_recursive() {
         let cfg = create_cfg! {
-          0 => [1, 2],
-          1 => [3],
-          2 => [3, 4],
-          3 => [5],
-          4 => [5],
-          5 => []
+          0 => [1, 2], 1 => [3], 2 => [3, 4], 3 => [5], 4 => [5], 5 => []
         };
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_none());
@@ -1305,12 +1293,7 @@ mod tests {
 
     #[test]
     fn improper_interval() {
-        let cfg = create_cfg! {
-          0 => [1, 2],
-          1 => [2, 3],
-          2 => [1 ,3],
-          3 => []
-        };
+        let cfg = create_cfg! { 0 => [1, 2], 1 => [2, 3], 2 => [1 ,3], 3 => [] };
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_none());
     }
@@ -1321,13 +1304,7 @@ mod tests {
         // - loop with no evident entry point
         // - sequence extension
         let cfg = create_cfg! {
-          0 => [1, 2],
-          1 => [2],
-          2 => [3],
-          3 => [4, 6],
-          4 => [5, 6],
-          5 => [0],
-          6 => []
+          0 => [1, 2], 1 => [2], 2 => [3], 3 => [4, 6], 4 => [5, 6], 5 => [0], 6 => []
         };
         let cfs = CFS::new(&cfg.add_entry_point());
         assert!(cfs.get_tree().is_some());
