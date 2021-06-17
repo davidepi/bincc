@@ -16,6 +16,9 @@ pub struct BareCFG {
     /// Vector of CFG edges. Each tuple contains an edge in the form:
     /// - offset of the source basic block.
     /// - offset of the destination basic block.
+    ///
+    /// The edge corresponding to the "true" condition of a conditional jump in the CFG
+    /// should come before the edge corresponding to the "false" condition.
     pub edges: Vec<(u64, u64)>,
 }
 

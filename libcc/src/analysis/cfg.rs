@@ -1,5 +1,5 @@
 use crate::analysis::Graph;
-use crate::disasm::{Architecture, JumpType, Statement};
+use crate::disasm::{Architecture, BareCFG, JumpType, Statement};
 use fnv::FnvHashMap;
 use parse_int::parse;
 use regex::Regex;
@@ -38,7 +38,7 @@ pub struct CFG {
 ///
 /// This class does not contains the actual statements, rather than their offsets in the original
 /// code.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct BasicBlock {
     /// Offset, in the original code, of the **first** instruction belonging to this basic block.
     pub first: u64,
@@ -104,6 +104,40 @@ impl Display for CFG {
             write!(f, "CFG({}+1, {}+0)", self.len(), edges_no)
         } else {
             write!(f, "CFG({}, {})", self.len(), edges_no)
+        }
+    }
+}
+
+impl From<BareCFG> for CFG {
+    fn from(bare: BareCFG) -> Self {
+        let bbs = bare
+            .blocks
+            .iter()
+            .cloned()
+            .map(|(first, last)| (first, Rc::new(BasicBlock { first, last })))
+            .collect::<HashMap<_, _>>();
+        let mut marked = HashSet::with_capacity(bbs.len());
+        let mut edges = HashMap::new();
+        for (src, dst) in bare.edges {
+            let src_bb = bbs.get(&src);
+            let dst_bb = bbs.get(&dst);
+            if let (Some(src_bb), Some(dst_bb)) = (src_bb, dst_bb) {
+                edges
+                    .entry(src_bb.clone())
+                    .and_modify(|e: &mut [Option<Rc<BasicBlock>>; 2]| e[1] = Some(dst_bb.clone()))
+                    .or_insert([Some(dst_bb.clone()), None]);
+                marked.insert(src_bb);
+            }
+        }
+        // insert terminating nodes
+        bbs.iter()
+            .filter(|(_, val)| !marked.contains(*val))
+            .for_each(|(_, val)| {
+                edges.insert(val.clone(), [None, None]);
+            });
+        CFG {
+            root: bbs.into_iter().min().map(|(_, bb)| bb),
+            edges,
         }
     }
 }
@@ -619,7 +653,7 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
 mod tests {
     use crate::analysis::cfg::reachable;
     use crate::analysis::{BasicBlock, Graph, CFG};
-    use crate::disasm::{ArchX86, Statement};
+    use crate::disasm::{ArchX86, BareCFG, Statement};
     use maplit::hashmap;
     use std::collections::HashMap;
     use std::error::Error;
@@ -661,6 +695,41 @@ mod tests {
             root: Some(nodes[0].clone()),
             edges,
         }
+    }
+
+    #[test]
+    fn from_bare_cfg() {
+        //expected
+        let nodes = [
+            Rc::new(BasicBlock {
+                first: 0x1000,
+                last: 0x1012,
+            }),
+            Rc::new(BasicBlock {
+                first: 0x1014,
+                last: 0x1014,
+            }),
+            Rc::new(BasicBlock {
+                first: 0x1016,
+                last: 0x101A,
+            }),
+        ];
+        let edges = hashmap![
+            nodes[0].clone() => [Some(nodes[2].clone()), Some(nodes[1].clone())],
+            nodes[1].clone() => [Some(nodes[2].clone()), None],
+            nodes[2].clone() => [None, None],
+        ];
+        let expected = CFG {
+            root: Some(nodes[0].clone()),
+            edges,
+        };
+        //conversion
+        let bare = BareCFG {
+            blocks: vec![(0x1000, 0x1012), (0x1014, 0x1014), (0x1016, 0x101A)],
+            edges: vec![(0x1000, 0x1016), (0x1000, 0x1014), (0x1014, 0x1016)],
+        };
+        let cfg = CFG::from(bare);
+        assert_eq!(cfg, expected);
     }
 
     #[test]
