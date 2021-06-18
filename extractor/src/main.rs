@@ -216,9 +216,8 @@ fn extract_cfg_to_dot(input: &str, output: Option<&str>, tid: usize) {
 
 fn calculate_comparison(input: &str, _: Option<&str>, tid: usize) {
     if let Ok(cfg) = CFG::from_file(input) {
-        let cfg_sinked = cfg.add_sink().add_entry_point();
         let start_t = Instant::now();
-        let cfs = CFS::new(&cfg_sinked);
+        let cfs = CFS::new(&cfg);
         let end_t = Instant::now();
         if cfs.get_tree().is_some() {
             let duration = end_t.checked_duration_since(start_t).unwrap().as_millis();

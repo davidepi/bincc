@@ -22,9 +22,11 @@ pub struct CFS {
 
 impl CFS {
     pub fn new(cfg: &CFG) -> CFS {
+        let sinked_cfg = cfg.clone().add_entry_point().add_sink();
+        let tree = build_cfs(&sinked_cfg);
         CFS {
-            cfg: cfg.clone(),
-            tree: build_cfs(cfg),
+            cfg: sinked_cfg,
+            tree,
         }
     }
 
@@ -109,7 +111,9 @@ fn print_subgraph<T: std::fmt::Write>(
     let mut latest = id;
     match node {
         StructureBlock::Basic(bb) => {
-            writeln!(fmt, "{};", *cfg_ids.get(bb).unwrap()).unwrap();
+            if !bb.is_entry_point() && !bb.is_sink() {
+                writeln!(fmt, "{};", *cfg_ids.get(bb).unwrap()).unwrap();
+            }
         }
         StructureBlock::Nested(_) => {
             writeln!(fmt, "subgraph cluster_{}{{", id).unwrap();
