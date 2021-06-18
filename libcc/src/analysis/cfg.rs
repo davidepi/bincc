@@ -118,6 +118,10 @@ impl From<BareCFG> for CFG {
             .collect::<HashMap<_, _>>();
         let mut marked = HashSet::with_capacity(bbs.len());
         let mut edges = HashMap::new();
+        let mut preds_no = bbs
+            .iter()
+            .map(|(_, bb)| (bb, 0_u32))
+            .collect::<HashMap<_, _>>();
         for (src, dst) in bare.edges {
             let src_bb = bbs.get(&src);
             let dst_bb = bbs.get(&dst);
@@ -126,6 +130,7 @@ impl From<BareCFG> for CFG {
                     .entry(src_bb.clone())
                     .and_modify(|e: &mut [Option<Rc<BasicBlock>>; 2]| e[1] = Some(dst_bb.clone()))
                     .or_insert([Some(dst_bb.clone()), None]);
+                preds_no.entry(dst_bb).and_modify(|e| *e += 1);
                 marked.insert(src_bb);
             }
         }
@@ -135,10 +140,17 @@ impl From<BareCFG> for CFG {
             .for_each(|(_, val)| {
                 edges.insert(val.clone(), [None, None]);
             });
-        CFG {
-            root: bbs.into_iter().min().map(|(_, bb)| bb),
-            edges,
+        let mut root = preds_no
+            .into_iter()
+            .filter(|(_, no)| *no == 0)
+            .map(|(bb, _)| bb)
+            .min()
+            .cloned();
+        if !bbs.is_empty() && root.is_none() {
+            // every preds has at least 1 entry, pick the lowest offset
+            root = bbs.iter().map(|(_, bb)| bb).min().cloned();
         }
+        CFG { root, edges }
     }
 }
 
@@ -424,7 +436,8 @@ impl CFG {
     /// Unless the CFG changes, the id assigned by this method will always be the same, and based on
     /// a preorder visit of the CFG.
     pub fn node_id_map(&self) -> HashMap<Rc<BasicBlock>, usize> {
-        self.dfs_preorder()
+        println!("{}", self.bfs().count());
+        self.bfs()
             .enumerate()
             .map(|(index, node)| (self.rc(node).unwrap(), index))
             .collect::<HashMap<_, _>>()
@@ -643,10 +656,30 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
         let src_id = resolve_bb_id(ret, &offset_id_map, &tgmap.targets);
         edges.get_mut(&nodes[src_id]).unwrap()[1] = None;
     }
-    reachable(CFG {
-        root: nodes.first().cloned(),
-        edges,
-    })
+    // for better maintainability this should generate a BareCFG, but ain't nobody got time for that
+    let mut preds_no = nodes
+        .iter()
+        .map(|bb| (bb, 0_u32))
+        .collect::<HashMap<_, _>>();
+    for (_, [maybe_next, maybe_cond]) in edges.iter() {
+        if let Some(next) = maybe_next {
+            preds_no.entry(&next).and_modify(|e| *e += 1);
+        }
+        if let Some(cond) = maybe_cond {
+            preds_no.entry(&cond).and_modify(|e| *e += 1);
+        }
+    }
+    let mut root = preds_no
+        .iter()
+        .filter(|(_, no)| **no == 0)
+        .map(|(bb, _)| *bb)
+        .min()
+        .cloned();
+    if !preds_no.is_empty() && root.is_none() {
+        // every preds has at least 1 entry, pick the lowest offset
+        root = nodes.iter().min().cloned();
+    }
+    reachable(CFG { root, edges })
 }
 
 #[cfg(test)]
@@ -1072,14 +1105,14 @@ mod tests {
     fn add_extra_entry_point() {
         let stmts = vec![
             Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x620, "jmp 0x61c"),
+            Statement::new(0x620, "jne 0x61c"),
             Statement::new(0x624, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
-        assert_eq!(cfg.len(), 1);
+        assert_eq!(cfg.len(), 2);
         let cfg_with_eep = cfg.clone().add_entry_point();
-        assert_eq!(cfg_with_eep.len(), 2);
+        assert_eq!(cfg_with_eep.len(), 3);
         assert!(cfg_with_eep.root().unwrap().is_entry_point());
         assert_eq!(
             cfg_with_eep.next(cfg_with_eep.root()).unwrap(),
@@ -1144,5 +1177,65 @@ mod tests {
         let node1 = cfg_only_reachables.next(node0);
         let node2 = cfg_only_reachables.next(node1);
         assert!(node2.is_none());
+    }
+
+    #[test]
+    fn from_bare_cfg_root_midway() {
+        //root does not have the min address
+        let bcfg = BareCFG {
+            blocks: vec![
+                (418538, 418544),
+                (418548, 418570),
+                (418580, 418592),
+                (418596, 418602),
+                (418712, 418712),
+            ],
+            edges: vec![
+                (418538, 418712),
+                (418538, 418548),
+                (418580, 418538),
+                (418580, 418596),
+                (418596, 418538),
+            ],
+        };
+        let cfg = CFG::from(bcfg);
+        assert_eq!(cfg.bfs().count(), 5);
+    }
+
+    #[test]
+    fn new_root_midway() {
+        let stmts = vec![
+            Statement::new(0x538, "jne 0x712"),
+            Statement::new(0x548, "jmp 0x712"),
+            Statement::new(0x580, "jne 0x538"),
+            Statement::new(0x596, "jmp 0x538"),
+            Statement::new(0x712, "ret"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert_eq!(cfg.len(), 5);
+    }
+
+    #[test]
+    fn from_bare_cfg_everybody_has_preds() {
+        let bcfg = BareCFG {
+            blocks: vec![(0, 1), (2, 3)],
+            edges: vec![(0, 2), (2, 0)],
+        };
+        let cfg = CFG::from(bcfg);
+        assert!(cfg.root().is_some());
+        assert_eq!(cfg.root().unwrap().first, 0);
+    }
+
+    #[test]
+    fn new_everybody_has_preds() {
+        let stmts = vec![
+            Statement::new(0x61C, "jmp 0x620"),
+            Statement::new(0x620, "jmp 0x61c"),
+        ];
+        let arch = ArchX86::new_amd64();
+        let cfg = CFG::new(&stmts, &arch);
+        assert!(cfg.root().is_some());
+        assert_eq!(cfg.root().unwrap().first, 0x61C);
     }
 }
