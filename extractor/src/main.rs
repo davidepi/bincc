@@ -182,40 +182,35 @@ fn extract_cfg_to_dot(input: &str, output: Option<&str>, tid: usize) {
             return;
         }
     };
-    if let Some(arch) = disassembler.get_arch() {
-        log::trace!("[{}] starting disassembling", tid);
-        let start_t = Instant::now();
-        disassembler.analyse();
-        let end_t = Instant::now();
-        log::trace!("[{}] finished disassembling", tid);
-        log::info!(
-            "[{}] disassembling {} ({} bytes) took {} ms",
-            tid,
-            input,
-            metadata.len(),
-            end_t.checked_duration_since(start_t).unwrap().as_millis()
-        );
-        let fnames = disassembler.get_function_names();
-        let bodies = disassembler.get_function_bodies();
-        log::debug!(
-            "[{}] found {} function bodies for {}",
-            tid,
-            bodies.len(),
-            input
-        );
-        for (function, offset) in fnames {
-            let graph_filename = format!("{}{}", function, ".dot");
-            let outfile = out_dir.clone().join(Path::new(&graph_filename));
-            if let Some(body) = bodies.get(&offset) {
-                let cfg = CFG::new(&body[..], &*arch);
-                log::trace!("[{}] extracted CFG of {}::{}", tid, input, function);
-                cfg.to_file(outfile).unwrap_or_else(|_| {
-                    log::error!("[{}] could not save CFG of {}::{}", tid, input, function)
-                });
-            }
+    log::trace!("[{}] starting disassembling", tid);
+    let start_t = Instant::now();
+    disassembler.analyse();
+    let end_t = Instant::now();
+    log::trace!("[{}] finished disassembling", tid);
+    log::info!(
+        "[{}] disassembling {} ({} bytes) took {} ms",
+        tid,
+        input,
+        metadata.len(),
+        end_t.checked_duration_since(start_t).unwrap().as_millis()
+    );
+    let fnames = disassembler.get_function_names();
+    log::debug!(
+        "[{}] found {} function bodies for {}",
+        tid,
+        fnames.len(),
+        input
+    );
+    for (function, offset) in fnames {
+        let graph_filename = format!("{}{}", function, ".dot");
+        let outfile = out_dir.clone().join(Path::new(&graph_filename));
+        if let Some(barecfg) = disassembler.get_function_cfg(offset) {
+            let cfg = CFG::from(barecfg);
+            log::trace!("[{}] extracted CFG of {}::{}", tid, input, function);
+            cfg.to_file(outfile).unwrap_or_else(|_| {
+                log::error!("[{}] could not save CFG of {}::{}", tid, input, function)
+            });
         }
-    } else {
-        log::error!("[{}] Unknown architecture of file {}", tid, input);
     }
 }
 
