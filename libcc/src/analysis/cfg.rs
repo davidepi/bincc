@@ -110,6 +110,7 @@ impl Display for CFG {
 
 impl From<BareCFG> for CFG {
     fn from(bare: BareCFG) -> Self {
+        let root_addr = bare.root;
         let bbs = bare
             .blocks
             .iter()
@@ -118,10 +119,6 @@ impl From<BareCFG> for CFG {
             .collect::<HashMap<_, _>>();
         let mut marked = HashSet::with_capacity(bbs.len());
         let mut edges = HashMap::new();
-        let mut preds_no = bbs
-            .iter()
-            .map(|(_, bb)| (bb, 0_u32))
-            .collect::<HashMap<_, _>>();
         for (src, dst) in bare.edges {
             let src_bb = bbs.get(&src);
             let dst_bb = bbs.get(&dst);
@@ -130,7 +127,6 @@ impl From<BareCFG> for CFG {
                     .entry(src_bb.clone())
                     .and_modify(|e: &mut [Option<Rc<BasicBlock>>; 2]| e[1] = Some(dst_bb.clone()))
                     .or_insert([Some(dst_bb.clone()), None]);
-                preds_no.entry(dst_bb).and_modify(|e| *e += 1);
                 marked.insert(src_bb);
             }
         }
@@ -140,14 +136,13 @@ impl From<BareCFG> for CFG {
             .for_each(|(_, val)| {
                 edges.insert(val.clone(), [None, None]);
             });
-        let mut root = preds_no
-            .into_iter()
-            .filter(|(_, no)| *no == 0)
-            .map(|(bb, _)| bb)
-            .min()
+        let mut root = bbs
+            .iter()
+            .map(|(_, bb)| bb)
+            .find(|&bb| bb.first == root_addr)
             .cloned();
-        if !bbs.is_empty() && root.is_none() {
-            // every preds has at least 1 entry, pick the lowest offset
+        if root.is_none() && !bbs.is_empty() {
+            // if the root written in the BareCFG does not exists (weird), pick the lowest offset
             root = bbs.iter().map(|(_, bb)| bb).min().cloned();
         }
         CFG { root, edges }
@@ -758,6 +753,7 @@ mod tests {
         };
         //conversion
         let bare = BareCFG {
+            root: 0x1000,
             blocks: vec![(0x1000, 0x1012), (0x1014, 0x1014), (0x1016, 0x101A)],
             edges: vec![(0x1000, 0x1016), (0x1000, 0x1014), (0x1014, 0x1016)],
         };
@@ -1183,6 +1179,7 @@ mod tests {
     fn from_bare_cfg_root_midway() {
         //root does not have the min address
         let bcfg = BareCFG {
+            root: 418580,
             blocks: vec![
                 (418538, 418544),
                 (418548, 418570),
@@ -1218,7 +1215,10 @@ mod tests {
 
     #[test]
     fn from_bare_cfg_everybody_has_preds() {
+        // This test is now useless, previously I estimated the entry point for bareCFG.
+        // leaving it here because it does not hurts
         let bcfg = BareCFG {
+            root: 0,
             blocks: vec![(0, 1), (2, 3)],
             edges: vec![(0, 2), (2, 0)],
         };

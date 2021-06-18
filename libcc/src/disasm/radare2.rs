@@ -172,7 +172,7 @@ impl Disassembler for R2Disasm {
             Ok(_) => {
                 if let Ok(dot) = pipe.cmd("agfd") {
                     if !dot.is_empty() {
-                        retval = Some(radare_dot_to_bare_cfg(&dot));
+                        retval = Some(radare_dot_to_bare_cfg(function, &dot));
                     }
                 }
             }
@@ -184,7 +184,7 @@ impl Disassembler for R2Disasm {
     }
 }
 
-fn radare_dot_to_bare_cfg(dot: &str) -> BareCFG {
+fn radare_dot_to_bare_cfg(offset: u64, dot: &str) -> BareCFG {
     let mut blocks = Vec::new();
     let mut block_labels = Vec::new();
     let mut edges = Vec::new();
@@ -231,7 +231,11 @@ fn radare_dot_to_bare_cfg(dot: &str) -> BareCFG {
             _ => blocks.push((*insn.first().unwrap(), *insn.last().unwrap())),
         }
     }
-    BareCFG { blocks, edges }
+    BareCFG {
+        root: offset,
+        blocks,
+        edges,
+    }
 }
 
 #[cfg(test)]
@@ -434,6 +438,7 @@ mod tests {
         assert!(cfg.is_some());
         let cfg = cfg.unwrap();
         let expected = BareCFG {
+            root: 0x1000,
             blocks: vec![(0x1000, 0x1012), (0x1014, 0x1014), (0x1016, 0x101A)],
             edges: vec![(0x1000, 0x1016), (0x1000, 0x1014), (0x1014, 0x1016)],
         };

@@ -9,6 +9,8 @@ use std::collections::HashMap;
 /// This struct, however, is used to store the data retrieved from the underlying disassembler.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct BareCFG {
+    /// Address of the function entry point.
+    pub root: u64,
     /// Vector of basic blocks. Each tuple contains a basic block in the form:
     /// - offset of the first instruction.
     /// - offset of the last instruction.
