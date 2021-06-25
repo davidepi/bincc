@@ -232,7 +232,7 @@ fn radare_dot_to_bare_cfg(offset: u64, dot: &str) -> BareCFG {
         }
     }
     BareCFG {
-        root: offset,
+        root: Some(offset),
         blocks,
         edges,
     }
@@ -438,7 +438,7 @@ mod tests {
         assert!(cfg.is_some());
         let cfg = cfg.unwrap();
         let expected = BareCFG {
-            root: 0x1000,
+            root: Some(0x1000),
             blocks: vec![(0x1000, 0x1012), (0x1014, 0x1014), (0x1016, 0x101A)],
             edges: vec![(0x1000, 0x1016), (0x1000, 0x1014), (0x1014, 0x1016)],
         };

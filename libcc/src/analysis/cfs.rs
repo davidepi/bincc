@@ -22,7 +22,7 @@ pub struct CFS {
 
 impl CFS {
     pub fn new(cfg: &CFG) -> CFS {
-        let sinked_cfg = cfg.clone().add_entry_point().add_sink();
+        let sinked_cfg = cfg.clone();
         let tree = build_cfs(&sinked_cfg);
         CFS {
             cfg: sinked_cfg,

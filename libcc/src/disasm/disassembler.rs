@@ -10,7 +10,7 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct BareCFG {
     /// Address of the function entry point.
-    pub root: u64,
+    pub root: Option<u64>,
     /// Vector of basic blocks. Each tuple contains a basic block in the form:
     /// - offset of the first instruction.
     /// - offset of the last instruction.

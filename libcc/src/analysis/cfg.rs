@@ -110,7 +110,7 @@ impl Display for CFG {
 
 impl From<BareCFG> for CFG {
     fn from(bare: BareCFG) -> Self {
-        let root_addr = bare.root;
+        let root_addr = bare.root.unwrap_or(0x0);
         let bbs = bare
             .blocks
             .iter()
@@ -178,7 +178,7 @@ impl CFG {
     /// assert_eq!(cfg.len(), 4);
     /// ```
     pub fn new(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
-        build_cfg(stmts, arch)
+        CFG::from(to_bare_cfg(stmts, arch))
     }
 
     /// Returns the next basic block.
@@ -544,49 +544,8 @@ fn get_targets(stmts: &[Statement], arch: &dyn Architecture) -> TargetMap {
     }
 }
 
-/// Removes unreachable nodes.
-///
-/// Removes nodes that are not reachable from the CFG root by any path. These nodes are usually
-/// created when there are indirect jumps in the original statement list.
-fn reachable(cfg: CFG) -> CFG {
-    if !cfg.is_empty() {
-        let reachables = cfg.dfs_preorder().collect::<HashSet<_>>();
-        // need to clone edges map that uses Rc instead of the reachables set
-        let edges = cfg
-            .edges
-            .clone()
-            .into_iter()
-            .filter(|(node, _child)| reachables.contains(node.as_ref()))
-            .collect::<HashMap<_, _>>();
-        CFG {
-            root: cfg.root,
-            edges,
-        }
-    } else {
-        cfg
-    }
-}
-
-// given an offset (any offset) returns the corresponding basic block id containing it.
-// requires:
-// - the actual offset
-// - a map <basic block starting offset, basic block id>
-// - list of jump targets
-// this method is used ad-hoc inside the build_cfg function and needs to be rewritten to be used in
-// any other case
-fn resolve_bb_id(offset: u64, id_map: &FnvHashMap<u64, usize>, targets: &BTreeSet<u64>) -> usize {
-    if let Some(ret) = id_map.get(&offset) {
-        // corner case: the current offset is also the block start
-        *ret
-    } else {
-        // these MUST exist, otherwise the previous if should happen
-        let block_start_offset = targets.range(..offset).last().unwrap();
-        *id_map.get(block_start_offset).unwrap()
-    }
-}
-
 // actual cfg building
-fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
+fn to_bare_cfg(stmts: &[Statement], arch: &dyn Architecture) -> BareCFG {
     let all_offsets = stmts
         .iter()
         .map(|x| x.get_offset())
@@ -596,98 +555,115 @@ fn build_cfg(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
     // This target is used for a strictly lower bound.
     // The +1 is useful so I can use the last statement in the function
     let function_over = stmts.last().unwrap_or(&empty_stmt).get_offset() + 1;
-    // create all nodes (without ending statement)
-    let mut nodes_tmp = tgmap
-        .targets
-        .iter()
-        .map(|target| BasicBlock {
-            first: *target,
-            last: 0,
-        })
-        .collect::<Vec<_>>();
-    // fill ending statement offset
-    let mut nodes_iter = tgmap.targets.iter().enumerate().peekable();
-    while let Some((index, _)) = nodes_iter.next() {
-        let next_target = *nodes_iter.peek().unwrap_or(&(0, &function_over)).1;
-        let last_stmt = *all_offsets.range(..next_target).last().unwrap_or(&0);
-        nodes_tmp[index].last = last_stmt;
-    }
-    let nodes = nodes_tmp.into_iter().map(Rc::new).collect::<Vec<_>>();
-    let mut edges = if !tgmap.targets.is_empty() {
-        let mut edges = HashMap::new();
-        let mut iter = nodes.iter().peekable();
-        while let Some(node) = iter.next() {
-            match iter.peek() {
-                Some(next) => edges.insert(node.clone(), [Some((*next).clone()), None]),
-                None => edges.insert(node.clone(), [None, None]),
-            };
+    let mut nodes = Vec::with_capacity(tgmap.targets.len());
+    // the capacity here is not perfect but it's a good estimation
+    let mut edges = Vec::with_capacity(
+        tgmap.targets.len() + tgmap.srcs_cond.len() - tgmap.deadend_uncond.len(),
+    );
+    // create nodes
+    let mut nodes_iter = tgmap.targets.iter().peekable();
+    while let Some(current) = nodes_iter.next() {
+        let next_target = *nodes_iter.peek().unwrap_or(&&function_over);
+        let last_stmt = all_offsets.range(..next_target).last().unwrap_or(&0);
+        nodes.push((*current, *last_stmt));
+        if *next_target != function_over {
+            edges.push((*current, *next_target));
         }
-        edges
-    } else {
-        HashMap::new()
-    };
-    // map every offset to the block id
-    let offset_id_map = tgmap
-        .targets
+    }
+    // remove node->next_node edges where node contains a jump or a return
+    let nodes_ordered = nodes
         .iter()
-        .enumerate()
-        .map(|(index, target)| (*target, index))
-        .collect::<FnvHashMap<_, _>>();
+        .map(|&(first, _)| first)
+        .collect::<BTreeSet<_>>();
+    let jump_blocks = tgmap
+        .srcs_cond
+        .keys()
+        .chain(tgmap.srcs_uncond.keys())
+        .map(|src| *nodes_ordered.range(..=src).next_back().unwrap())
+        .collect::<HashSet<_>>();
+    let return_blocks = tgmap
+        .deadend_cond
+        .iter()
+        .chain(tgmap.deadend_uncond.iter())
+        .map(|src| *nodes_ordered.range(..=src).next_back().unwrap())
+        .collect::<HashSet<_>>();
+    edges = edges
+        .into_iter()
+        .filter(|(src, _)| !jump_blocks.contains(src))
+        .filter(|(src, _)| !return_blocks.contains(src))
+        .collect();
+    // add jump edges
     for (off_src, off_dst) in tgmap.srcs_uncond {
-        let src_id = resolve_bb_id(off_src, &offset_id_map, &tgmap.targets);
-        let dst_id = resolve_bb_id(off_dst, &offset_id_map, &tgmap.targets);
-        edges.get_mut(&nodes[src_id]).unwrap()[0] = Some(nodes[dst_id].clone());
+        let src_bb = *nodes_ordered.range(..=off_src).next_back().unwrap();
+        edges.push((src_bb, off_dst));
     }
     for (off_src, off_dst) in tgmap.srcs_cond {
-        let src_id = resolve_bb_id(off_src, &offset_id_map, &tgmap.targets);
-        let dst_id = resolve_bb_id(off_dst, &offset_id_map, &tgmap.targets);
-        edges.get_mut(&nodes[src_id]).unwrap()[1] = Some(nodes[dst_id].clone());
+        let src_bb = *nodes_ordered.range(..=off_src).next_back().unwrap();
+        let next_dst = *nodes_ordered
+            .range(off_src + 1..)
+            .next()
+            .unwrap_or(&function_over);
+        edges.push((src_bb, next_dst)); // first the next stmt
+        edges.push((src_bb, off_dst)); // then the cond stmt
     }
-    for ret in tgmap.deadend_uncond {
-        let src_id = resolve_bb_id(ret, &offset_id_map, &tgmap.targets);
-        edges.get_mut(&nodes[src_id]).unwrap()[0] = None;
-    }
-    for ret in tgmap.deadend_cond {
-        let src_id = resolve_bb_id(ret, &offset_id_map, &tgmap.targets);
-        edges.get_mut(&nodes[src_id]).unwrap()[1] = None;
-    }
-    // for better maintainability this should generate a BareCFG, but ain't nobody got time for that
+
+    // find root
     let mut preds_no = nodes
         .iter()
-        .map(|bb| (bb, 0_u32))
-        .collect::<HashMap<_, _>>();
-    for (_, [maybe_next, maybe_cond]) in edges.iter() {
-        if let Some(next) = maybe_next {
-            preds_no.entry(&next).and_modify(|e| *e += 1);
-        }
-        if let Some(cond) = maybe_cond {
-            preds_no.entry(&cond).and_modify(|e| *e += 1);
-        }
-    }
+        .map(|&(first, _)| (first, 0_u32))
+        .collect::<FnvHashMap<_, _>>();
+    edges.iter().for_each(|&(_, dst)| {
+        preds_no.entry(dst).and_modify(|e| *e += 1);
+    });
     let mut root = preds_no
         .iter()
         .filter(|(_, no)| **no == 0)
         .map(|(bb, _)| *bb)
-        .min()
-        .cloned();
+        .min();
     if !preds_no.is_empty() && root.is_none() {
         // every preds has at least 1 entry, pick the lowest offset
-        root = nodes.iter().min().cloned();
+        root = nodes.iter().min().map(|(first, _)| first).cloned();
     }
-    reachable(CFG { root, edges })
+    BareCFG {
+        root,
+        blocks: nodes,
+        edges,
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::analysis::cfg::reachable;
     use crate::analysis::{BasicBlock, Graph, CFG};
     use crate::disasm::{ArchX86, BareCFG, Statement};
     use maplit::hashmap;
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::error::Error;
     use std::io::{Read, Seek, SeekFrom, Write};
     use std::rc::Rc;
     use tempfile::tempfile;
+
+    /// Removes unreachable nodes.
+    ///
+    /// Removes nodes that are not reachable from the CFG root by any path. These nodes are usually
+    /// created when there are indirect jumps in the original statement list.
+    fn reachable(cfg: CFG) -> CFG {
+        if !cfg.is_empty() {
+            let reachables = cfg.dfs_preorder().collect::<HashSet<_>>();
+            // need to clone edges map that uses Rc instead of the reachables set
+            let edges = cfg
+                .edges
+                .clone()
+                .into_iter()
+                .filter(|(node, _child)| reachables.contains(node.as_ref()))
+                .collect::<HashMap<_, _>>();
+            CFG {
+                root: cfg.root,
+                edges,
+            }
+        } else {
+            cfg
+        }
+    }
 
     //digraph 0->1, 1->2, 2->3
     fn sequence() -> CFG {
@@ -753,7 +729,7 @@ mod tests {
         };
         //conversion
         let bare = BareCFG {
-            root: 0x1000,
+            root: Some(0x1000),
             blocks: vec![(0x1000, 0x1012), (0x1014, 0x1014), (0x1016, 0x101A)],
             edges: vec![(0x1000, 0x1016), (0x1000, 0x1014), (0x1014, 0x1016)],
         };
@@ -929,7 +905,7 @@ mod tests {
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
-        assert_eq!(cfg.len(), 3);
+        assert_eq!(cfg.len(), 5);
         let node0 = cfg.root();
         let node1 = cfg.next(node0);
         let node2 = cfg.cond(node0);
@@ -1179,7 +1155,7 @@ mod tests {
     fn from_bare_cfg_root_midway() {
         //root does not have the min address
         let bcfg = BareCFG {
-            root: 418580,
+            root: Some(418580),
             blocks: vec![
                 (418538, 418544),
                 (418548, 418570),
@@ -1218,7 +1194,7 @@ mod tests {
         // This test is now useless, previously I estimated the entry point for bareCFG.
         // leaving it here because it does not hurts
         let bcfg = BareCFG {
-            root: 0,
+            root: Some(0),
             blocks: vec![(0, 1), (2, 3)],
             edges: vec![(0, 2), (2, 0)],
         };
