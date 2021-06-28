@@ -105,7 +105,7 @@ impl CFS {
 fn print_subgraph<T: std::fmt::Write>(
     node: &StructureBlock,
     id: usize,
-    cfg_ids: &HashMap<Rc<BasicBlock>, usize>,
+    cfg_ids: &HashMap<&Rc<BasicBlock>, usize>,
     fmt: &mut T,
 ) -> usize {
     let mut latest = id;
@@ -582,18 +582,10 @@ fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock> {
                     .get(&node)
                     .iter()
                     .flat_map(|x| x.iter())
-                    .flatten()
                     .cloned()
                     .map(StructureBlock::from)
                     .collect();
-                stack.extend(
-                    cfg.edges
-                        .get(&node)
-                        .iter()
-                        .flat_map(|x| x.iter())
-                        .flatten()
-                        .cloned(),
-                );
+                stack.extend(cfg.edges.get(&node).iter().flat_map(|x| x.iter()).cloned());
                 graph.adjacency.insert(StructureBlock::from(node), children);
             }
         }
@@ -612,15 +604,15 @@ fn calculate_depth(cfg: &CFG) -> HashMap<Rc<BasicBlock>, usize> {
                 depth = max(depth, child_depth + 1);
             }
         }
-        depth_map.insert(cfg.rc(node).unwrap(), depth);
+        depth_map.insert(node.clone(), depth);
     }
     depth_map
 }
 
 // calculates the exit nodes and target (of the exit) for a node in a particular loop
 fn exits_and_targets(
-    node: &BasicBlock,
-    sccs: &HashMap<&BasicBlock, usize>,
+    node: &Rc<BasicBlock>,
+    sccs: &HashMap<&Rc<BasicBlock>, usize>,
     cfg: &CFG,
 ) -> (HashSet<Rc<BasicBlock>>, HashSet<Rc<BasicBlock>>) {
     let mut visit = vec![node];
@@ -633,10 +625,8 @@ fn exits_and_targets(
         for child in cfg.neighbours(node).unwrap() {
             let child_scc_id = *sccs.get(child).unwrap();
             if child_scc_id != node_scc_id {
-                let node_rc = cfg.rc(node).unwrap();
-                let child_rc = cfg.rc(child).unwrap();
-                exits.insert(node_rc);
-                targets.insert(child_rc);
+                exits.insert(node.clone());
+                targets.insert(child.clone());
             } else if !visited.contains(child) {
                 // continue the visit only if the scc is the same and the node is not visited
                 // |-> stay in the loop
@@ -668,32 +658,35 @@ fn is_loop<'a, T: Hash + Eq>(sccs: &HashMap<&'a T, usize>) -> HashMap<&'a T, boo
 fn remove_edges(
     input_set: HashSet<Rc<BasicBlock>>,
     targets: HashSet<Rc<BasicBlock>>,
-    mut cfg: CFG,
+    cfg: CFG,
 ) -> CFG {
-    for (node, edges) in cfg.edges.iter_mut() {
-        if input_set.contains(node) {
-            if let Some(next) = &mut edges[0] {
-                if targets.contains(next) {
-                    edges[0] = None;
-                }
-            }
-            if let Some(cond) = &mut edges[1] {
-                if targets.contains(cond) {
-                    edges[1] = None;
-                }
-            }
-            if edges[0].is_none() && edges[1].is_some() {
-                edges.swap(0, 1);
-            }
-        }
+    type EdgesMap = HashMap<Rc<BasicBlock>, Vec<Rc<BasicBlock>>>;
+    let (keep, edit): (EdgesMap, EdgesMap) = cfg
+        .edges
+        .into_iter()
+        .partition(|(src, _)| !input_set.contains(src));
+    let done = edit
+        .into_iter()
+        .map(|(src, dst)| {
+            (
+                src,
+                dst.into_iter()
+                    .filter(|child| !targets.contains(child))
+                    .collect(),
+            )
+        })
+        .chain(keep)
+        .collect();
+    CFG {
+        root: cfg.root,
+        edges: done,
     }
-    cfg
 }
 
 fn denaturate_loop(
-    node: &BasicBlock,
-    sccs: &HashMap<&BasicBlock, usize>,
-    preds: &HashMap<&BasicBlock, HashSet<&BasicBlock>>,
+    node: &Rc<BasicBlock>,
+    sccs: &HashMap<&Rc<BasicBlock>, usize>,
+    preds: &HashMap<&Rc<BasicBlock>, HashSet<&Rc<BasicBlock>>>,
     depth_map: &HashMap<Rc<BasicBlock>, usize>,
     mut cfg: CFG,
 ) -> CFG {
@@ -745,11 +738,11 @@ fn denaturate_loop(
             // or farther away from the entry point (do-while case) -> highest predecessor number
             let max_preds = exits
                 .iter()
-                .fold(0, |acc, x| acc.max(preds.get(&**x).unwrap().len()));
+                .fold(0, |acc, x| acc.max(preds.get(x).unwrap().len()));
             let exits_vec = exits
                 .iter()
                 .cloned()
-                .filter(|x| preds.get(&**x).unwrap().len() == max_preds)
+                .filter(|x| preds.get(x).unwrap().len() == max_preds)
                 .collect::<Vec<_>>();
             let exit = if exits_vec.len() == 1 {
                 exits_vec.last().cloned().unwrap()
@@ -780,18 +773,15 @@ fn denaturate_loop(
 }
 
 fn remove_natural_loops(
-    sccs: &HashMap<&BasicBlock, usize>,
-    preds: &HashMap<&BasicBlock, HashSet<&BasicBlock>>,
+    sccs: &HashMap<&Rc<BasicBlock>, usize>,
+    preds: &HashMap<&Rc<BasicBlock>, HashSet<&Rc<BasicBlock>>>,
     mut cfg: CFG,
 ) -> CFG {
     let mut loops_done = FnvHashSet::default();
     let depth_map = calculate_depth(&cfg);
-    let nodes = cfg
-        .dfs_preorder()
-        .map(|x| cfg.rc(x).unwrap())
-        .collect::<Vec<_>>();
+    let nodes = cfg.dfs_preorder().cloned().collect::<Vec<_>>();
     for node in nodes {
-        let scc_id = sccs.get(&*node).unwrap();
+        let scc_id = sccs.get(&node).unwrap();
         if !loops_done.contains(scc_id) {
             cfg = denaturate_loop(&node, sccs, preds, &depth_map, cfg);
             loops_done.insert(scc_id);
@@ -820,13 +810,8 @@ mod tests {
             #[allow(unused_mut)]
             let mut edges = std::collections::HashMap::with_capacity(cap);
             $(
-                let mut targets = $value
-                                  .iter()
-                                  .map(|x: &usize| Some(nodes[*x].clone()))
-                                  .collect::<Vec<_>>();
-                targets.resize(2, None);
-                targets.reverse();
-                edges.insert(nodes[$src].clone(), [targets.pop().unwrap(), targets.pop().unwrap()]);
+                let targets = $value.iter().map(|x: &usize| nodes[*x].clone()).collect::<Vec<_>>();
+                edges.insert(nodes[$src].clone(), targets);
             )*
             let root = nodes.first().map(|x| x.clone());
             CFG {

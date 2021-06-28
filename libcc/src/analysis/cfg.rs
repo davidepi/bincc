@@ -5,7 +5,6 @@ use parse_int::parse;
 use regex::Regex;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::error::Error;
-use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io;
 use std::io::{ErrorKind, Read, Write};
@@ -16,6 +15,10 @@ use std::rc::Rc;
 pub const SINK_ADDR: u64 = u64::MAX;
 /// Offset of an artificially created entry point.
 pub const ENTRY_ADDR: u64 = 0;
+/// Shape of the root in the exported/imported graphviz dot
+const EXTERN_DOT_ROOT: &str = "rect";
+/// Shape of the sink/extended entry point in the exported/imported graphviz dot
+const EXTERN_DOT_SINK: &str = "point";
 
 /// A Control Flow Graph.
 ///
@@ -24,7 +27,7 @@ pub const ENTRY_ADDR: u64 = 0;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CFG {
     pub(super) root: Option<Rc<BasicBlock>>,
-    pub(super) edges: HashMap<Rc<BasicBlock>, [Option<Rc<BasicBlock>>; 2]>,
+    pub(super) edges: HashMap<Rc<BasicBlock>, Vec<Rc<BasicBlock>>>,
 }
 
 /// Minimum portion of code without any jump.
@@ -85,29 +88,6 @@ impl Default for BasicBlock {
     }
 }
 
-impl Display for CFG {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let has_sink = self
-            .edges
-            .iter()
-            .filter(|(node, _child)| node.is_sink())
-            .map(|(node, _child)| node)
-            .last();
-        let edges_no = self
-            .edges
-            .iter()
-            .flat_map(|(_node, edge)| edge)
-            .filter_map(Option::Some)
-            .count();
-        if let Some(_sink) = has_sink {
-            //TODO: fix this +0 (filter after filter_map) removing everything equal to sink
-            write!(f, "CFG({}+1, {}+0)", self.len(), edges_no)
-        } else {
-            write!(f, "CFG({}, {})", self.len(), edges_no)
-        }
-    }
-}
-
 impl From<BareCFG> for CFG {
     fn from(bare: BareCFG) -> Self {
         let root_addr = bare.root.unwrap_or(0x0);
@@ -119,14 +99,17 @@ impl From<BareCFG> for CFG {
             .collect::<HashMap<_, _>>();
         let mut marked = HashSet::with_capacity(bbs.len());
         let mut edges = HashMap::new();
-        for (src, dst) in bare.edges {
+        let mut bare_edges_sorted = bare.edges;
+        bare_edges_sorted.sort_unstable(); // first edge is always false, then there is true.
+        bare_edges_sorted.dedup(); // remove dups as they may interfere with CFS
+        for (src, dst) in bare_edges_sorted {
             let src_bb = bbs.get(&src);
             let dst_bb = bbs.get(&dst);
             if let (Some(src_bb), Some(dst_bb)) = (src_bb, dst_bb) {
                 edges
                     .entry(src_bb.clone())
-                    .and_modify(|e: &mut [Option<Rc<BasicBlock>>; 2]| e[1] = Some(dst_bb.clone()))
-                    .or_insert([Some(dst_bb.clone()), None]);
+                    .and_modify(|e: &mut Vec<Rc<BasicBlock>>| e.push(dst_bb.clone()))
+                    .or_insert_with(|| vec![dst_bb.clone()]);
                 marked.insert(src_bb);
             }
         }
@@ -134,7 +117,7 @@ impl From<BareCFG> for CFG {
         bbs.iter()
             .filter(|(_, val)| !marked.contains(*val))
             .for_each(|(_, val)| {
-                edges.insert(val.clone(), [None, None]);
+                edges.insert(val.clone(), Vec::with_capacity(0));
             });
         let mut root = bbs
             .iter()
@@ -189,15 +172,11 @@ impl CFG {
     ///
     /// Returns [Option::None] if there is no next block, the current basic block does not belong to this CFG
     /// or the original BasicBlock is None.
-    pub fn next(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
+    pub fn next(&self, block: Option<&Rc<BasicBlock>>) -> Option<&Rc<BasicBlock>> {
         if let Some(bb) = block {
             let maybe_children = self.edges.get(bb);
             if let Some(children) = maybe_children {
-                if let Some(next) = &children[0] {
-                    Some(next)
-                } else {
-                    None
-                }
+                children.first()
             } else {
                 None
             }
@@ -212,12 +191,12 @@ impl CFG {
     ///
     /// Returns [Option::None] if the current basic block does not have conditional jumps, does not belong to
     /// this CFG or the original BasicBlock is None.
-    pub fn cond(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
+    pub fn cond(&self, block: Option<&Rc<BasicBlock>>) -> Option<&Rc<BasicBlock>> {
         if let Some(bb) = block {
             let maybe_children = self.edges.get(bb);
             if let Some(children) = maybe_children {
-                if let Some(cond) = &children[1] {
-                    Some(cond)
+                if children.len() >= 2 {
+                    Some(&children[1])
                 } else {
                     None
                 }
@@ -241,24 +220,34 @@ impl CFG {
         let mut edges_string = Vec::new();
         let mut nodes_string = Vec::new();
         let nodes_ids = self.node_id_map();
-        for (node, child) in self.edges.iter() {
+        for (node, children) in self.edges.iter() {
             let node_id = nodes_ids.get(node).unwrap_or(&usize::MAX);
             let shape = if node.is_entry_point() || node.is_sink() {
-                r#",shape="point""#
+                format!(",shape=\"{}\"", EXTERN_DOT_SINK)
+            } else if Some(node) == self.root.as_ref() {
+                format!(",shape=\"{}\"", EXTERN_DOT_ROOT)
             } else {
-                ""
+                String::new()
             };
             nodes_string.push(format!(
                 "{}[comment=\"({},{})\"{}];",
                 node_id, node.first, node.last, shape
             ));
-            if let Some(next) = &child[0] {
-                let next_id = *nodes_ids.get(next).unwrap_or(&usize::MAX);
-                edges_string.push(format!("{}->{}", node_id, next_id));
-            }
-            if let Some(cond) = &child[1] {
-                let cond_id = *nodes_ids.get(cond).unwrap_or(&usize::MAX);
-                edges_string.push(format!("{}->{}[arrowhead=\"empty\"];", node_id, cond_id));
+            match children.len() {
+                0 => {}
+                // 1 falls into the _ case
+                2 => {
+                    let dst_false = *nodes_ids.get(&children[0]).unwrap_or(&usize::MAX);
+                    let dst_true = *nodes_ids.get(&children[1]).unwrap_or(&usize::MAX);
+                    edges_string.push(format!("{}->{}", node_id, dst_false));
+                    edges_string.push(format!("{}->{}", node_id, dst_true));
+                }
+                _ => {
+                    for child in children.iter() {
+                        let dst = *nodes_ids.get(child).unwrap_or(&usize::MAX);
+                        edges_string.push(format!("{}->{}", node_id, dst));
+                    }
+                }
             }
         }
         format!(
@@ -283,26 +272,33 @@ impl CFG {
         lines.reverse();
         if let Some(_first @ "digraph{") = lines.pop() {
             let mut nodes = HashMap::new();
-            let mut edges_next = HashMap::new();
-            let mut edges_cond = HashMap::new();
-            let node_re =
-                Regex::new(r#"(\d+)\[comment="\((\d+),(\d+)\)"(?:,shape="point")?];"#).unwrap();
+            let mut edges_ids = HashMap::new();
+            let nodes_re_str = format!(
+                r#"(\d+)\[comment="\((\d+),(\d+)\)"(?:,shape="({}|{})")?];"#,
+                EXTERN_DOT_SINK, EXTERN_DOT_ROOT
+            );
+            let mut root = None;
+            let node_re = Regex::new(&nodes_re_str).unwrap();
             let edge_re = Regex::new(r#"(\d+)->(\d+)(\[.*];)?"#).unwrap();
             while let Some(line) = lines.pop() {
                 if let Some(cap) = node_re.captures(line) {
                     let id = cap.get(1).unwrap().as_str().parse::<usize>()?;
                     let first = cap.get(2).unwrap().as_str().parse::<u64>()?;
                     let last = cap.get(3).unwrap().as_str().parse::<u64>()?;
-                    let node = BasicBlock { first, last };
-                    nodes.insert(id, Rc::new(node));
+                    let node = Rc::new(BasicBlock { first, last });
+                    if let Some(shape) = cap.get(4) {
+                        if shape.as_str() == EXTERN_DOT_ROOT {
+                            root = Some(node.clone());
+                        }
+                    }
+                    nodes.insert(id, node.clone());
                 } else if let Some(cap) = edge_re.captures(line) {
                     let from = cap.get(1).unwrap().as_str().parse::<usize>()?;
                     let to = cap.get(2).unwrap().as_str().parse::<usize>()?;
-                    if cap.get(3).is_none() {
-                        edges_next.insert(from, to);
-                    } else {
-                        edges_cond.insert(from, to);
-                    }
+                    edges_ids
+                        .entry(from)
+                        .and_modify(|e: &mut Vec<usize>| e.push(to))
+                        .or_insert_with(|| vec![to]);
                 }
             }
             let mut edges = HashMap::new();
@@ -313,22 +309,16 @@ impl CFG {
                     "inconsistent data",
                 ))
             };
-            for (src, dst) in edges_next {
+            for (src, dst_vec) in edges_ids {
                 let src_node = nodes.get(&src).ok_or_else(parse_err)?.clone();
-                let dst_node = nodes.get(&dst).ok_or_else(parse_err)?.clone();
-                edges.insert(src_node, [Some(dst_node), None]);
+                for dst in dst_vec {
+                    let dst_node = nodes.get(&dst).ok_or_else(parse_err)?.clone();
+                    edges
+                        .entry(src_node.clone())
+                        .and_modify(|e: &mut Vec<Rc<BasicBlock>>| e.push(dst_node.clone()))
+                        .or_insert_with(|| vec![dst_node]);
+                }
             }
-            for (src, dst) in edges_cond {
-                let src_node = nodes.get(&src).ok_or_else(parse_err)?.clone();
-                let dst_node = nodes.get(&dst).ok_or_else(parse_err)?.clone();
-                let existing = edges.get_mut(&src_node).ok_or_else(parse_err)?;
-                existing[1] = Some(dst_node);
-            }
-            let root = if !nodes.is_empty() {
-                Some(nodes.get(&0).unwrap().clone())
-            } else {
-                None
-            };
             // add the exits
             let exits = nodes
                 .into_iter()
@@ -336,7 +326,7 @@ impl CFG {
                 .map(|(_, node)| node)
                 .collect::<Vec<_>>();
             for exit in exits {
-                edges.insert(exit, [None, None]);
+                edges.insert(exit, Vec::with_capacity(0));
             }
             Ok(CFG { root, edges })
         } else {
@@ -380,16 +370,16 @@ impl CFG {
         let exit_nodes = self
             .edges
             .iter()
-            .filter(|(_, child)| child[0].is_none() && child[1].is_none())
+            .filter(|(_, child)| child.is_empty())
             .count();
         if exit_nodes > 1 {
             let sink = Rc::new(BasicBlock::new_sink());
             for (_, child) in self.edges.iter_mut() {
-                if child[0].is_none() && child[1].is_none() {
-                    child[0] = Some(sink.clone());
+                if child.is_empty() {
+                    child.push(sink.clone());
                 }
             }
-            self.edges.insert(sink, [None, None]);
+            self.edges.insert(sink, Vec::with_capacity(0));
         }
         self
     }
@@ -403,57 +393,45 @@ impl CFG {
     /// one or more predecessors.
     #[must_use]
     pub fn add_entry_point(mut self) -> CFG {
-        let oep_has_preds = self
-            .edges
-            .iter()
-            .flat_map(|(_, edge)| edge)
-            .any(|x| x == &self.root);
-        if oep_has_preds {
-            let eep = Rc::new(BasicBlock::new_entry_point());
-            self.edges.insert(eep.clone(), [self.root.take(), None]);
-            self.root = Some(eep);
+        if let Some(oep) = &self.root {
+            let oep_has_preds = self
+                .edges
+                .iter()
+                .flat_map(|(_, edge)| edge)
+                .any(|x| x == oep);
+            if oep_has_preds {
+                let eep = Rc::new(BasicBlock::new_entry_point());
+                self.edges
+                    .insert(eep.clone(), vec![self.root.take().unwrap()]);
+                self.root = Some(eep);
+            }
         }
         self
-    }
-
-    /// Given a node, returns it's shared reference used internally by the CFG.
-    ///
-    /// This is useful to avoid some caveats with mutability and borrowing without having to clone
-    /// the BasicBlock.
-    ///
-    /// Returns [Option::None] if the input node does not belong to this graph.
-    pub fn rc(&self, node: &BasicBlock) -> Option<Rc<BasicBlock>> {
-        self.edges.get_key_value(node).map(|(rc, _)| rc.clone())
     }
 
     /// Assigns an unique ID to each node in the CFG.
     ///
     /// Unless the CFG changes, the id assigned by this method will always be the same, and based on
     /// a preorder visit of the CFG.
-    pub fn node_id_map(&self) -> HashMap<Rc<BasicBlock>, usize> {
-        println!("{}", self.bfs().count());
+    pub fn node_id_map(&self) -> HashMap<&Rc<BasicBlock>, usize> {
         self.bfs()
             .enumerate()
-            .map(|(index, node)| (self.rc(node).unwrap(), index))
+            .map(|(index, node)| (node, index))
             .collect::<HashMap<_, _>>()
     }
 }
 
 impl Graph for CFG {
-    type Item = BasicBlock;
+    type Item = Rc<BasicBlock>;
 
     fn root(&self) -> Option<&Self::Item> {
-        self.root.as_ref().map(|root| root.as_ref())
+        self.root.as_ref()
     }
 
     fn neighbours(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
-        self.edges.get(node).map(|children| {
-            children
-                .iter()
-                .flatten()
-                .map(|x| x.as_ref())
-                .collect::<Vec<_>>()
-        })
+        self.edges
+            .get(node)
+            .map(|neighbours| neighbours.iter().collect())
     }
 
     fn len(&self) -> usize {
@@ -654,7 +632,7 @@ mod tests {
                 .edges
                 .clone()
                 .into_iter()
-                .filter(|(node, _child)| reachables.contains(node.as_ref()))
+                .filter(|(node, _child)| reachables.contains(node))
                 .collect::<HashMap<_, _>>();
             CFG {
                 root: cfg.root,
@@ -672,10 +650,10 @@ mod tests {
             .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
             .collect::<Vec<_>>();
         let edges = hashmap![
-            nodes[0].clone() => [Some(nodes[1].clone()), None],
-            nodes[1].clone() => [Some(nodes[2].clone()), None],
-            nodes[2].clone() => [Some(nodes[3].clone()), None],
-            nodes[3].clone() => [None, None],
+            nodes[0].clone() => vec![nodes[1].clone()],
+            nodes[1].clone() => vec![nodes[2].clone()],
+            nodes[2].clone() => vec![nodes[3].clone()],
+            nodes[3].clone() => vec![],
         ];
         CFG {
             root: Some(nodes[0].clone()),
@@ -690,10 +668,10 @@ mod tests {
             .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
             .collect::<Vec<_>>();
         let edges = hashmap![
-            nodes[0].clone() => [Some(nodes[1].clone()), None],
-            nodes[1].clone() => [None, None],
-            nodes[2].clone() => [Some(nodes[3].clone()), None],
-            nodes[3].clone() => [None, None],
+            nodes[0].clone() => vec![nodes[1].clone()],
+            nodes[1].clone() => vec![],
+            nodes[2].clone() => vec![nodes[3].clone()],
+            nodes[3].clone() => vec![],
         ];
         CFG {
             root: Some(nodes[0].clone()),
@@ -719,9 +697,9 @@ mod tests {
             }),
         ];
         let edges = hashmap![
-            nodes[0].clone() => [Some(nodes[2].clone()), Some(nodes[1].clone())],
-            nodes[1].clone() => [Some(nodes[2].clone()), None],
-            nodes[2].clone() => [None, None],
+            nodes[0].clone() => vec![nodes[1].clone(), nodes[2].clone()],
+            nodes[1].clone() => vec![nodes[2].clone()],
+            nodes[2].clone() => vec![],
         ];
         let expected = CFG {
             root: Some(nodes[0].clone()),
@@ -762,7 +740,7 @@ mod tests {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
-        let children = cfg.neighbours(&BasicBlock::new_sink());
+        let children = cfg.neighbours(&Rc::new(BasicBlock::new_sink()));
         assert!(children.is_none())
     }
 
