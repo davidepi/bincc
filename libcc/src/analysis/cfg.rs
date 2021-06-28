@@ -15,10 +15,18 @@ use std::rc::Rc;
 pub const SINK_ADDR: u64 = u64::MAX;
 /// Offset of an artificially created entry point.
 pub const ENTRY_ADDR: u64 = 0;
-/// Shape of the root in the exported/imported graphviz dot
+/// Shape of the root in the exported/imported graphviz dot.
 const EXTERN_DOT_ROOT: &str = "rect";
-/// Shape of the sink/extended entry point in the exported/imported graphviz dot
+/// Shape of the sink/extended entry point in the exported/imported graphviz dot.
 const EXTERN_DOT_SINK: &str = "point";
+/// Color of the background in the saved CFG .dot file.
+const EXTERN_DOT_BG_COLOUR: &str = "azure";
+/// Color of the true edges in the saved CFG .dot file (conditional jumps).
+const EXTERN_DOT_TRUE_COLOUR: &'static str = "mediumspringgreen";
+/// Color of the false edges in the saved CFG .dot file (conditional jumps).
+const EXTERN_DOT_FALSE_COLOUR: &'static str = "crimson";
+/// Color of the unconditional jumps edges in the saved CFG .dot file.
+const EXTERN_DOT_JUMP_COLOUR: &'static str = "dodgerblue";
 
 /// A Control Flow Graph.
 ///
@@ -239,19 +247,30 @@ impl CFG {
                 2 => {
                     let dst_false = *nodes_ids.get(&children[0]).unwrap_or(&usize::MAX);
                     let dst_true = *nodes_ids.get(&children[1]).unwrap_or(&usize::MAX);
-                    edges_string.push(format!("{}->{}", node_id, dst_false));
-                    edges_string.push(format!("{}->{}", node_id, dst_true));
+                    edges_string.push(format!(
+                        "{}->{}[color=\"{}\"];",
+                        node_id, dst_false, EXTERN_DOT_FALSE_COLOUR
+                    ));
+                    edges_string.push(format!(
+                        "{}->{}[color=\"{}\"];",
+                        node_id, dst_true, EXTERN_DOT_TRUE_COLOUR
+                    ));
                 }
                 _ => {
                     for child in children.iter() {
                         let dst = *nodes_ids.get(child).unwrap_or(&usize::MAX);
-                        edges_string.push(format!("{}->{}", node_id, dst));
+                        edges_string.push(format!(
+                            "{}->{}[color=\"{}\"];",
+                            node_id, dst, EXTERN_DOT_JUMP_COLOUR
+                        ));
                     }
                 }
             }
         }
         format!(
-            "digraph{{\n{}\n{}\n}}\n",
+            "digraph{{\ngraph[bgcolor={},fontsize=8,splines=\"ortho\"];\n{}\n{}\n{}\n}}\n",
+            EXTERN_DOT_BG_COLOUR,
+            "node[fillcolor=gray,style=filled,shape=box];\nedge[arrowhead=normal];\n",
             nodes_string.join("\n"),
             edges_string.join("\n")
         )
@@ -279,7 +298,7 @@ impl CFG {
             );
             let mut root = None;
             let node_re = Regex::new(&nodes_re_str).unwrap();
-            let edge_re = Regex::new(r#"(\d+)->(\d+)(\[.*];)?"#).unwrap();
+            let edge_re = Regex::new(r#"(\d+)->(\d+)(?:\[.*];)?"#).unwrap();
             while let Some(line) = lines.pop() {
                 if let Some(cap) = node_re.captures(line) {
                     let id = cap.get(1).unwrap().as_str().parse::<usize>()?;
