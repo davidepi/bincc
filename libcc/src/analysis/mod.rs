@@ -1,7 +1,9 @@
 mod graph;
+pub use self::graph::BfsIter;
+pub use self::graph::DfsPostIter;
+pub use self::graph::DfsPreIter;
 pub use self::graph::DirectedGraph;
 pub use self::graph::Graph;
-pub use self::graph::GraphIter;
 mod cfg;
 pub use self::cfg::BasicBlock;
 pub use self::cfg::CFG;

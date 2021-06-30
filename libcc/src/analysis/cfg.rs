@@ -447,10 +447,12 @@ impl Graph for CFG {
         self.root.as_ref()
     }
 
-    fn neighbours(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
-        self.edges
-            .get(node)
-            .map(|neighbours| neighbours.iter().collect())
+    fn neighbours(&self, node: &Self::Item) -> &[Self::Item] {
+        if let Some(n) = self.edges.get(node) {
+            &n[..]
+        } else {
+            &[]
+        }
     }
 
     fn len(&self) -> usize {
@@ -760,7 +762,7 @@ mod tests {
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         let children = cfg.neighbours(&Rc::new(BasicBlock::new_sink()));
-        assert!(children.is_none())
+        assert!(children.is_empty())
     }
 
     #[test]
@@ -772,8 +774,7 @@ mod tests {
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         let children = cfg.neighbours(cfg.root().unwrap());
-        assert!(children.is_some());
-        assert!(children.unwrap().is_empty());
+        assert!(children.is_empty());
     }
 
     #[test]
@@ -787,8 +788,7 @@ mod tests {
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, &arch);
         let children = cfg.neighbours(cfg.root().unwrap());
-        assert!(children.is_some());
-        assert_eq!(children.unwrap().len(), 2);
+        assert_eq!(children.len(), 2);
     }
 
     #[test]

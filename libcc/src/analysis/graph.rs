@@ -25,7 +25,7 @@ pub trait Graph {
     /// Given a node, returns a vector with its neighbours.
     ///
     /// Returns *None* if the input node does not exist in the graph.
-    fn neighbours(&self, node: &Self::Item) -> Option<Vec<&Self::Item>>;
+    fn neighbours(&self, node: &Self::Item) -> &[Self::Item];
 
     /// Returns the size of the graph in the number of nodes.
     fn len(&self) -> usize;
@@ -42,30 +42,28 @@ pub trait Graph {
     /// moving to the next depth level.
     ///
     /// In the default implementation this visit is iterative.
-    ///
-    /// This method panics if the graph representation is inconsistent,
-    /// i.e. if [Graph::neighbours()] method returns non-existing IDs.
-    fn bfs(&self) -> GraphIter<'_, Self::Item> {
+    fn bfs(&self) -> BfsIter<'_, Self>
+    where
+        Self: Sized,
+    {
         if let Some(root) = self.root() {
             let mut queue = VecDeque::with_capacity(self.len());
-            let mut retval = Vec::with_capacity(self.len());
             queue.push_back(root);
-            retval.push(root);
-            let mut marked = HashSet::with_capacity(self.len());
-            while let Some(node) = queue.pop_front() {
-                let neighbours = self.neighbours(node).unwrap();
-                for nbor in neighbours.into_iter() {
-                    if !marked.contains(nbor) {
-                        marked.insert(nbor);
-                        queue.push_back(nbor);
-                        retval.push(nbor);
-                    }
-                }
+            let mut buffer = VecDeque::new();
+            buffer.push_back(root);
+            BfsIter {
+                queue,
+                buffer,
+                marked: HashSet::with_capacity(self.len()),
+                graph: &self,
             }
-            retval.reverse();
-            GraphIter { stack: retval }
         } else {
-            GraphIter { stack: Vec::new() }
+            BfsIter {
+                queue: VecDeque::with_capacity(0),
+                buffer: VecDeque::with_capacity(0),
+                marked: HashSet::with_capacity(0),
+                graph: &self,
+            }
         }
     }
 
@@ -75,29 +73,24 @@ pub trait Graph {
     /// depth-first pre-order.
     ///
     /// In the default implementation this visit is iterative.
-    ///
-    /// This method panics if the graph representation is inconsistent,
-    /// i.e. if [Graph::neighbours()] method returns non-existing IDs.
-    fn dfs_preorder(&self) -> GraphIter<'_, Self::Item> {
+    fn dfs_preorder(&self) -> DfsPreIter<'_, Self>
+    where
+        Self: Sized,
+    {
         if let Some(root) = self.root() {
-            let mut buffer = vec![root];
-            let mut retval = Vec::with_capacity(self.len());
-            let mut marked = HashSet::with_capacity(self.len());
-            while let Some(current) = buffer.pop() {
-                retval.push(current);
-                marked.insert(current);
-                let neighbours = self.neighbours(current).unwrap();
-                for nbor in neighbours.into_iter().rev() {
-                    if !marked.contains(nbor) {
-                        marked.insert(nbor);
-                        buffer.push(nbor);
-                    }
-                }
+            let mut stack = Vec::with_capacity(self.len());
+            stack.push(root);
+            DfsPreIter {
+                stack,
+                marked: HashSet::with_capacity(self.len()),
+                graph: &self,
             }
-            retval.reverse();
-            GraphIter { stack: retval }
         } else {
-            GraphIter { stack: Vec::new() }
+            DfsPreIter {
+                stack: Vec::with_capacity(0),
+                marked: HashSet::with_capacity(0),
+                graph: &self,
+            }
         }
     }
 
@@ -107,36 +100,26 @@ pub trait Graph {
     /// depth-first post-order visit.
     ///
     /// In the default implementation this visit is iterative.
-    ///
-    /// This method panics if the graph representation is inconsistent,
-    /// i.e. if [Graph::neighbours()] method returns non-existing IDs.
-    fn dfs_postorder(&self) -> GraphIter<'_, Self::Item> {
+    fn dfs_postorder(&self) -> DfsPostIter<'_, Self>
+    where
+        Self: Sized,
+    {
         if let Some(root) = self.root() {
-            let mut buffer = vec![root];
-            let mut retval = Vec::with_capacity(self.len());
-            let mut marked = HashSet::with_capacity(self.len());
-            while let Some(current) = buffer.last() {
-                let mut to_push = Vec::new();
-                marked.insert(*current);
-                let neighbours = self.neighbours(*current).unwrap();
-                for nbor in neighbours.into_iter().rev() {
-                    if !marked.contains(nbor) {
-                        marked.insert(nbor);
-                        to_push.push(nbor);
-                    }
-                }
-                // if all children has been processed, push current node
-                if to_push.is_empty() {
-                    let current = buffer.pop().unwrap();
-                    retval.push(current);
-                } else {
-                    buffer.append(&mut to_push);
-                }
+            let mut stack = Vec::with_capacity(self.len());
+            stack.push(root);
+            DfsPostIter {
+                stack,
+                buffer: VecDeque::new(),
+                marked: HashSet::with_capacity(self.len()),
+                graph: &self,
             }
-            retval.reverse();
-            GraphIter { stack: retval }
         } else {
-            GraphIter { stack: Vec::new() }
+            DfsPostIter {
+                stack: Vec::with_capacity(0),
+                buffer: VecDeque::with_capacity(0),
+                marked: HashSet::with_capacity(0),
+                graph: &self,
+            }
         }
     }
 
@@ -148,6 +131,7 @@ pub trait Graph {
     fn predecessors(&self) -> HashMap<&Self::Item, HashSet<&Self::Item>>
     where
         Self::Item: Hash + Eq,
+        Self: Sized,
     {
         let mut pmap = HashMap::with_capacity(self.len());
         let visit = self.dfs_preorder();
@@ -155,8 +139,7 @@ pub trait Graph {
             // the next line is used to have a set for each node. Otherwise nodes with no children
             // will never get their entry inside the map.
             pmap.entry(node).or_insert_with(HashSet::new);
-            let neighbours = self.neighbours(node).unwrap();
-            for nbor in neighbours {
+            for nbor in self.neighbours(node) {
                 let child_map = pmap.entry(nbor).or_insert_with(HashSet::new);
                 child_map.insert(node);
             }
@@ -173,6 +156,7 @@ pub trait Graph {
     fn scc(&self) -> HashMap<&Self::Item, usize>
     where
         Self::Item: Hash + Eq,
+        Self: Sized,
     {
         // assign indices to everything (array indexing will be used a lot in this method)
         let ids = self
@@ -184,8 +168,7 @@ pub trait Graph {
         for (node, index) in &ids {
             let neighbours = self
                 .neighbours(node)
-                .unwrap()
-                .into_iter()
+                .iter()
                 .flat_map(|x| ids.get(x))
                 .copied()
                 .collect();
@@ -243,6 +226,101 @@ pub trait Graph {
     }
 }
 
+/// An iterator that performs a Breadth-First visit of a graph.
+///
+/// This iterator is created from [Graph::bfs].
+pub struct BfsIter<'a, G: Graph> {
+    queue: VecDeque<&'a G::Item>,
+    buffer: VecDeque<&'a G::Item>,
+    marked: HashSet<&'a G::Item>,
+    graph: &'a G,
+}
+
+impl<'a, G: Graph> Iterator for BfsIter<'a, G> {
+    type Item = &'a G::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.queue.is_empty() && self.buffer.is_empty() {
+            if let Some(node) = self.queue.pop_front() {
+                for nbor in self.graph.neighbours(node) {
+                    if !self.marked.contains(nbor) {
+                        self.marked.insert(nbor);
+                        self.queue.push_back(nbor);
+                        self.buffer.push_back(nbor);
+                    }
+                }
+            }
+        }
+        self.buffer.pop_front()
+    }
+}
+
+/// An iterator that performs a preorder Depth-First visit of a graph.
+///
+/// This iterator is created from [Graph::dfs_preorder].
+pub struct DfsPreIter<'a, G: Graph> {
+    stack: Vec<&'a G::Item>,
+    marked: HashSet<&'a G::Item>,
+    graph: &'a G,
+}
+
+impl<'a, G: Graph> Iterator for DfsPreIter<'a, G> {
+    type Item = &'a G::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(current) = self.stack.pop() {
+            let retval = current;
+            self.marked.insert(current);
+            for nbor in self.graph.neighbours(current).iter().rev() {
+                if !self.marked.contains(nbor) {
+                    self.marked.insert(nbor);
+                    self.stack.push(nbor);
+                }
+            }
+            Some(retval)
+        } else {
+            None
+        }
+    }
+}
+
+/// An iterator that performs a postorder Depth-First visit of a graph.
+///
+/// This iterator is created from [Graph::dfs_postorder].
+pub struct DfsPostIter<'a, G: Graph> {
+    stack: Vec<&'a G::Item>,
+    buffer: VecDeque<&'a G::Item>,
+    marked: HashSet<&'a G::Item>,
+    graph: &'a G,
+}
+
+impl<'a, G: Graph> Iterator for DfsPostIter<'a, G> {
+    type Item = &'a G::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.stack.is_empty() && self.buffer.is_empty() {
+            if let Some(current) = self.stack.last() {
+                let mut to_push = Vec::new();
+                self.marked.insert(current);
+                for nbor in self.graph.neighbours(current).iter().rev() {
+                    if !self.marked.contains(nbor) {
+                        self.marked.insert(nbor);
+                        to_push.push(nbor);
+                    }
+                }
+                // if all children has been processed, return current node
+                if to_push.is_empty() {
+                    let current = self.stack.pop().unwrap();
+                    self.buffer.push_back(current);
+                } else {
+                    self.stack.append(&mut to_push);
+                }
+            }
+        }
+        self.buffer.pop_front()
+    }
+}
+
 /// Generic Directed Graph.
 ///
 /// Generic implementation of a directed graph using a vector of neighbours.
@@ -258,19 +336,6 @@ pub struct DirectedGraph<T> {
     pub root: Option<T>,
     // neighbour for a given node in the graph.
     pub adjacency: HashMap<T, Vec<T>>,
-}
-
-/// Iterator for Graph elements.
-pub struct GraphIter<'a, T> {
-    stack: Vec<&'a T>,
-}
-
-impl<'a, T> Iterator for GraphIter<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.stack.pop()
-    }
 }
 
 impl<T> Default for DirectedGraph<T> {
@@ -289,15 +354,11 @@ impl<T: Hash + Eq> Graph for DirectedGraph<T> {
         self.root.as_ref()
     }
 
-    fn neighbours(&self, node: &Self::Item) -> Option<Vec<&Self::Item>> {
+    fn neighbours(&self, node: &Self::Item) -> &[Self::Item] {
         if let Some(neighbours) = self.adjacency.get(node) {
-            let mut retval = Vec::with_capacity(neighbours.len());
-            for nbor in neighbours {
-                retval.push(&*nbor);
-            }
-            Some(retval)
+            neighbours
         } else {
-            None
+            &[]
         }
     }
 
@@ -346,15 +407,14 @@ mod tests {
     fn directed_graph_children_empty() {
         let graph: DirectedGraph<u8> = DirectedGraph::default();
         let children = graph.neighbours(&0);
-        assert!(children.is_none());
+        assert!(children.is_empty());
     }
 
     #[test]
     fn directed_graph_children_existing() {
         let graph = sample();
         let children = graph.neighbours(graph.root().unwrap());
-        assert!(children.is_some());
-        assert_eq!(*children.unwrap()[0], 1);
+        assert_eq!(children[0], 1);
     }
 
     #[test]
