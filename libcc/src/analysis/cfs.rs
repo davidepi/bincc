@@ -44,12 +44,10 @@ impl CFS {
 
     pub fn to_dot(&self) -> String {
         let mut dot = self.cfg.to_dot();
-        let old_ids = self.cfg.node_id_map();
         dot.pop();
         dot.pop();
-        let mut id = 0;
         for (node, _) in self.tree.adjacency.iter() {
-            id = print_subgraph(node, id, &old_ids, &mut dot);
+            print_subgraph(node, 0, &mut dot);
         }
         dot.push('}');
         dot.push('\n');
@@ -64,14 +62,8 @@ impl CFS {
     pub fn to_dot_tree(&self) -> String {
         let mut dot = "digraph {\n".to_string();
         let mut stack = self.get_tree().iter().cloned().collect::<Vec<_>>();
-        let mut ids = stack
-            .iter()
-            .cloned()
-            .map(|x| (x, 0))
-            .collect::<HashMap<_, _>>();
         while let Some(node) = stack.pop() {
-            let ids_len = ids.len();
-            let node_id = *ids.entry(node.clone()).or_insert(ids_len);
+            let node_id = node.starting_offset();
             match node {
                 StructureBlock::Basic(_) => writeln!(
                     dot,
@@ -85,8 +77,7 @@ impl CFS {
             }
             .unwrap();
             for child in node.children().iter().cloned() {
-                let ids_len = ids.len();
-                let child_id = *ids.entry(child.clone()).or_insert(ids_len);
+                let child_id = child.starting_offset();
                 writeln!(dot, "{}->{}", node_id, child_id).unwrap();
                 stack.push(child);
             }
@@ -102,23 +93,18 @@ impl CFS {
     }
 }
 
-fn print_subgraph<T: std::fmt::Write>(
-    node: &StructureBlock,
-    id: usize,
-    cfg_ids: &HashMap<&Rc<BasicBlock>, usize>,
-    fmt: &mut T,
-) -> usize {
+fn print_subgraph<T: std::fmt::Write>(node: &StructureBlock, id: usize, fmt: &mut T) -> usize {
     let mut latest = id;
     match node {
         StructureBlock::Basic(bb) => {
             if !bb.is_entry_point() && !bb.is_sink() {
-                writeln!(fmt, "{};", *cfg_ids.get(bb).unwrap()).unwrap();
+                writeln!(fmt, "{};", bb.first).unwrap();
             }
         }
         StructureBlock::Nested(_) => {
             writeln!(fmt, "subgraph cluster_{}{{", id).unwrap();
-            for (child_no, child) in node.children().iter().enumerate() {
-                latest = print_subgraph(child, id + child_no + 1, cfg_ids, fmt);
+            for child in node.children().iter() {
+                latest = print_subgraph(child, latest + 1, fmt);
             }
             writeln!(fmt, "label=\"{}\";\n}}", node.block_type()).unwrap();
         }

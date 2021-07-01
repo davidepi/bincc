@@ -426,17 +426,6 @@ impl CFG {
         }
         self
     }
-
-    /// Assigns an unique ID to each node in the CFG.
-    ///
-    /// Unless the CFG changes, the id assigned by this method will always be the same, and based on
-    /// a preorder visit of the CFG.
-    pub fn node_id_map(&self) -> HashMap<&Rc<BasicBlock>, usize> {
-        self.bfs()
-            .enumerate()
-            .map(|(index, node)| (node, index))
-            .collect::<HashMap<_, _>>()
-    }
 }
 
 impl Graph for CFG {
