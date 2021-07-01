@@ -128,7 +128,7 @@ fn reduce_self_loop<'a>(
     node: &'a StructureBlock,
     graph: &'a DirectedGraph<StructureBlock>,
     _: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
-    _: &HashMap<&StructureBlock, bool>,
+    _: &LoopHelper<'a>,
 ) -> Option<Reduction<'a>> {
     match node {
         StructureBlock::Basic(_) => {
@@ -153,7 +153,7 @@ fn reduce_switch<'a>(
     node: &'a StructureBlock,
     graph: &'a DirectedGraph<StructureBlock>,
     preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
-    _: &HashMap<&StructureBlock, bool>,
+    _: &LoopHelper<'a>,
 ) -> Option<Reduction<'a>> {
     let children = graph.neighbours(node);
     if children.len() >= 3 {
@@ -226,7 +226,7 @@ fn reduce_sequence<'a>(
     node: &'a StructureBlock,
     graph: &'a DirectedGraph<StructureBlock>,
     preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
-    _: &HashMap<&StructureBlock, bool>,
+    _: &LoopHelper<'a>,
 ) -> Option<Reduction<'a>> {
     // conditions for a sequence:
     // - current node has only one successor node
@@ -301,7 +301,7 @@ fn reduce_ifthen<'a>(
     node: &'a StructureBlock,
     graph: &'a DirectedGraph<StructureBlock>,
     preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
-    _: &HashMap<&StructureBlock, bool>,
+    _: &LoopHelper<'a>,
 ) -> Option<Reduction<'a>> {
     let children = graph.neighbours(node);
     if children.len() == 2 {
@@ -344,7 +344,7 @@ fn reduce_ifelse<'a>(
     node: &'a StructureBlock,
     graph: &'a DirectedGraph<StructureBlock>,
     preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
-    _: &HashMap<&StructureBlock, bool>,
+    _: &LoopHelper<'a>,
 ) -> Option<Reduction<'a>> {
     let node_children = graph.neighbours(node);
     if node_children.len() == 2 {
@@ -406,20 +406,20 @@ fn reduce_loop<'a>(
     node: &'a StructureBlock,
     graph: &'a DirectedGraph<StructureBlock>,
     preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
-    loops: &HashMap<&StructureBlock, bool>,
+    lh: &LoopHelper<'a>,
 ) -> Option<Reduction<'a>> {
-    if *loops.get(&node).unwrap() && preds.get(&node).unwrap().len() > 1 {
+    if *lh.loops.get(&node).unwrap() && preds.get(&node).unwrap().len() > 1 {
         let head_children = graph.neighbours(node);
         if head_children.len() == 2 {
             // while loop
             let next = &head_children[0];
             let tail = &head_children[1];
-            find_while(node, next, tail, graph)
+            find_while(node, next, tail, preds, lh, graph)
         } else if head_children.len() == 1 {
             // do-while loop
             let tail = &head_children[0];
             let tail_children = graph.neighbours(tail);
-            find_dowhile(node, tail, tail_children, graph)
+            find_dowhile(node, tail, tail_children, preds, lh, graph)
         } else {
             None
         }
@@ -428,10 +428,27 @@ fn reduce_loop<'a>(
     }
 }
 
+// in a loop tail should NOT have predecessors coming from OUTSIDE the loop
+// checking only the preds is not sufficient (check analysis::cfs::tests::nested_dowhile_sharing for
+// a counter-example)
+fn tail_preds_ok(
+    tail: &StructureBlock,
+    preds: &HashMap<&StructureBlock, HashSet<&StructureBlock>>,
+    loop_helper: &LoopHelper,
+) -> bool {
+    !preds
+        .get(tail)
+        .unwrap()
+        .iter()
+        .any(|pred| loop_helper.sccs.get(pred).unwrap() != loop_helper.sccs.get(tail).unwrap())
+}
+
 fn find_while<'a>(
     node: &'a StructureBlock,
     next: &'a StructureBlock,
     tail: &'a StructureBlock,
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
+    lh: &LoopHelper<'a>,
     graph: &'a DirectedGraph<StructureBlock>,
 ) -> Option<Reduction<'a>> {
     let mut next = next;
@@ -440,7 +457,7 @@ fn find_while<'a>(
         swap(&mut next, &mut tail);
     }
     let tail_children = graph.neighbours(&tail);
-    if tail_children.len() == 1 && &tail_children[0] == node {
+    if tail_children.len() == 1 && &tail_children[0] == node && tail_preds_ok(tail, preds, lh) {
         let block = Rc::new(NestedBlock::new(
             BlockType::While,
             vec![node.clone(), tail.clone()],
@@ -459,6 +476,8 @@ fn find_dowhile<'a>(
     node: &'a StructureBlock,
     tail: &'a StructureBlock,
     tail_children: &'a [StructureBlock],
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
+    lh: &LoopHelper<'a>,
     graph: &'a DirectedGraph<StructureBlock>,
 ) -> Option<Reduction<'a>> {
     if tail_children.len() == 2 {
@@ -479,22 +498,26 @@ fn find_dowhile<'a>(
             } else {
                 return None;
             }
-            let block = Rc::new(NestedBlock::new(
-                BlockType::DoWhile,
-                vec![node.clone(), tail.clone(), post_tail.clone()],
-            ));
-            Some(Reduction {
-                old: hashset![node, tail, post_tail],
-                new: StructureBlock::from(block),
-                next: Some(next),
-            })
+            if tail_preds_ok(tail, preds, lh) && tail_preds_ok(post_tail, preds, lh) {
+                let block = Rc::new(NestedBlock::new(
+                    BlockType::DoWhile,
+                    vec![node.clone(), tail.clone(), post_tail.clone()],
+                ));
+                Some(Reduction {
+                    old: hashset![node, tail, post_tail],
+                    new: StructureBlock::from(block),
+                    next: Some(next),
+                })
+            } else {
+                None
+            }
         } else {
             //type 1 or 2 (single or no node between head and tail)
             let mut next = &tail_children[0];
             if next == node {
                 next = &tail_children[1];
             }
-            if node != next && tail != next {
+            if node != next && tail != next && tail_preds_ok(tail, preds, lh) {
                 let block = Rc::new(NestedBlock::new(
                     BlockType::DoWhile,
                     vec![node.clone(), tail.clone()],
@@ -591,13 +614,26 @@ fn remap_nodes(
     }
 }
 
+struct LoopHelper<'a> {
+    loops: HashMap<&'a StructureBlock, bool>,
+    sccs: HashMap<&'a StructureBlock, usize>,
+}
+
+impl<'a> LoopHelper<'a> {
+    fn new(graph: &'a DirectedGraph<StructureBlock>) -> LoopHelper<'a> {
+        let sccs = graph.scc();
+        let loops = is_loop(&sccs);
+        LoopHelper { loops, sccs }
+    }
+}
+
 fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
     let nonat_cfg = remove_natural_loops(&cfg.scc(), &cfg.predecessors(), cfg.clone());
     let mut graph = deep_copy(&nonat_cfg);
     loop {
         let mut modified = false;
         let preds = graph.predecessors();
-        let loops = is_loop(&graph.scc());
+        let loop_helper = LoopHelper::new(&graph);
         for node in graph.dfs_postorder() {
             let reductions = [
                 reduce_self_loop,
@@ -609,7 +645,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
             ];
             let mut reduced = None;
             for reduction in &reductions {
-                reduced = (reduction)(node, &graph, &preds, &loops);
+                reduced = (reduction)(node, &graph, &preds, &loop_helper);
                 if reduced.is_some() {
                     break;
                 }
