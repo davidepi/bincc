@@ -22,11 +22,11 @@ const EXTERN_DOT_SINK: &str = "point";
 /// Color of the background in the saved CFG .dot file.
 const EXTERN_DOT_BG_COLOUR: &str = "azure";
 /// Color of the true edges in the saved CFG .dot file (conditional jumps).
-const EXTERN_DOT_TRUE_COLOUR: &'static str = "mediumspringgreen";
+const EXTERN_DOT_TRUE_COLOUR: &str = "forestgreen";
 /// Color of the false edges in the saved CFG .dot file (conditional jumps).
-const EXTERN_DOT_FALSE_COLOUR: &'static str = "crimson";
+const EXTERN_DOT_FALSE_COLOUR: &str = "crimson";
 /// Color of the unconditional jumps edges in the saved CFG .dot file.
-const EXTERN_DOT_JUMP_COLOUR: &'static str = "dodgerblue";
+const EXTERN_DOT_JUMP_COLOUR: &str = "dodgerblue";
 
 /// A Control Flow Graph.
 ///
@@ -227,9 +227,8 @@ impl CFG {
     pub fn to_dot(&self) -> String {
         let mut edges_string = Vec::new();
         let mut nodes_string = Vec::new();
-        let nodes_ids = self.node_id_map();
         for (node, children) in self.edges.iter() {
-            let node_id = nodes_ids.get(node).unwrap_or(&usize::MAX);
+            let node_id = node.first;
             let shape = if node.is_entry_point() || node.is_sink() {
                 format!(",shape=\"{}\"", EXTERN_DOT_SINK)
             } else if Some(node) == self.root.as_ref() {
@@ -239,14 +238,14 @@ impl CFG {
             };
             nodes_string.push(format!(
                 "{}[comment=\"({},{})\"{}];",
-                node_id, node.first, node.last, shape
+                node.first, node.first, node.last, shape
             ));
             match children.len() {
                 0 => {}
                 // 1 falls into the _ case
                 2 => {
-                    let dst_false = *nodes_ids.get(&children[0]).unwrap_or(&usize::MAX);
-                    let dst_true = *nodes_ids.get(&children[1]).unwrap_or(&usize::MAX);
+                    let dst_false = &children[0].first;
+                    let dst_true = &children[1].first;
                     edges_string.push(format!(
                         "{}->{}[color=\"{}\"];",
                         node_id, dst_false, EXTERN_DOT_FALSE_COLOUR
@@ -258,7 +257,7 @@ impl CFG {
                 }
                 _ => {
                     for child in children.iter() {
-                        let dst = *nodes_ids.get(child).unwrap_or(&usize::MAX);
+                        let dst = child.first;
                         edges_string.push(format!(
                             "{}->{}[color=\"{}\"];",
                             node_id, dst, EXTERN_DOT_JUMP_COLOUR
