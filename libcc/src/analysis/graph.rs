@@ -37,26 +37,38 @@ pub trait Graph {
 
     /// Visits the graph nodes in a breadth-first fashion.
     ///
-    /// Returns an iterator visiting every node reachable from [Graph::root()] using a
+    /// Returns an iterator visiting every node reachable from `start_from` using a
     /// breadth-first pre-order visit. All the nodes at the same depth are thus visited before
     /// moving to the next depth level.
+    /// The node `start_from` will be reported in the result **even if** it does not belongs to the
+    /// graph.
     ///
     /// In the default implementation this visit is iterative.
+    fn bfs_from<'a>(&'a self, start_from: &'a <Self as Graph>::Item) -> BfsIter<'a, Self>
+    where
+        Self: Sized,
+    {
+        let mut queue = VecDeque::with_capacity(self.len());
+        queue.push_back(start_from);
+        let mut buffer = VecDeque::new();
+        buffer.push_back(start_from);
+        BfsIter {
+            queue,
+            buffer,
+            marked: HashSet::with_capacity(self.len()),
+            graph: &self,
+        }
+    }
+
+    /// Visits the graph nodes in a breadth-first fashion. Starts from root.
+    ///
+    /// Internally calls [Graph::bfs_from], correctly handling the empty case.
     fn bfs(&self) -> BfsIter<'_, Self>
     where
         Self: Sized,
     {
         if let Some(root) = self.root() {
-            let mut queue = VecDeque::with_capacity(self.len());
-            queue.push_back(root);
-            let mut buffer = VecDeque::new();
-            buffer.push_back(root);
-            BfsIter {
-                queue,
-                buffer,
-                marked: HashSet::with_capacity(self.len()),
-                graph: &self,
-            }
+            self.bfs_from(root)
         } else {
             BfsIter {
                 queue: VecDeque::with_capacity(0),
@@ -69,22 +81,37 @@ pub trait Graph {
 
     /// Visits the graph nodes using a depth-first search in pre-order.
     ///
-    /// Returns an iterator visiting every node reachable from [Graph::root()] using a
+    /// Returns an iterator visiting every node reachable from `start_from` using a
     /// depth-first pre-order.
+    /// The node `start_from` will be reported in the result **even if** it does not belongs to the
+    /// graph.
     ///
     /// In the default implementation this visit is iterative.
+    fn dfs_preorder_from<'a>(
+        &'a self,
+        start_from: &'a <Self as Graph>::Item,
+    ) -> DfsPreIter<'a, Self>
+    where
+        Self: Sized,
+    {
+        let mut stack = Vec::with_capacity(self.len());
+        stack.push(start_from);
+        DfsPreIter {
+            stack,
+            marked: HashSet::with_capacity(self.len()),
+            graph: &self,
+        }
+    }
+
+    /// Visits the graph nodes in a depth-first search in preorder. Starts from root.
+    ///
+    /// Internally calls [Graph::dfs_preorder_from], correctly handling the empty case.
     fn dfs_preorder(&self) -> DfsPreIter<'_, Self>
     where
         Self: Sized,
     {
         if let Some(root) = self.root() {
-            let mut stack = Vec::with_capacity(self.len());
-            stack.push(root);
-            DfsPreIter {
-                stack,
-                marked: HashSet::with_capacity(self.len()),
-                graph: &self,
-            }
+            self.dfs_preorder_from(root)
         } else {
             DfsPreIter {
                 stack: Vec::with_capacity(0),
@@ -94,25 +121,40 @@ pub trait Graph {
         }
     }
 
-    /// Visits the graph nodes using a depth-first search in post-order.
+    /// Visits the graph nodes using a depth-first search in post-order. Starts from root.
     ///
-    /// Returns an iterator visiting every node reachable from [Graph::root()] using a
+    /// Returns an iterator visiting every node reachable from `start_from` using a
     /// depth-first post-order visit.
+    /// The node `start_from` will be reported in the result **even if** it does not belongs to the
+    /// graph.
     ///
     /// In the default implementation this visit is iterative.
+    fn dfs_postorder_from<'a>(
+        &'a self,
+        start_from: &'a <Self as Graph>::Item,
+    ) -> DfsPostIter<'a, Self>
+    where
+        Self: Sized,
+    {
+        let mut stack = Vec::with_capacity(self.len());
+        stack.push(start_from);
+        DfsPostIter {
+            stack,
+            buffer: VecDeque::new(),
+            marked: HashSet::with_capacity(self.len()),
+            graph: &self,
+        }
+    }
+
+    /// Visits the graph nodes using a depth-first search in post-order. Starts from root.
+    ///
+    /// Internally calls [Graph::dfs_postorder_from], correctly handling the empty case.
     fn dfs_postorder(&self) -> DfsPostIter<'_, Self>
     where
         Self: Sized,
     {
         if let Some(root) = self.root() {
-            let mut stack = Vec::with_capacity(self.len());
-            stack.push(root);
-            DfsPostIter {
-                stack,
-                buffer: VecDeque::new(),
-                marked: HashSet::with_capacity(self.len()),
-                graph: &self,
-            }
+            self.dfs_postorder_from(root)
         } else {
             DfsPostIter {
                 stack: Vec::with_capacity(0),
@@ -444,6 +486,15 @@ mod tests {
     }
 
     #[test]
+    fn bfs_from() {
+        let graph = sample();
+        let expected = vec![2, 3, 4, 5, 6];
+        for (index, val) in graph.bfs_from(&2).enumerate() {
+            assert_eq!(*val, expected[index]);
+        }
+    }
+
+    #[test]
     fn bfs() {
         let graph = sample();
         let expected = vec![0, 1, 2, 6, 3, 4, 5];
@@ -460,6 +511,15 @@ mod tests {
     }
 
     #[test]
+    fn dfs_preorder_from() {
+        let graph = sample();
+        let expected = vec![2, 3, 5, 6, 4];
+        for (index, val) in graph.dfs_preorder_from(&2).enumerate() {
+            assert_eq!(*val, expected[index]);
+        }
+    }
+
+    #[test]
     fn dfs_preorder() {
         let graph = sample();
         let expected = vec![0, 1, 6, 2, 3, 5, 4];
@@ -473,6 +533,15 @@ mod tests {
         let graph: DirectedGraph<u8> = DirectedGraph::default();
         let order = graph.dfs_postorder();
         assert_eq!(order.count(), 0);
+    }
+
+    #[test]
+    fn dfs_postorder_from() {
+        let graph = sample();
+        let expected = vec![6, 5, 3, 4, 2];
+        for (index, val) in graph.dfs_postorder_from(&2).enumerate() {
+            assert_eq!(*val, expected[index]);
+        }
     }
 
     #[test]
