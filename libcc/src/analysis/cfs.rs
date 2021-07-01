@@ -536,6 +536,49 @@ fn find_dowhile<'a>(
     }
 }
 
+fn reduce_improper_interval<'a>(
+    node: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+    _: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
+    _: &LoopHelper<'a>,
+) -> Option<Reduction<'a>> {
+    let children = graph.neighbours(node);
+    if children.len() == 2 {
+        let left = &children[0];
+        let right = &children[1];
+        let children_left = graph.neighbours(left);
+        let children_right = graph.neighbours(right);
+        // should be 4 children in total, but one edge is removed during the nat loop resolution
+        if children_left.len() + children_right.len() == 3
+            && children_left.contains(right)
+            && children_right.contains(left)
+        {
+            let next_set = children_left
+                .iter()
+                .chain(children_right.iter())
+                .filter(|&x| x != left && x != right)
+                .collect::<HashSet<_>>();
+            if next_set.len() == 1 {
+                let block = Rc::new(NestedBlock::new(
+                    BlockType::ImproperInterval,
+                    vec![node.clone(), left.clone(), right.clone()],
+                ));
+                Some(Reduction {
+                    old: hashset![node, left, right],
+                    new: StructureBlock::from(block),
+                    next: next_set.into_iter().next(),
+                })
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 fn construct_and_flatten_sequence<'a>(
     node: &'a StructureBlock,
     next: &'a StructureBlock,
@@ -642,6 +685,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
                 reduce_ifelse,
                 reduce_sequence,
                 reduce_switch,
+                reduce_improper_interval,
             ];
             let mut reduced = None;
             for reduction in &reductions {
@@ -1498,7 +1542,12 @@ mod tests {
     fn improper_interval() {
         let cfg = create_cfg! { 0 => [1, 2], 1 => [2, 3], 2 => [1 ,3], 3 => [] };
         let cfs = CFS::new(&cfg);
-        assert!(cfs.get_tree().is_none());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
+        assert_eq!(
+            sequence.children()[0].block_type(),
+            BlockType::ImproperInterval
+        );
     }
 
     #[test]

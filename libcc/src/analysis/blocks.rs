@@ -14,6 +14,7 @@ pub enum BlockType {
     While,
     DoWhile,
     Switch,
+    ImproperInterval,
 }
 
 impl Display for BlockType {
@@ -27,6 +28,7 @@ impl Display for BlockType {
             BlockType::While => write!(f, "While"),
             BlockType::DoWhile => write!(f, "Do-While"),
             BlockType::Switch => write!(f, "Switch"),
+            BlockType::ImproperInterval => write!(f, "Improper Interval"),
         }
     }
 }
@@ -140,6 +142,7 @@ impl StructureBlock {
             BlockType::While => "While",
             BlockType::DoWhile => "Do-While",
             BlockType::Switch => "Switch",
+            BlockType::ImproperInterval => "Improper Interval",
         }
     }
 
