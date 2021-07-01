@@ -163,6 +163,79 @@ fn reduce_self_loop<'a>(
     }
 }
 
+fn reduce_switch<'a>(
+    node: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
+    _: &HashMap<&StructureBlock, bool>,
+) -> Option<Reduction<'a>> {
+    let children = graph.neighbours(node);
+    if children.len() >= 3 {
+        let mut components = HashSet::new();
+        components.insert(node);
+        let mut oldlen = 0;
+        // iteratively add nodes (having all preds inside the switch) until the switch is complete
+        while components.len() != oldlen {
+            oldlen = components.len();
+            let neighbours = components
+                .iter()
+                .flat_map(|&x| graph.neighbours(x))
+                .collect::<HashSet<_>>();
+            for child in neighbours {
+                if let Some(cur_preds) = preds.get(child) {
+                    if !cur_preds.iter().any(|&x| !components.contains(x)) {
+                        components.insert(child);
+                    }
+                }
+            }
+        }
+        // now we need to find the next node.
+        // first find the nodes with no children considering only the switch components
+        let no_exit = components
+            .iter()
+            .filter(|&x| !graph.neighbours(x).iter().any(|y| components.contains(y)))
+            .collect::<Vec<_>>();
+        let next;
+        if no_exit.len() == 1 {
+            // the exit is part of the components set
+            let exit = **no_exit.last().unwrap();
+            components.remove(exit);
+            next = Some(exit);
+            let block = Rc::new(NestedBlock::new(
+                BlockType::Switch,
+                components.iter().copied().cloned().collect(),
+            ));
+            Some(Reduction {
+                old: components,
+                new: StructureBlock::from(block),
+                next,
+            })
+        } else {
+            let exit_set = no_exit
+                .into_iter()
+                .flat_map(|&x| graph.neighbours(x))
+                .collect::<HashSet<_>>();
+            if exit_set.len() == 1 {
+                // all the nodes point to the same exit
+                next = Some(exit_set.into_iter().next().unwrap());
+                let block = Rc::new(NestedBlock::new(
+                    BlockType::Switch,
+                    components.iter().copied().cloned().collect(),
+                ));
+                Some(Reduction {
+                    old: components,
+                    new: StructureBlock::from(block),
+                    next,
+                })
+            } else {
+                None
+            }
+        }
+    } else {
+        None
+    }
+}
+
 fn reduce_sequence<'a>(
     node: &'a StructureBlock,
     graph: &'a DirectedGraph<StructureBlock>,
@@ -546,6 +619,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
                 reduce_ifthen,
                 reduce_ifelse,
                 reduce_sequence,
+                reduce_switch,
             ];
             let mut reduced = None;
             for reduction in &reductions {
@@ -881,6 +955,124 @@ mod tests {
         assert_eq!(children[0].block_type(), BlockType::Basic);
         assert_eq!(children[1].block_type(), BlockType::SelfLooping);
         assert_eq!(children[2].block_type(), BlockType::Basic);
+    }
+
+    #[test]
+    fn reduce_switch() {
+        let cfg = create_cfg! {
+            0 => [1],
+            1 => [2, 3, 4, 5, 6],
+            2 => [7],
+            3 => [7],
+            4 => [7],
+            5 => [7],
+            6 => [7],
+            7 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 3);
+        let children = sequence.children();
+        assert_eq!(children[1].block_type(), BlockType::Switch);
+        assert_eq!(children[1].len(), 6);
+    }
+
+    #[test]
+    fn switch_fallthrough_single() {
+        let cfg = create_cfg! { 0 => [1, 2, 3], 1 => [2], 2 => [4], 3 => [4], 4 => [] };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_some());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        let children = sequence.children();
+        assert_eq!(children[0].block_type(), BlockType::Switch);
+    }
+
+    #[test]
+    fn switch_fallthrough_multiple() {
+        let cfg = create_cfg! { 0 => [1, 2, 3], 1 => [2, 3], 2 => [4], 3 => [4], 4 => [] };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_some());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        let children = sequence.children();
+        assert_eq!(children[0].block_type(), BlockType::Switch);
+    }
+
+    #[test]
+    fn switch_indirect() {
+        let cfg = create_cfg! {
+            0 => [1, 2, 3, 4],
+            1 => [2],
+            2 => [3, 4],
+            3 => [5],
+            4 => [5],
+            5 => []
+        };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_some());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        let children = sequence.children();
+        assert_eq!(children[0].block_type(), BlockType::Switch);
+    }
+
+    #[test]
+    fn switch_exit_in_components() {
+        let cfg = create_cfg! {
+            0 => [1, 2, 4, 5],
+            1 => [2],
+            2 => [4, 3],
+            3 => [4, 5],
+            4 => [6],
+            5 => [6],
+            6 => []
+        };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_some());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        let children = sequence.children();
+        assert_eq!(children[0].block_type(), BlockType::Switch);
+    }
+
+    #[test]
+    fn switch_exit_not_in_components() {
+        let cfg = create_cfg! {
+            0 => [1, 7],
+            1 => [2, 3, 5, 6],
+            2 => [3],
+            3 => [5, 4],
+            4 => [5, 6],
+            5 => [8],
+            6 => [8],
+            7 => [8],
+            8 => []
+        };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_some());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.len(), 2);
+        let children = sequence.children();
+        assert_eq!(children[0].block_type(), BlockType::IfThenElse);
+        assert_eq!(children[0].children()[1].block_type(), BlockType::Switch);
+    }
+
+    #[test]
+    fn switch_exit_impossible() {
+        let cfg = create_cfg! {
+            0 => [1, 7],
+            1 => [2, 3, 5, 6],
+            2 => [3],
+            3 => [5, 4],
+            4 => [5, 6],
+            5 => [7],
+            6 => [8],
+            7 => [8],
+            8 => []
+        };
+        let cfs = CFS::new(&cfg);
+        assert!(cfs.get_tree().is_none())
     }
 
     #[test]

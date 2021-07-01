@@ -13,6 +13,7 @@ pub enum BlockType {
     IfThenElse,
     While,
     DoWhile,
+    Switch,
 }
 
 impl Display for BlockType {
@@ -25,6 +26,7 @@ impl Display for BlockType {
             BlockType::IfThenElse => write!(f, "If-Then-Else"),
             BlockType::While => write!(f, "While"),
             BlockType::DoWhile => write!(f, "Do-While"),
+            BlockType::Switch => write!(f, "Switch"),
         }
     }
 }
@@ -137,6 +139,7 @@ impl StructureBlock {
             BlockType::IfThenElse => "If-Then-Else",
             BlockType::While => "While",
             BlockType::DoWhile => "Do-While",
+            BlockType::Switch => "Switch",
         }
     }
 
