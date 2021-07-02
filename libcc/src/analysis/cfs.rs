@@ -579,6 +579,117 @@ fn reduce_improper_interval<'a>(
     }
 }
 
+fn reduce_proper_interval<'a>(
+    node: &'a StructureBlock,
+    graph: &'a DirectedGraph<StructureBlock>,
+    preds: &HashMap<&'a StructureBlock, HashSet<&'a StructureBlock>>,
+    _: &LoopHelper<'a>,
+) -> Option<Reduction<'a>> {
+    let children = graph.neighbours(node);
+    if children.len() == 2 {
+        let mut content = hashset![node, &children[0], &children[1]];
+        let mut left = &children[0];
+        let mut right = &children[1];
+        let mut cross_exists = false; // at least one cross path should exist
+        let next;
+        loop {
+            let left_children = graph.neighbours(left);
+            let right_children = graph.neighbours(right);
+            // first remove the current left or right
+            let next_left = left_children
+                .iter()
+                .filter(|&x| x != right)
+                .collect::<HashSet<_>>();
+            let next_right = right_children
+                .iter()
+                .filter(|&x| x != left)
+                .collect::<HashSet<_>>();
+            if next_left.len() != left_children.len() || next_right.len() != right_children.len() {
+                // record the removal (this is important)
+                cross_exists = true;
+            }
+            if next_left.is_empty() || next_right.is_empty() {
+                return None;
+            }
+            let total_next = next_left.len() + next_right.len();
+            let children_union = next_left
+                .union(&next_right)
+                .copied()
+                .collect::<HashSet<_>>();
+            // if there is a backedge return immediately
+            if children_union.intersection(&content).next().is_some() {
+                return None;
+            }
+            // if the union of the children is exactly 1, that's the exit point
+            match children_union.len() {
+                1 => {
+                    next = children_union.into_iter().next();
+                    break;
+                }
+                2 => {}
+                _ => return None,
+            }
+            // else, continue iterating
+            match total_next {
+                2 => {
+                    left = next_left.into_iter().next().unwrap();
+                    right = next_right.into_iter().next().unwrap();
+                }
+                3 => {
+                    cross_exists = true;
+                    if next_left.len() > next_right.len() {
+                        right = next_right.into_iter().next().unwrap();
+                        left = next_left.into_iter().find(|&x| x != right).unwrap();
+                    } else {
+                        left = next_left.into_iter().next().unwrap();
+                        right = next_right.into_iter().find(|&x| x != left).unwrap();
+                    }
+                }
+                4 => {
+                    cross_exists = true;
+                    let mut iter = children_union.iter().copied();
+                    left = iter.next().unwrap();
+                    right = iter.next().unwrap();
+                    if left.starting_offset() > right.starting_offset() {
+                        // in this case choosing left and right may be nondeterministic. So left
+                        // is always the one with the lowest offset.
+                        swap(&mut left, &mut right)
+                    }
+                }
+                _ => return None,
+            }
+            content.insert(left);
+            content.insert(right);
+            // check preds, everything should come from nodes either in left or right path
+            let preds_not_ok = preds
+                .get(left)
+                .unwrap()
+                .iter()
+                .chain(preds.get(right).unwrap().iter())
+                .any(|&x| !content.contains(x));
+            if preds_not_ok {
+                return None;
+            }
+        }
+        if cross_exists && next.is_some() {
+            // cross exits checks avoid incorrectly resolving a if-else as proper interval
+            let block = Rc::new(NestedBlock::new(
+                BlockType::ProperInterval,
+                content.iter().copied().cloned().collect(),
+            ));
+            Some(Reduction {
+                old: content,
+                new: StructureBlock::from(block),
+                next,
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 fn construct_and_flatten_sequence<'a>(
     node: &'a StructureBlock,
     next: &'a StructureBlock,
@@ -685,6 +796,7 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
                 reduce_ifelse,
                 reduce_sequence,
                 reduce_switch,
+                reduce_proper_interval,
                 reduce_improper_interval,
             ];
             let mut reduced = None;
@@ -1523,16 +1635,86 @@ mod tests {
     }
 
     #[test]
-    fn proper_interval() {
-        let cfg = create_cfg! { 0 => [1, 2], 1 => [3], 2 => [1 ,3], 3 => [] };
+    fn proper_interval_mini() {
+        let cfg = create_cfg! { 0 => [1, 2], 1 => [2, 3], 2 => [3], 3 => [] };
         let cfs = CFS::new(&cfg);
-        assert!(cfs.get_tree().is_none());
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
+        assert_eq!(
+            sequence.children()[0].block_type(),
+            BlockType::ProperInterval
+        );
     }
 
     #[test]
-    fn proper_interval_recursive() {
+    fn proper_interval_left() {
         let cfg = create_cfg! {
-          0 => [1, 2], 1 => [3], 2 => [3, 4], 3 => [5], 4 => [5], 5 => []
+            0 => [1, 2], 1 => [3, 4], 2 => [4], 3 => [5], 4 => [5], 5 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
+        assert_eq!(
+            sequence.children()[0].block_type(),
+            BlockType::ProperInterval
+        );
+    }
+
+    #[test]
+    fn proper_interval_right() {
+        let cfg = create_cfg! {
+            0 => [1, 2], 1 => [3], 2 => [3, 4], 3 => [5], 4 => [5], 5 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
+        assert_eq!(
+            sequence.children()[0].block_type(),
+            BlockType::ProperInterval
+        );
+    }
+
+    #[test]
+    fn proper_interval_cross() {
+        let cfg = create_cfg! {
+            0 => [1, 2], 1 => [3, 4], 2 => [3, 4], 3 => [5], 4 => [5], 5 => []
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
+        assert_eq!(
+            sequence.children()[0].block_type(),
+            BlockType::ProperInterval
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn proper_interval_multilevel() {
+        // currently not supported, not sure if it is a good idea to do so
+        let cfg = create_cfg! {
+            0 => [1, 2],
+            1 => [3, 6],
+            2 => [3, 4],
+            3 => [5],
+            4 => [5, 6],
+            5 => [7],
+            6 => [7],
+            7 => [],
+        };
+        let cfs = CFS::new(&cfg);
+        let sequence = cfs.get_tree().unwrap();
+        assert_eq!(sequence.block_type(), BlockType::Sequence);
+        assert_eq!(
+            sequence.children()[0].block_type(),
+            BlockType::ProperInterval
+        );
+    }
+
+    #[test]
+    fn proper_interval_wrong() {
+        let cfg = create_cfg! {
+            0 => [1, 2], 1 => [3, 4], 2 => [4, 5], 3 => [6], 4 => [6], 5 => [6], 6 => []
         };
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_none());
@@ -1556,7 +1738,7 @@ mod tests {
         // - loop with no evident entry point
         // - sequence extension
         let cfg = create_cfg! {
-          0 => [1, 2], 1 => [2], 2 => [3], 3 => [4, 6], 4 => [5, 6], 5 => [0], 6 => []
+            0 => [1, 2], 1 => [2], 2 => [3], 3 => [4, 6], 4 => [5, 6], 5 => [0], 6 => []
         };
         let cfs = CFS::new(&cfg.add_entry_point());
         assert!(cfs.get_tree().is_some());
