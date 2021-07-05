@@ -782,7 +782,9 @@ impl<'a> LoopHelper<'a> {
 }
 
 fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
-    let nonat_cfg = remove_natural_loops(&cfg.scc(), &cfg.predecessors(), cfg.clone());
+    let nonat_cfg = remove_natural_loops(&cfg.scc(), &cfg.predecessors(), cfg.clone())
+        .add_sink()
+        .add_entry_point();
     let mut graph = deep_copy(&nonat_cfg);
     loop {
         let mut modified = false;
