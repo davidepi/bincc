@@ -36,6 +36,10 @@ impl CFS {
         }
     }
 
+    pub fn get_graph(&self) -> &DirectedGraph<StructureBlock> {
+        &self.tree
+    }
+
     pub fn get_tree(&self) -> Option<StructureBlock> {
         if self.tree.len() == 1 {
             Some(self.tree.root.clone().unwrap())
@@ -835,6 +839,13 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
             break;
         }
     }
+    // throw away unreachable nodes
+    let visit = graph.bfs().cloned().collect::<HashSet<_>>();
+    graph.adjacency = graph
+        .adjacency
+        .into_iter()
+        .filter(|(node, _)| visit.contains(node))
+        .collect();
     graph
 }
 

@@ -1,4 +1,4 @@
-use bcc::analysis::{CFG, CFS};
+use bcc::analysis::{Graph, CFG, CFS};
 use bcc::disasm::radare2::R2Disasm;
 use bcc::disasm::Disassembler;
 use clap::{App, Arg};
@@ -228,7 +228,13 @@ fn calculate_comparison(input: &str, _: Option<&str>, tid: usize) {
                 duration
             );
         } else {
-            log::debug!("[{}] CFS failed for {}", tid, input);
+            log::debug!(
+                "[{}] CFS failed for {}. Reduced from {} nodes to {} nodes",
+                tid,
+                input,
+                cfg.len(),
+                cfs.get_graph().len()
+            );
         }
     } else {
         log::error!("[{}] Failed to read CFG {}", tid, input);
