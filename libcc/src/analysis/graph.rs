@@ -56,7 +56,7 @@ pub trait Graph {
             queue,
             buffer,
             marked: HashSet::with_capacity(self.len()),
-            graph: &self,
+            graph: self,
         }
     }
 
@@ -74,7 +74,7 @@ pub trait Graph {
                 queue: VecDeque::with_capacity(0),
                 buffer: VecDeque::with_capacity(0),
                 marked: HashSet::with_capacity(0),
-                graph: &self,
+                graph: self,
             }
         }
     }
@@ -99,7 +99,7 @@ pub trait Graph {
         DfsPreIter {
             stack,
             marked: HashSet::with_capacity(self.len()),
-            graph: &self,
+            graph: self,
         }
     }
 
@@ -116,7 +116,7 @@ pub trait Graph {
             DfsPreIter {
                 stack: Vec::with_capacity(0),
                 marked: HashSet::with_capacity(0),
-                graph: &self,
+                graph: self,
             }
         }
     }
@@ -142,7 +142,7 @@ pub trait Graph {
             stack,
             buffer: VecDeque::new(),
             marked: HashSet::with_capacity(self.len()),
-            graph: &self,
+            graph: self,
         }
     }
 
@@ -160,7 +160,7 @@ pub trait Graph {
                 stack: Vec::with_capacity(0),
                 buffer: VecDeque::with_capacity(0),
                 marked: HashSet::with_capacity(0),
-                graph: &self,
+                graph: self,
             }
         }
     }

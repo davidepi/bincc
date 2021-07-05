@@ -453,10 +453,10 @@ fn find_while<'a>(
 ) -> Option<Reduction<'a>> {
     let mut next = next;
     let mut tail = tail;
-    if graph.neighbours(&next).contains(&node) {
+    if graph.neighbours(next).contains(node) {
         swap(&mut next, &mut tail);
     }
-    let tail_children = graph.neighbours(&tail);
+    let tail_children = graph.neighbours(tail);
     if tail_children.len() == 1 && &tail_children[0] == node && tail_preds_ok(tail, preds, lh) {
         let block = Rc::new(NestedBlock::new(
             BlockType::While,
@@ -481,7 +481,7 @@ fn find_dowhile<'a>(
     graph: &'a DirectedGraph<StructureBlock>,
 ) -> Option<Reduction<'a>> {
     if tail_children.len() == 2 {
-        if !tail_children.contains(&node) {
+        if !tail_children.contains(node) {
             //type 3 or 4 (single node between tail and head) or no loop
             let post_tail_children = [
                 graph.neighbours(&tail_children[0]),
