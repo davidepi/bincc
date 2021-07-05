@@ -14,6 +14,12 @@ use std::mem::swap;
 use std::path::Path;
 use std::rc::Rc;
 
+// how many times the reduction may NOT decrease the amount of nodes before the CFS is
+// terminated.
+// This value is high due to the existence of self-loop reductions that are legit and does not
+// decrease the node amount.
+const BUILD_TOLERANCE: usize = 32;
+
 #[derive(Clone)]
 pub struct CFS {
     cfg: CFG,
@@ -785,8 +791,13 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
     let nonat_cfg = remove_natural_loops(&cfg.scc(), &cfg.predecessors(), cfg.clone())
         .add_sink()
         .add_entry_point();
+    let mut current_tolerance = 0;
     let mut graph = deep_copy(&nonat_cfg);
+    let mut prev_len = nonat_cfg.len();
     loop {
+        if graph.len() == 1 {
+            break;
+        }
         let mut modified = false;
         let preds = graph.predecessors();
         let loop_helper = LoopHelper::new(&graph);
@@ -810,11 +821,17 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
             }
             if let Some(reduction) = reduced {
                 graph = remap_nodes(reduction, &graph);
+                if graph.len() < prev_len {
+                    current_tolerance = 0;
+                    prev_len = graph.len();
+                } else {
+                    current_tolerance += 1;
+                }
                 modified = true;
                 break;
             }
         }
-        if !modified {
+        if !modified || current_tolerance >= BUILD_TOLERANCE {
             break;
         }
     }
