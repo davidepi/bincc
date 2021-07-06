@@ -70,6 +70,21 @@ impl Disassembler for R2Disasm {
         }
     }
 
+    fn analyse_functions(&mut self) {
+        let mut pipe = self.pipe.borrow_mut();
+        match pipe.cmd("aa") {
+            Ok(_) => match pipe.cmd("aac") {
+                Ok(_) => {}
+                Err(error) => {
+                    log::error!("{}", error);
+                }
+            },
+            Err(error) => {
+                log::error!("{}", error);
+            }
+        }
+    }
+
     fn get_arch(&self) -> Option<Box<dyn Architecture>> {
         let res = self.pipe.borrow_mut().cmdj("ij");
         match res {

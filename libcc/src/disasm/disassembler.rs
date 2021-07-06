@@ -29,6 +29,14 @@ pub trait Disassembler {
     /// Performs analysis on the underlying binary.
     fn analyse(&mut self);
 
+    /// Performs analysis on the function bounds only.
+    ///
+    /// The default implementation calls [Disassembler::analyse] thus performing a full-binary
+    /// analysis.
+    fn analyse_functions(&mut self) {
+        self.analyse();
+    }
+
     /// Returns the architecture of a specific file.
     ///
     /// This operation *DOES NOT* require to run [Disassembler::analyse] first.

@@ -184,7 +184,7 @@ fn extract_cfg_to_dot(input: &str, output: Option<&str>, tid: usize) {
     };
     log::trace!("[{}] starting disassembling", tid);
     let start_t = Instant::now();
-    disassembler.analyse();
+    disassembler.analyse_functions();
     let end_t = Instant::now();
     log::trace!("[{}] finished disassembling", tid);
     log::info!(
