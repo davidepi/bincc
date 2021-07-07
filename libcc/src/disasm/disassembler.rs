@@ -13,7 +13,7 @@ pub struct BareCFG {
     pub root: Option<u64>,
     /// Vector of basic blocks. Each tuple contains a basic block in the form:
     /// - offset of the first instruction.
-    /// - offset of the last instruction.
+    /// - length of the basic block.
     pub blocks: Vec<(u64, u64)>,
     /// Vector of CFG edges. Each tuple contains an edge in the form:
     /// - offset of the source basic block.

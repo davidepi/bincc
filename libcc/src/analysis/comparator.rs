@@ -119,11 +119,10 @@ fn remove_overlapping(mut clone_list: Vec<ClonePair>) -> Vec<ClonePair> {
         let mut keep = Vec::with_capacity(clone_list.len());
         while let Some(compare) = clone_list.pop() {
             if !removed.contains(&compare) {
+                // FIXME: This is wrong now that the ending offset has been removed
                 if current.depth() != compare.depth()
-                    && current.a.starting_offset() <= compare.a.starting_offset()
-                    && current.b.starting_offset() <= compare.b.starting_offset()
-                    && current.a.ending_offset() >= compare.a.ending_offset()
-                    && current.b.ending_offset() >= compare.b.ending_offset()
+                    && current.a.offset() <= compare.a.offset()
+                    && current.b.offset() <= compare.b.offset()
                 {
                     // not same depth (otherwise I remove myself),
                     // and one is contained inside the other one
@@ -182,7 +181,7 @@ mod tests {
             Statement::new(0x1, "xor eax, eax"),
             Statement::new(0x2, "jmp 0x1"),
         ];
-        let cfg = CFG::new(&stmts, &ArchX86::new_amd64()).add_sink();
+        let cfg = CFG::new(&stmts, 0x3, &ArchX86::new_amd64()).add_sink();
         let cfs = CFS::new(&cfg);
         assert!(cfs.get_tree().is_none());
         let mut diff = CFSComparator::new(5);
@@ -193,7 +192,7 @@ mod tests {
     #[test]
     fn cloned_full() {
         let stmts = create_function();
-        let cfg = CFG::new(&stmts, &ArchX86::new_amd64()).add_sink();
+        let cfg = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs = CFS::new(&cfg);
         let mut diff = CFSComparator::new(5);
         let first = diff.insert(&cfs, "first");
@@ -204,8 +203,7 @@ mod tests {
         let s = second.unwrap();
         assert_eq!(s.len(), 1);
         let pair = s.last().unwrap();
-        assert_eq!(pair.first_tree().starting_offset(), 0);
-        assert_eq!(pair.first_tree().ending_offset(), SINK_ADDR);
+        assert_eq!(pair.first_tree().offset(), 0);
         assert_eq!(s[0].first_name(), "first");
         assert_eq!(s[0].second_name(), "other");
     }
@@ -213,7 +211,7 @@ mod tests {
     #[test]
     fn cloned_partial() {
         let mut stmts = create_function();
-        let cfg0 = CFG::new(&stmts, &ArchX86::new_amd64()).add_sink();
+        let cfg0 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs0 = CFS::new(&cfg0);
         let mut diff = CFSComparator::new(2);
         let first = diff.insert(&cfs0, "first");
@@ -225,7 +223,7 @@ mod tests {
         stmts[10] = Statement::new(0x28, "nop");
         stmts[11] = Statement::new(0x2C, "nop");
         stmts[12] = Statement::new(0x30, "nop");
-        let cfg1 = CFG::new(&stmts, &ArchX86::new_amd64()).add_sink();
+        let cfg1 = CFG::new(&stmts, 0x34, &ArchX86::new_amd64()).add_sink();
         let cfs1 = CFS::new(&cfg1);
         let second = diff.insert(&cfs1, "second");
         assert!(second.is_some());

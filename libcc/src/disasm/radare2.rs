@@ -454,7 +454,7 @@ mod tests {
         let cfg = cfg.unwrap();
         let expected = BareCFG {
             root: Some(0x1000),
-            blocks: vec![(0x1000, 0x1012), (0x1014, 0x1014), (0x1016, 0x101A)],
+            blocks: vec![(0x1000, 20), (0x1014, 2), (0x1016, 5)],
             edges: vec![(0x1000, 0x1016), (0x1000, 0x1014), (0x1014, 0x1016)],
         };
         assert_eq!(cfg, expected);

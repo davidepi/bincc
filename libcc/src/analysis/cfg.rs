@@ -52,9 +52,9 @@ pub struct CFG {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct BasicBlock {
     /// Offset, in the original code, of the **first** instruction belonging to this basic block.
-    pub first: u64,
-    /// Offset, in the original code, of the **last** instruction belonging to this basic block.
-    pub last: u64,
+    pub offset: u64,
+    /// Length of the basic block in bytes.
+    pub length: u64,
 }
 
 impl BasicBlock {
@@ -62,7 +62,7 @@ impl BasicBlock {
     ///
     /// Sink blocks are added by the [CFG::add_sink()] method.
     pub fn is_sink(&self) -> bool {
-        self.first == self.last && self.first == SINK_ADDR
+        self.length == 0 && self.offset == SINK_ADDR
     }
 
     /// Returns true if the current block is an artificially added entry point for a CFG.
@@ -70,22 +70,22 @@ impl BasicBlock {
     /// **NOTE:** The original entry point **WILL NOT** return true with this method; this method
     /// applies only to the node added with the [CFG::add_entry_point()] method.
     pub fn is_entry_point(&self) -> bool {
-        self.first == self.last && self.first == ENTRY_ADDR
+        self.length == 0 && self.offset == ENTRY_ADDR
     }
 
     /// Creates a new sink block.
     fn new_sink() -> BasicBlock {
         BasicBlock {
-            first: SINK_ADDR,
-            last: SINK_ADDR,
+            offset: SINK_ADDR,
+            length: 0,
         }
     }
 
     /// Creates a new artificial entry point.
     fn new_entry_point() -> BasicBlock {
         BasicBlock {
-            first: ENTRY_ADDR,
-            last: ENTRY_ADDR,
+            offset: ENTRY_ADDR,
+            length: 0,
         }
     }
 }
@@ -103,7 +103,15 @@ impl From<BareCFG> for CFG {
             .blocks
             .iter()
             .cloned()
-            .map(|(first, last)| (first, Rc::new(BasicBlock { first, last })))
+            .map(|(first, length)| {
+                (
+                    first,
+                    Rc::new(BasicBlock {
+                        offset: first,
+                        length,
+                    }),
+                )
+            })
             .collect::<HashMap<_, _>>();
         let mut marked = HashSet::with_capacity(bbs.len());
         let mut edges = HashMap::new();
@@ -130,7 +138,7 @@ impl From<BareCFG> for CFG {
         let mut root = bbs
             .iter()
             .map(|(_, bb)| bb)
-            .find(|&bb| bb.first == root_addr)
+            .find(|&bb| bb.offset == root_addr)
             .cloned();
         if root.is_none() && !bbs.is_empty() {
             // if the root written in the BareCFG does not exists (weird), pick the lowest offset
@@ -143,8 +151,12 @@ impl From<BareCFG> for CFG {
 impl CFG {
     /// Creates a new CFG from a list of statements.
     ///
-    /// Given a list of statements and a source architectures, builds the CFG for that list.
+    /// Given a list of statements, the function end offset and a source architectures, builds the
+    /// CFG for that list.
     /// The list of statements is presented as slice.
+    ///
+    /// The function end offset is needed to correctly calculate the last basic block length. Other
+    /// than that, any number can be passed.
     ///
     /// The newly returned CFG will not contain a sink and will contain only reachable nodes
     /// (thus eliminating indirect jumps).
@@ -164,12 +176,12 @@ impl CFG {
     ///     Statement::new(0x4A, "ret"),
     /// ];
     /// let arch = ArchX86::new_amd64();
-    /// let cfg = CFG::new(&stmts, &arch);
+    /// let cfg = CFG::new(&stmts, 0x4B, &arch);
     ///
     /// assert_eq!(cfg.len(), 4);
     /// ```
-    pub fn new(stmts: &[Statement], arch: &dyn Architecture) -> CFG {
-        CFG::from(to_bare_cfg(stmts, arch))
+    pub fn new(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> CFG {
+        CFG::from(to_bare_cfg(stmts, fn_end, arch))
     }
 
     /// Returns the next basic block.
@@ -228,7 +240,7 @@ impl CFG {
         let mut edges_string = Vec::new();
         let mut nodes_string = Vec::new();
         for (node, children) in self.edges.iter() {
-            let node_id = node.first;
+            let node_id = node.offset;
             let shape = if node.is_entry_point() || node.is_sink() {
                 format!(",shape=\"{}\"", EXTERN_DOT_SINK)
             } else if Some(node) == self.root.as_ref() {
@@ -238,14 +250,14 @@ impl CFG {
             };
             nodes_string.push(format!(
                 "{}[comment=\"({},{})\"{}];",
-                node.first, node.first, node.last, shape
+                node.offset, node.offset, node.length, shape
             ));
             match children.len() {
                 0 => {}
                 // 1 falls into the _ case
                 2 => {
-                    let dst_false = &children[0].first;
-                    let dst_true = &children[1].first;
+                    let dst_false = &children[0].offset;
+                    let dst_true = &children[1].offset;
                     edges_string.push(format!(
                         "{}->{}[color=\"{}\"];",
                         node_id, dst_false, EXTERN_DOT_FALSE_COLOUR
@@ -257,7 +269,7 @@ impl CFG {
                 }
                 _ => {
                     for child in children.iter() {
-                        let dst = child.first;
+                        let dst = child.offset;
                         edges_string.push(format!(
                             "{}->{}[color=\"{}\"];",
                             node_id, dst, EXTERN_DOT_JUMP_COLOUR
@@ -301,9 +313,9 @@ impl CFG {
             while let Some(line) = lines.pop() {
                 if let Some(cap) = node_re.captures(line) {
                     let id = cap.get(1).unwrap().as_str().parse::<usize>()?;
-                    let first = cap.get(2).unwrap().as_str().parse::<u64>()?;
-                    let last = cap.get(3).unwrap().as_str().parse::<u64>()?;
-                    let node = Rc::new(BasicBlock { first, last });
+                    let offset = cap.get(2).unwrap().as_str().parse::<u64>()?;
+                    let length = cap.get(3).unwrap().as_str().parse::<u64>()?;
+                    let node = Rc::new(BasicBlock { offset, length });
                     if let Some(shape) = cap.get(4) {
                         if shape.as_str() == EXTERN_DOT_ROOT {
                             root = Some(node.clone());
@@ -532,16 +544,9 @@ fn get_targets(stmts: &[Statement], arch: &dyn Architecture) -> TargetMap {
 }
 
 // actual cfg building
-fn to_bare_cfg(stmts: &[Statement], arch: &dyn Architecture) -> BareCFG {
-    let all_offsets = stmts
-        .iter()
-        .map(|x| x.get_offset())
-        .collect::<BTreeSet<_>>();
+fn to_bare_cfg(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> BareCFG {
     let tgmap = get_targets(stmts, arch);
-    let empty_stmt = Statement::new(0x0, "");
     // This target is used for a strictly lower bound.
-    // The +1 is useful so I can use the last statement in the function
-    let function_over = stmts.last().unwrap_or(&empty_stmt).get_offset() + 1;
     let mut nodes = Vec::with_capacity(tgmap.targets.len());
     // the capacity here is not perfect but it's a good estimation
     let mut edges = Vec::with_capacity(
@@ -550,10 +555,9 @@ fn to_bare_cfg(stmts: &[Statement], arch: &dyn Architecture) -> BareCFG {
     // create nodes
     let mut nodes_iter = tgmap.targets.iter().peekable();
     while let Some(current) = nodes_iter.next() {
-        let next_target = *nodes_iter.peek().unwrap_or(&&function_over);
-        let last_stmt = all_offsets.range(..next_target).last().unwrap_or(&0);
-        nodes.push((*current, *last_stmt));
-        if *next_target != function_over {
+        let next_target = *nodes_iter.peek().unwrap_or(&&fn_end);
+        nodes.push((*current, *next_target - *current));
+        if *next_target != fn_end {
             edges.push((*current, *next_target));
         }
     }
@@ -589,7 +593,7 @@ fn to_bare_cfg(stmts: &[Statement], arch: &dyn Architecture) -> BareCFG {
         let next_dst = *nodes_ordered
             .range(off_src + 1..)
             .next()
-            .unwrap_or(&function_over);
+            .unwrap_or(&&fn_end);
         edges.push((src_bb, next_dst)); // first the next stmt
         edges.push((src_bb, off_dst)); // then the cond stmt
     }
@@ -656,7 +660,12 @@ mod tests {
     fn sequence() -> CFG {
         let nodes = (0..)
             .take(4)
-            .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
+            .map(|x| {
+                Rc::new(BasicBlock {
+                    offset: x,
+                    length: 1,
+                })
+            })
             .collect::<Vec<_>>();
         let edges = hashmap![
             nodes[0].clone() => vec![nodes[1].clone()],
@@ -674,7 +683,12 @@ mod tests {
     fn two_sequences() -> CFG {
         let nodes = (0..)
             .take(4)
-            .map(|x| Rc::new(BasicBlock { first: x, last: 0 }))
+            .map(|x| {
+                Rc::new(BasicBlock {
+                    offset: x,
+                    length: 1,
+                })
+            })
             .collect::<Vec<_>>();
         let edges = hashmap![
             nodes[0].clone() => vec![nodes[1].clone()],
@@ -693,16 +707,16 @@ mod tests {
         //expected
         let nodes = [
             Rc::new(BasicBlock {
-                first: 0x1000,
-                last: 0x1012,
+                offset: 0x1000,
+                length: 20,
             }),
             Rc::new(BasicBlock {
-                first: 0x1014,
-                last: 0x1014,
+                offset: 0x1014,
+                length: 2,
             }),
             Rc::new(BasicBlock {
-                first: 0x1016,
-                last: 0x101A,
+                offset: 0x1016,
+                length: 5,
             }),
         ];
         let edges = hashmap![
@@ -717,7 +731,7 @@ mod tests {
         //conversion
         let bare = BareCFG {
             root: Some(0x1000),
-            blocks: vec![(0x1000, 0x1012), (0x1014, 0x1014), (0x1016, 0x101A)],
+            blocks: vec![(0x1000, 20), (0x1014, 2), (0x1016, 5)],
             edges: vec![(0x1000, 0x1016), (0x1000, 0x1014), (0x1014, 0x1016)],
         };
         let cfg = CFG::from(bare);
@@ -728,7 +742,7 @@ mod tests {
     fn root_empty() {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x0, &arch);
         assert!(cfg.root().is_none());
     }
 
@@ -739,16 +753,16 @@ mod tests {
             Statement::new(0x624, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x625, &arch);
         assert!(cfg.root().is_some());
-        assert_eq!(cfg.root().unwrap().first, 0x61C);
+        assert_eq!(cfg.root().unwrap().offset, 0x61C);
     }
 
     #[test]
     fn get_children_nonexisting() {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x0, &arch);
         let children = cfg.neighbours(&Rc::new(BasicBlock::new_sink()));
         assert!(children.is_empty())
     }
@@ -760,7 +774,7 @@ mod tests {
             Statement::new(0x624, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x625, &arch);
         let children = cfg.neighbours(cfg.root().unwrap());
         assert!(children.is_empty());
     }
@@ -774,7 +788,7 @@ mod tests {
             Statement::new(0x618, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x619, &arch);
         let children = cfg.neighbours(cfg.root().unwrap());
         assert_eq!(children.len(), 2);
     }
@@ -788,7 +802,7 @@ mod tests {
             Statement::new(0x618, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x619, &arch);
         assert_eq!(cfg.len(), 3);
     }
 
@@ -796,7 +810,7 @@ mod tests {
     fn build_cfg_empty() {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x0, &arch);
         assert!(cfg.is_empty());
         assert_eq!(cfg.len(), 0);
     }
@@ -828,17 +842,17 @@ mod tests {
             Statement::new(0x625, "ret"),           //3
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x626, &arch);
         assert!(!cfg.is_empty());
         assert_eq!(cfg.len(), 4);
         let node0 = cfg.root();
         let node1 = cfg.next(node0);
         let node2 = cfg.next(node1);
         let node3 = cfg.cond(node1);
-        assert_eq!(node0.unwrap().first, 0x610);
-        assert_eq!(node1.unwrap().first, 0x614);
-        assert_eq!(node2.unwrap().first, 0x61D);
-        assert_eq!(node3.unwrap().first, 0x620);
+        assert_eq!(node0.unwrap().offset, 0x610);
+        assert_eq!(node1.unwrap().offset, 0x614);
+        assert_eq!(node2.unwrap().offset, 0x61D);
+        assert_eq!(node3.unwrap().offset, 0x620);
         assert!(cfg.next(node2).is_none());
         assert!(cfg.cond(node2).is_none());
         assert!(cfg.next(node3).is_none());
@@ -861,16 +875,16 @@ mod tests {
             Statement::new(0x639, "ret"),                     //3
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x640, &arch);
         assert_eq!(cfg.len(), 4);
         let node0 = cfg.root();
         let node1 = cfg.next(node0);
         let node2 = cfg.cond(node0);
         let node3 = cfg.next(node1);
-        assert_eq!(node0.unwrap().first, 0x61E);
-        assert_eq!(node1.unwrap().first, 0x62E);
-        assert_eq!(node2.unwrap().first, 0x633);
-        assert_eq!(node3.unwrap().first, 0x638);
+        assert_eq!(node0.unwrap().offset, 0x61E);
+        assert_eq!(node1.unwrap().offset, 0x62E);
+        assert_eq!(node2.unwrap().offset, 0x633);
+        assert_eq!(node3.unwrap().offset, 0x638);
         assert!(cfg.cond(node1).is_none());
         assert!(cfg.cond(node2).is_none());
         assert!(cfg.next(node3).is_none());
@@ -889,7 +903,7 @@ mod tests {
             Statement::new(0x615, "ret"),                    //4
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x616, &arch);
         assert_eq!(cfg.len(), 5);
         let node0 = cfg.root();
         let node1 = cfg.next(node0);
@@ -907,13 +921,13 @@ mod tests {
             Statement::new(0x614, "je 0x628"),      //0
             Statement::new(0x618, "test esi, esi"), //1
             Statement::new(0x61C, "mov eax, 5"),    //1
-            Statement::new(0x620, "je 0x628"),      //2
+            Statement::new(0x620, "je 0x628"),      //1
             Statement::new(0x624, "ret"),           //2
             Statement::new(0x628, "mov eax, 6"),    //3
             Statement::new(0x62C, "ret"),           //3
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x630, &arch);
         assert_eq!(cfg.len(), 4);
         let node0 = cfg.root();
         let node1 = cfg.next(node0);
@@ -924,14 +938,14 @@ mod tests {
         assert!(cfg.cond(node2).is_none());
         assert!(cfg.next(node3).is_none());
         assert!(cfg.cond(node3).is_none());
-        assert_eq!(node0.unwrap().first, 0x610);
-        assert_eq!(node0.unwrap().last, 0x614);
-        assert_eq!(node1.unwrap().first, 0x618);
-        assert_eq!(node1.unwrap().last, 0x620);
-        assert_eq!(node2.unwrap().first, 0x624);
-        assert_eq!(node2.unwrap().last, 0x624);
-        assert_eq!(node3.unwrap().first, 0x628);
-        assert_eq!(node3.unwrap().last, 0x62C);
+        assert_eq!(node0.unwrap().offset, 0x610);
+        assert_eq!(node0.unwrap().length, 8);
+        assert_eq!(node1.unwrap().offset, 0x618);
+        assert_eq!(node1.unwrap().length, 12);
+        assert_eq!(node2.unwrap().offset, 0x624);
+        assert_eq!(node2.unwrap().length, 4);
+        assert_eq!(node3.unwrap().offset, 0x628);
+        assert_eq!(node3.unwrap().length, 8);
     }
 
     #[test]
@@ -953,7 +967,7 @@ mod tests {
             Statement::new(0x3FD1A7EF568, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x3FD1A7EF56C, &arch);
         assert_eq!(cfg.len(), 6);
     }
 
@@ -961,7 +975,7 @@ mod tests {
     fn save_and_retrieve_empty() -> Result<(), Box<dyn Error>> {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x0, &arch);
         let mut file = tempfile()?;
         file.write_all(cfg.to_dot().as_bytes())?;
         file.seek(SeekFrom::Start(0))?;
@@ -986,7 +1000,7 @@ mod tests {
             Statement::new(0x639, "ret"),                     //3
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x640, &arch);
         let mut file = tempfile()?;
         file.write_all(cfg.to_dot().as_bytes())?;
         file.seek(SeekFrom::Start(0))?;
@@ -1008,7 +1022,7 @@ mod tests {
             Statement::new(0x639, "ret"),                     //2
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x640, &arch);
         let cfg_sink_eep = cfg.clone().add_entry_point().add_sink();
         assert_ne!(cfg, cfg_sink_eep);
         let mut file = tempfile()?;
@@ -1025,7 +1039,7 @@ mod tests {
     fn add_sink_empty() {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x0, &arch);
         let cfg_with_sink = cfg.add_sink();
         assert!(cfg_with_sink.is_empty());
     }
@@ -1040,7 +1054,7 @@ mod tests {
             Statement::new(0x62C, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x630, &arch);
         assert_eq!(cfg.len(), 3);
         let cfg_with_sink = cfg.add_sink();
         assert_eq!(cfg_with_sink.len(), 4);
@@ -1053,7 +1067,7 @@ mod tests {
             Statement::new(0x624, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x625, &arch);
         let cfg_with_sink = cfg.clone().add_sink();
         assert_eq!(cfg.len(), cfg_with_sink.len());
     }
@@ -1066,7 +1080,7 @@ mod tests {
             Statement::new(0x624, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x625, &arch);
         assert_eq!(cfg.len(), 2);
         let cfg_with_eep = cfg.clone().add_entry_point();
         assert_eq!(cfg_with_eep.len(), 3);
@@ -1094,7 +1108,7 @@ mod tests {
             Statement::new(0x624, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x625, &arch);
         assert_eq!(cfg.len(), 1);
         let cfg_with_eep = cfg.clone().add_entry_point();
         assert_eq!(cfg_with_eep, cfg);
@@ -1142,11 +1156,11 @@ mod tests {
         let bcfg = BareCFG {
             root: Some(418580),
             blocks: vec![
-                (418538, 418544),
-                (418548, 418570),
-                (418580, 418592),
-                (418596, 418602),
-                (418712, 418712),
+                (418538, 10),
+                (418548, 32),
+                (418580, 16),
+                (418596, 16),
+                (418712, 2),
             ],
             edges: vec![
                 (418538, 418712),
@@ -1170,7 +1184,7 @@ mod tests {
             Statement::new(0x712, "ret"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x713, &arch);
         assert_eq!(cfg.len(), 5);
     }
 
@@ -1180,12 +1194,12 @@ mod tests {
         // leaving it here because it does not hurts
         let bcfg = BareCFG {
             root: Some(0),
-            blocks: vec![(0, 1), (2, 3)],
+            blocks: vec![(0, 1), (2, 1)],
             edges: vec![(0, 2), (2, 0)],
         };
         let cfg = CFG::from(bcfg);
         assert!(cfg.root().is_some());
-        assert_eq!(cfg.root().unwrap().first, 0);
+        assert_eq!(cfg.root().unwrap().offset, 0);
     }
 
     #[test]
@@ -1195,8 +1209,8 @@ mod tests {
             Statement::new(0x620, "jmp 0x61c"),
         ];
         let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, &arch);
+        let cfg = CFG::new(&stmts, 0x62C, &arch);
         assert!(cfg.root().is_some());
-        assert_eq!(cfg.root().unwrap().first, 0x61C);
+        assert_eq!(cfg.root().unwrap().offset, 0x61C);
     }
 }

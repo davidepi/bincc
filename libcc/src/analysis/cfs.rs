@@ -73,7 +73,7 @@ impl CFS {
         let mut dot = "digraph {\n".to_string();
         let mut stack = self.get_tree().iter().cloned().collect::<Vec<_>>();
         while let Some(node) = stack.pop() {
-            let node_id = node.starting_offset();
+            let node_id = node.offset();
             match node {
                 StructureBlock::Basic(_) => writeln!(
                     dot,
@@ -87,7 +87,7 @@ impl CFS {
             }
             .unwrap();
             for child in node.children().iter().cloned() {
-                let child_id = child.starting_offset();
+                let child_id = child.offset();
                 writeln!(dot, "{}->{}", node_id, child_id).unwrap();
                 stack.push(child);
             }
@@ -108,7 +108,7 @@ fn print_subgraph<T: std::fmt::Write>(node: &StructureBlock, id: usize, fmt: &mu
     match node {
         StructureBlock::Basic(bb) => {
             if !bb.is_entry_point() && !bb.is_sink() {
-                writeln!(fmt, "{};", bb.first).unwrap();
+                writeln!(fmt, "{};", bb.offset).unwrap();
             }
         }
         StructureBlock::Nested(_) => {
@@ -660,7 +660,7 @@ fn reduce_proper_interval<'a>(
                     let mut iter = children_union.iter().copied();
                     left = iter.next().unwrap();
                     right = iter.next().unwrap();
-                    if left.starting_offset() > right.starting_offset() {
+                    if left.offset() > right.offset() {
                         // in this case choosing left and right may be nondeterministic. So left
                         // is always the one with the lowest offset.
                         swap(&mut left, &mut right)
@@ -991,8 +991,8 @@ fn denaturate_loop(
                     match depth_map.get(a).cmp(&depth_map.get(b)) {
                         Ordering::Less => b,
                         Ordering::Equal => {
-                            let difference_a = distance(node.first, a.first);
-                            let difference_b = distance(node.first, b.first);
+                            let difference_a = distance(node.offset, a.offset);
+                            let difference_b = distance(node.offset, b.offset);
                             match difference_a.cmp(&difference_b) {
                                 Ordering::Less => a,
                                 Ordering::Equal => {
@@ -1033,7 +1033,7 @@ fn denaturate_loop(
                 //keep the one with further offset
                 let (_, index_max_diff) = exits_vec
                     .iter()
-                    .map(|x| distance(node.first, x.first))
+                    .map(|x| distance(node.offset, x.offset))
                     .enumerate()
                     .map(|(index, value)| (value, index))
                     .max()
@@ -1087,7 +1087,7 @@ mod tests {
             let cap = create_cfg!(@count $($src),*);
             let nodes = (0..)
                         .take(cap)
-                        .map(|x| Rc::new(BasicBlock { first: x, last: x+1 }))
+                        .map(|x| Rc::new(BasicBlock { offset: x, length: 1 }))
                         .collect::<Vec<_>>();
             #[allow(unused_mut)]
             let mut edges = std::collections::HashMap::with_capacity(cap);
@@ -1125,7 +1125,7 @@ mod tests {
         };
         let depth = cfs::calculate_depth(&cfg);
         let mut visit = cfg.dfs_postorder().collect::<Vec<_>>();
-        visit.sort_by(|a, b| a.first.cmp(&b.first));
+        visit.sort_by(|a, b| a.offset.cmp(&b.offset));
         let expected = vec![4_usize, 1, 3, 2, 0, 1, 0];
         let actual = visit
             .into_iter()
