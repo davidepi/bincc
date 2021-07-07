@@ -195,12 +195,14 @@ fn extract_cfg_to_dot(input: &str, output: Option<&str>, tid: usize) {
         end_t.checked_duration_since(start_t).unwrap().as_millis()
     );
     let fnames = disassembler.get_function_names();
+    let functions_no = fnames.len();
     log::debug!(
         "[{}] found {} function bodies for {}",
         tid,
-        fnames.len(),
+        functions_no,
         input
     );
+    let start_t = Instant::now();
     for (function, offset) in fnames {
         let graph_filename = format!("{}{}", function, ".dot");
         let outfile = out_dir.clone().join(Path::new(&graph_filename));
@@ -212,6 +214,13 @@ fn extract_cfg_to_dot(input: &str, output: Option<&str>, tid: usize) {
             });
         }
     }
+    let end_t = Instant::now();
+    log::info!(
+        "[{}] Building the CFG for {} functions took {} ms",
+        tid,
+        functions_no,
+        end_t.checked_duration_since(start_t).unwrap().as_millis()
+    );
 }
 
 fn calculate_comparison(input: &str, _: Option<&str>, tid: usize) {
