@@ -1,6 +1,7 @@
 use crate::analysis::Graph;
 use crate::disasm::{Architecture, BareCFG, JumpType, Statement};
 use fnv::FnvHashMap;
+use lazy_static::lazy_static;
 use parse_int::parse;
 use regex::Regex;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -309,7 +310,9 @@ impl CFG {
             );
             let mut root = None;
             let node_re = Regex::new(&nodes_re_str).unwrap();
-            let edge_re = Regex::new(r#"(\d+)->(\d+)(?:\[.*];)?"#).unwrap();
+            lazy_static! {
+                static ref DOT_EDGES_RE: Regex = Regex::new(r#"(\d+)->(\d+)(?:\[.*];)?"#).unwrap();
+            }
             while let Some(line) = lines.pop() {
                 if let Some(cap) = node_re.captures(line) {
                     let id = cap.get(1).unwrap().as_str().parse::<usize>()?;
@@ -322,7 +325,7 @@ impl CFG {
                         }
                     }
                     nodes.insert(id, node.clone());
-                } else if let Some(cap) = edge_re.captures(line) {
+                } else if let Some(cap) = DOT_EDGES_RE.captures(line) {
                     let from = cap.get(1).unwrap().as_str().parse::<usize>()?;
                     let to = cap.get(2).unwrap().as_str().parse::<usize>()?;
                     edges_ids

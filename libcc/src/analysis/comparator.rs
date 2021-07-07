@@ -139,7 +139,7 @@ fn remove_overlapping(mut clone_list: Vec<ClonePair>) -> Vec<ClonePair> {
 
 #[cfg(test)]
 mod tests {
-    use crate::analysis::{CFSComparator, CFG, CFS, SINK_ADDR};
+    use crate::analysis::{CFSComparator, CFG, CFS};
     use crate::disasm::{ArchX86, Statement};
 
     fn create_function() -> Vec<Statement> {
