@@ -1,11 +1,13 @@
 use crate::disasm::architectures::{ArchARM, ArchX86, Architecture};
 use crate::disasm::{BareCFG, Disassembler, Statement};
 use fnv::FnvHashMap;
+use lazy_static::lazy_static;
 use r2pipe::{R2Pipe, R2PipeSpawnOptions};
 use regex::Regex;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::ErrorKind;
+use std::str::FromStr;
 use std::{fs, io};
 
 /// Disassembler using the radare2 backend.
@@ -185,9 +187,15 @@ impl Disassembler for R2Disasm {
         let mut pipe = self.pipe.borrow_mut();
         match pipe.cmd(&cmd_change_offset) {
             Ok(_) => {
-                if let Ok(dot) = pipe.cmd("agfd") {
-                    if !dot.is_empty() {
-                        retval = Some(radare_dot_to_bare_cfg(function, &dot));
+                if let (Ok(bbs), Ok(dot)) = (pipe.cmd("afb"), pipe.cmd("agfdm")) {
+                    if !bbs.is_empty() && !dot.is_empty() {
+                        let blocks = radare_dot_to_bare_cfg_nodes(&bbs);
+                        let edges = radare_dot_to_bare_cfg_edges(&dot);
+                        retval = Some(BareCFG {
+                            root: Some(function),
+                            blocks,
+                            edges,
+                        })
                     }
                 }
             }
@@ -199,17 +207,14 @@ impl Disassembler for R2Disasm {
     }
 }
 
-fn radare_dot_to_bare_cfg(offset: u64, dot: &str) -> BareCFG {
-    let mut blocks = Vec::new();
-    let mut block_labels = Vec::new();
+fn radare_dot_to_bare_cfg_edges(dot: &str) -> Vec<(u64, u64)> {
     let mut edges = Vec::new();
-    let block_re = Regex::new(r#""0[xX][0-9a-fA-F]+"\s*\[.*label\s*=\s*"(.*)".*].*"#).unwrap();
-    let insn_re = Regex::new(r#"^0[xX]([0-9a-fA-F]+).*"#).unwrap();
-    let edge_re = Regex::new(r#""0[xX]([0-9a-fA-F]+)"\s*->\s*"0[xX]([0-9a-fA-F]+)".*"#).unwrap();
+    lazy_static! {
+        static ref RE_EDGES: Regex =
+            Regex::new(r#""0[xX]([0-9a-fA-F]+)"\s*->\s*"0[xX]([0-9a-fA-F]+)".*"#).unwrap();
+    }
     for line in dot.lines() {
-        if let Some(cap) = block_re.captures(line) {
-            block_labels.push(cap.get(1).unwrap().as_str());
-        } else if let Some(cap) = edge_re.captures(line) {
+        if let Some(cap) = RE_EDGES.captures(line) {
             let src = u64::from_str_radix(cap.get(1).unwrap().as_str(), 16);
             let dst = u64::from_str_radix(cap.get(2).unwrap().as_str(), 16);
             if let (Ok(src), Ok(dst)) = (src, dst) {
@@ -217,40 +222,37 @@ fn radare_dot_to_bare_cfg(offset: u64, dot: &str) -> BareCFG {
             } else {
                 log::error!(
                     "While reading the radare2 CFG, failed to parse the offsets in \
-                line \"{}\". Continuing, but the CFG may be wrong",
+                     line \"{}\". Continuing, but the CFG may be wrong",
                     line
                 );
             }
         }
     }
-    for label in block_labels {
-        let mut insn = Vec::new();
-        for line in label.split("\\l") {
-            if let Some(off_str) = insn_re.captures(line) {
-                let insn_offset = u64::from_str_radix(off_str.get(1).unwrap().as_str(), 16);
-                if let Ok(offset) = insn_offset {
-                    insn.push(offset);
-                } else {
-                    log::error!(
-                        "While reading the radare2 CFG, failed to parse the offsets in \
-                    line \"{}\". Continuing, but the CFG may be wrong",
-                        line
-                    );
-                }
+    edges
+}
+
+fn radare_dot_to_bare_cfg_nodes(bbs: &str) -> Vec<(u64, u64)> {
+    let mut blocks = Vec::new();
+    lazy_static! {
+        static ref RE_BLOCKS: Regex =
+            Regex::new(r#"0[xX]([0-9a-fA-F]+)\s+[^\s]+\s+[^\s]+\s+(\d+).*"#).unwrap();
+    }
+    for line in bbs.lines() {
+        if let Some(cap) = RE_BLOCKS.captures(line) {
+            let off = u64::from_str_radix(cap.get(1).unwrap().as_str(), 16);
+            let length = u64::from_str(cap.get(2).unwrap().as_str());
+            if let (Ok(offset), Ok(length)) = (off, length) {
+                blocks.push((offset, length));
+            } else {
+                log::error!(
+                    "While reading the radare2 basic blocks, failed to parse the block offsets in \
+                     line \"{}\". Continuing, but the CFG may be wrong",
+                    line
+                );
             }
         }
-        insn.sort_unstable();
-        match insn.len() {
-            0 => log::warn!("Parsed a CFG that had a node with no instructions"),
-            1 => blocks.push((*insn.last().unwrap(), *insn.last().unwrap())),
-            _ => blocks.push((*insn.first().unwrap(), *insn.last().unwrap())),
-        }
     }
-    BareCFG {
-        root: Some(offset),
-        blocks,
-        edges,
-    }
+    blocks
 }
 
 #[cfg(test)]
