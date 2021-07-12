@@ -1,6 +1,6 @@
 use crate::disasm::architectures::{ArchARM, ArchX86, Architecture};
 use crate::disasm::{BareCFG, Disassembler, Statement};
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use lazy_static::lazy_static;
 use r2pipe::{R2Pipe, R2PipeSpawnOptions};
 use regex::Regex;
@@ -106,6 +106,26 @@ impl Disassembler for R2Disasm {
             Err(error) => {
                 log::error!("{}", error);
                 None
+            }
+        }
+    }
+
+    fn get_function_offsets(&self) -> FnvHashSet<u64> {
+        match self.pipe.borrow_mut().cmdj("aflqj") {
+            Ok(json) => {
+                if let Some(offsets) = json.as_array() {
+                    offsets
+                        .iter()
+                        .map(|offset| offset.as_u64())
+                        .flatten()
+                        .collect::<FnvHashSet<_>>()
+                } else {
+                    FnvHashSet::default()
+                }
+            }
+            Err(error) => {
+                log::error!("{}", error);
+                FnvHashSet::default()
             }
         }
     }
@@ -362,6 +382,17 @@ mod tests {
             disassembler.get_arch().unwrap().name(),
             ArchARM::new_aarch64().name()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn function_offsets() -> Result<(), io::Error> {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
+        let mut disassembler = R2Disasm::new(&x86_64)?;
+        disassembler.analyse();
+        let offsets = disassembler.get_function_offsets();
+        assert!(offsets.contains(&0x1149));
         Ok(())
     }
 

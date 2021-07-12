@@ -1,6 +1,6 @@
 use crate::disasm::architectures::Architecture;
 use crate::disasm::Statement;
-use fnv::FnvHashMap;
+use fnv::{FnvHashMap, FnvHashSet};
 use std::collections::HashMap;
 
 /// A very basic Control Flow Graph.
@@ -46,6 +46,11 @@ pub trait Disassembler {
     ///
     /// If the architecture can not be recognized, None is returned.
     fn get_arch(&self) -> Option<Box<dyn Architecture>>;
+
+    /// Returns the starting offset of each function contained in the disassembled executable
+    ///
+    /// This operation requires calling [Disassembler::analyse] first.
+    fn get_function_offsets(&self) -> FnvHashSet<u64>;
 
     /// Returns names and offsets of every function in the current executable.
     ///
