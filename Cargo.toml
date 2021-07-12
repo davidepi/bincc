@@ -2,6 +2,7 @@
 members = [
     "libcc",
     "extractor",
+    "rq1"
 ]
 
 [profile.release]

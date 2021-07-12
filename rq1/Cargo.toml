@@ -1,0 +1,25 @@
+[package]
+name = "rq1"
+description = "Research question #1"
+version = "0.1.0"
+authors = [
+    "Davide Pizzolotto <davide.pizzolotto@gmail.com>"
+]
+edition = "2018"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "rq1"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
+fnv = "1.0.7"
+parse_int = "0.5"
+bcc = {path="../libcc", features=["radare2"]}
+regex = "1"
+clap="2"
+num_cpus="1"
+indicatif="0.16"
+rand = "0.8"
