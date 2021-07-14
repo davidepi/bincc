@@ -991,13 +991,22 @@ fn denaturate_loop(
                     match depth_map.get(a).cmp(&depth_map.get(b)) {
                         Ordering::Less => b,
                         Ordering::Equal => {
-                            let difference_a = distance(node.offset, a.offset);
-                            let difference_b = distance(node.offset, b.offset);
-                            match difference_a.cmp(&difference_b) {
+                            let distance_a = distance(node.offset, a.offset);
+                            let distance_b = distance(node.offset, b.offset);
+                            match distance_a.cmp(&distance_b) {
                                 Ordering::Less => a,
                                 Ordering::Equal => {
-                                    /* bb offsets should be UNIQUE */
-                                    panic!()
+                                    // head is exactly midway between the targets
+                                    // at this point idk, keep the lowest
+                                    match a.offset.cmp(&b.offset) {
+                                        Ordering::Less => a,
+                                        Ordering::Equal => {
+                                            // no way this can happen without any error in the CFG
+                                            log::error!("Two blocks with the same offset");
+                                            a
+                                        }
+                                        Ordering::Greater => b,
+                                    }
                                 }
                                 Ordering::Greater => b,
                             }
