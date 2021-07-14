@@ -29,6 +29,14 @@ fn main() {
                 .required(true)
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("prefix")
+                .help("Output prefix")
+                .required(false)
+                .multiple(false)
+                .long("prefix")
+                .takes_value(true),
+        )
         .get_matches();
     let threads_no = num_cpus::get();
     let mut inputs = matches
@@ -37,11 +45,12 @@ fn main() {
         .map(|path| path.to_string())
         .collect::<Vec<_>>();
     inputs.shuffle(&mut thread_rng());
+    let prefix = matches.value_of("prefix").unwrap_or("");
     let output = matches.value_of("output").unwrap().to_string();
-    calc_cfs(inputs, output, threads_no);
+    calc_cfs(inputs, output, prefix, threads_no);
 }
 
-fn calc_cfs(input_jobs: Vec<String>, output_dir: String, threads_no: usize) {
+fn calc_cfs(input_jobs: Vec<String>, output_dir: String, output_prefix: &str, threads_no: usize) {
     let pb = Arc::new(ProgressBar::new(input_jobs.len() as u64));
     pb.set_style(
         ProgressStyle::default_bar()
@@ -50,9 +59,9 @@ fn calc_cfs(input_jobs: Vec<String>, output_dir: String, threads_no: usize) {
     );
     let jobs = Arc::new(Mutex::new(input_jobs));
     let mut out_times_name = PathBuf::from(output_dir.clone());
-    out_times_name.push(Path::new("times.csv"));
+    out_times_name.push(Path::new(&format!("{}times.csv", output_prefix)));
     let mut out_funcs_name = PathBuf::from(output_dir);
-    out_funcs_name.push(Path::new("funcs.csv"));
+    out_funcs_name.push(Path::new(&format!("{}funcs.csv", output_prefix)));
     let out_times = Arc::new(Mutex::new(File::create(out_times_name).unwrap()));
     let out_funcs = Arc::new(Mutex::new(File::create(out_funcs_name).unwrap()));
     out_times
@@ -163,130 +172,7 @@ fn calc_cfs(input_jobs: Vec<String>, output_dir: String, threads_no: usize) {
         }));
     }
     for t in threads {
-        t.join().unwrap();
+        t.join().ok();
     }
     pb.finish();
 }
-
-// fn extract_cfg_to_dot(input: &str, output: Option<&str>, tid: usize) {
-//     let relative_path = Path::new(input);
-//     let filename = relative_path.file_name().unwrap();
-//     let out_dir = Path::new(output.unwrap()).join(Path::new(filename));
-//     let metadata = match std::fs::metadata(relative_path) {
-//         Ok(val) => val,
-//         Err(err) => {
-//             log::error!("[{}] {}", tid, err);
-//             return;
-//         }
-//     };
-//     if std::fs::create_dir(out_dir.clone()).is_err() {
-//         log::error!(
-//             "[{}] Could not create output directory {}",
-//             tid,
-//             output.unwrap()
-//         );
-//         return;
-//     }
-//     log::info!(
-//         "Created folder {}",
-//         out_dir.as_os_str().to_str().unwrap_or("ERR")
-//     );
-//     let mut disassembler = match R2Disasm::new(input) {
-//         Ok(disasm) => disasm,
-//         Err(err) => {
-//             log::error!("[{}] Disassembler error: {}", tid, err);
-//             return;
-//         }
-//     };
-//     log::trace!("[{}] starting disassembling", tid);
-//     let start_t = Instant::now();
-//     disassembler.analyse_functions();
-//     let end_t = Instant::now();
-//     log::trace!("[{}] finished disassembling", tid);
-//     log::info!(
-//         "[{}] disassembling {} ({} bytes) took {} ms",
-//         tid,
-//         input,
-//         metadata.len(),
-//         end_t.checked_duration_since(start_t).unwrap().as_millis()
-//     );
-//     let fnames = disassembler.get_function_names();
-//     let functions_no = fnames.len();
-//     log::debug!(
-//         "[{}] found {} function bodies for {}",
-//         tid,
-//         functions_no,
-//         input
-//     );
-//     let start_t = Instant::now();
-//     for (function, offset) in fnames {
-//         let graph_filename = format!("{}{}", function, ".dot");
-//         let outfile = out_dir.clone().join(Path::new(&graph_filename));
-//         if let Some(barecfg) = disassembler.get_function_cfg(offset) {
-//             let cfg = CFG::from(barecfg);
-//             log::trace!("[{}] extracted CFG of {}::{}", tid, input, function);
-//             cfg.to_file(outfile).unwrap_or_else(|_| {
-//                 log::error!("[{}] could not save CFG of {}::{}", tid, input, function)
-//             });
-//         }
-//     }
-//     let end_t = Instant::now();
-//     log::info!(
-//         "[{}] Building the CFG for {} functions took {} ms",
-//         tid,
-//         functions_no,
-//         end_t.checked_duration_since(start_t).unwrap().as_millis()
-//     );
-// }
-//
-// fn calculate_comparison(input: &str, _: Option<&str>, tid: usize) {
-//     if let Ok(cfg) = CFG::from_file(input) {
-//         let start_t = Instant::now();
-//         let cfs = CFS::new(&cfg);
-//         let end_t = Instant::now();
-//         if cfs.get_tree().is_some() {
-//             let duration = end_t.checked_duration_since(start_t).unwrap().as_millis();
-//             log::debug!(
-//                 "[{}] CFS successful for {} (took {} ms)",
-//                 tid,
-//                 input,
-//                 duration
-//             );
-//         } else {
-//             log::debug!(
-//                 "[{}] CFS failed for {}. Reduced from {} nodes to {} nodes",
-//                 tid,
-//                 input,
-//                 cfg.len(),
-//                 cfs.get_graph().len()
-//             );
-//         }
-//     } else {
-//         log::error!("[{}] Failed to read CFG {}", tid, input);
-//     }
-// }
-//
-// fn read_dot_files(path: String) -> Vec<String> {
-//     let path_p = Path::new(&path);
-//     if !path_p.is_dir() {
-//         log::warn!("Ignoring input path {}.", path);
-//         Vec::new()
-//     } else {
-//         match std::fs::read_dir(&path) {
-//             Ok(read) => read
-//                 .into_iter()
-//                 .flatten()
-//                 .filter(|x| x.path().extension().unwrap_or_default() == "dot")
-//                 .map(|x| (path_p.join(x.file_name()).to_str().unwrap().to_string()))
-//                 .collect::<Vec<_>>(),
-//             Err(err) => {
-//                 log::error!(
-//                     "Error while reading folder {}. {}. Path ignored.",
-//                     path,
-//                     err
-//                 );
-//                 Vec::new()
-//             }
-//         }
-//     }
-// }
