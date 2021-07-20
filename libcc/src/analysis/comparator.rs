@@ -1,5 +1,4 @@
 use crate::analysis::blocks::StructureBlock;
-use crate::analysis::CFS;
 use fnv::FnvHashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
@@ -67,41 +66,41 @@ impl CFSComparator {
         }
     }
 
-    pub fn insert(&mut self, other: &CFS, identifier: &str) -> Option<Vec<ClonePair>> {
-        if let Some(root) = other.get_tree() {
-            let mut stack = vec![root];
-            let mut ret = Vec::new();
-            while let Some(node) = stack.pop() {
-                if node.depth() >= self.mindepth {
-                    let mut hasher = DefaultHasher::new();
-                    node.structural_hash(&mut hasher);
-                    let hash = hasher.finish();
-                    if let Some(original) = self.hashes.get(&hash) {
-                        if original.structural_equality(&node) {
-                            // pick only a_name: b is never inserted in the hashmap because it's the
-                            // clone! so its name is used only in this pair and never recorded
-                            let a_name = self.names.get(original).unwrap().as_str();
-                            let pair =
-                                ClonePair::new(original.clone(), a_name, node.clone(), identifier);
-                            ret.push(pair);
-                        } else {
-                            log::warn!("Same structural hash but different structure.");
-                        }
+    pub fn compare_and_insert(
+        &mut self,
+        other: &StructureBlock,
+        identifier: &str,
+    ) -> Option<Vec<ClonePair>> {
+        let mut stack = vec![other.clone()];
+        let mut ret = Vec::new();
+        while let Some(node) = stack.pop() {
+            if node.depth() >= self.mindepth {
+                let mut hasher = DefaultHasher::new();
+                node.structural_hash(&mut hasher);
+                let hash = hasher.finish();
+                if let Some(original) = self.hashes.get(&hash) {
+                    if original.structural_equality(&node) {
+                        // pick only a_name: b is never inserted in the hashmap because it's the
+                        // clone! so its name is used only in this pair and never recorded
+                        let a_name = self.names.get(original).unwrap().as_str();
+                        let pair =
+                            ClonePair::new(original.clone(), a_name, node.clone(), identifier);
+                        ret.push(pair);
                     } else {
-                        self.hashes.insert(hash, node.clone());
-                        self.names.insert(node.clone(), identifier.to_string());
+                        log::warn!("Same structural hash but different structure.");
                     }
-                    let mut children = node.children().to_vec();
-                    stack.append(&mut children)
+                } else {
+                    self.hashes.insert(hash, node.clone());
+                    self.names.insert(node.clone(), identifier.to_string());
                 }
+                let mut children = node.children().to_vec();
+                stack.append(&mut children)
             }
-            if !ret.is_empty() {
-                ret = remove_overlapping(ret);
-            }
-            Some(ret)
-        } else {
-            None
         }
+        if !ret.is_empty() {
+            ret = remove_overlapping(ret);
+        }
+        Some(ret)
     }
 }
 
@@ -119,11 +118,7 @@ fn remove_overlapping(mut clone_list: Vec<ClonePair>) -> Vec<ClonePair> {
         let mut keep = Vec::with_capacity(clone_list.len());
         while let Some(compare) = clone_list.pop() {
             if !removed.contains(&compare) {
-                // FIXME: This is wrong now that the ending offset has been removed
-                if current.depth() != compare.depth()
-                    && current.a.offset() <= compare.a.offset()
-                    && current.b.offset() <= compare.b.offset()
-                {
+                if current.depth() != compare.depth() && overlaps(&current, &compare) {
                     // not same depth (otherwise I remove myself),
                     // and one is contained inside the other one
                     removed.insert(compare);
@@ -135,6 +130,38 @@ fn remove_overlapping(mut clone_list: Vec<ClonePair>) -> Vec<ClonePair> {
         clone_list = keep;
     }
     clone_list
+}
+
+fn overlaps(a: &ClonePair, b: &ClonePair) -> bool {
+    let mut retval = false;
+    if a.depth() >= b.depth()
+        && a.first_name() == b.first_name()
+        && a.second_name() == b.second_name()
+    {
+        let mut first_ok = false;
+        let mut second_ok = false;
+        let mut stack = a.a.children().iter().collect::<Vec<_>>();
+        while let Some(child) = stack.pop() {
+            if child.offset() == b.a.offset() {
+                first_ok = true;
+                break;
+            } else {
+                stack.extend(child.children());
+            }
+        }
+        if first_ok {
+            stack.clear();
+            stack.extend(a.b.children());
+            while let Some(child) = stack.pop() {
+                if child.offset() == b.b.offset() {
+                    second_ok = true;
+                    break;
+                }
+            }
+        }
+        retval = first_ok && second_ok;
+    }
+    retval
 }
 
 #[cfg(test)]
@@ -175,30 +202,15 @@ mod tests {
     }
 
     #[test]
-    fn cloned_failed_cfs() {
-        let stmts = vec![
-            Statement::new(0x0, "jge 0x2"),
-            Statement::new(0x1, "xor eax, eax"),
-            Statement::new(0x2, "jmp 0x1"),
-        ];
-        let cfg = CFG::new(&stmts, 0x3, &ArchX86::new_amd64()).add_sink();
-        let cfs = CFS::new(&cfg);
-        assert!(cfs.get_tree().is_none());
-        let mut diff = CFSComparator::new(5);
-        let first = diff.insert(&cfs, "failed");
-        assert!(first.is_none());
-    }
-
-    #[test]
     fn cloned_full() {
         let stmts = create_function();
         let cfg = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs = CFS::new(&cfg);
         let mut diff = CFSComparator::new(5);
-        let first = diff.insert(&cfs, "first");
+        let first = diff.compare_and_insert(&cfs.get_tree().unwrap(), "first");
         assert!(first.is_some());
         assert!(first.unwrap().is_empty());
-        let second = diff.insert(&cfs, "other");
+        let second = diff.compare_and_insert(&cfs.get_tree().unwrap(), "other");
         assert!(second.is_some());
         let s = second.unwrap();
         assert_eq!(s.len(), 1);
@@ -214,7 +226,7 @@ mod tests {
         let cfg0 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs0 = CFS::new(&cfg0);
         let mut diff = CFSComparator::new(2);
-        let first = diff.insert(&cfs0, "first");
+        let first = diff.compare_and_insert(&cfs0.get_tree().unwrap(), "first");
         assert!(first.is_some());
         assert!(first.unwrap().is_empty());
         stmts = create_function();
@@ -223,9 +235,9 @@ mod tests {
         stmts[10] = Statement::new(0x28, "nop");
         stmts[11] = Statement::new(0x2C, "nop");
         stmts[12] = Statement::new(0x30, "nop");
-        let cfg1 = CFG::new(&stmts, 0x34, &ArchX86::new_amd64()).add_sink();
+        let cfg1 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs1 = CFS::new(&cfg1);
-        let second = diff.insert(&cfs1, "second");
+        let second = diff.compare_and_insert(&cfs1.get_tree().unwrap(), "second");
         assert!(second.is_some());
         let s = second.unwrap();
         assert_eq!(s.len(), 2);
