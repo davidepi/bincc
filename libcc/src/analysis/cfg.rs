@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io;
 use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 /// Offset of an artificially created exit node.
 pub const SINK_ADDR: u64 = u64::MAX;
@@ -35,8 +35,8 @@ const EXTERN_DOT_JUMP_COLOUR: &str = "dodgerblue";
 /// This is a graph representation of all the possible execution paths in a function.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CFG {
-    pub(super) root: Option<Rc<BasicBlock>>,
-    pub(super) edges: HashMap<Rc<BasicBlock>, Vec<Rc<BasicBlock>>>,
+    pub(super) root: Option<Arc<BasicBlock>>,
+    pub(super) edges: HashMap<Arc<BasicBlock>, Vec<Arc<BasicBlock>>>,
 }
 
 /// Minimum portion of code without any jump.
@@ -107,7 +107,7 @@ impl From<BareCFG> for CFG {
             .map(|(first, length)| {
                 (
                     first,
-                    Rc::new(BasicBlock {
+                    Arc::new(BasicBlock {
                         offset: first,
                         length,
                     }),
@@ -125,7 +125,7 @@ impl From<BareCFG> for CFG {
             if let (Some(src_bb), Some(dst_bb)) = (src_bb, dst_bb) {
                 edges
                     .entry(src_bb.clone())
-                    .and_modify(|e: &mut Vec<Rc<BasicBlock>>| e.push(dst_bb.clone()))
+                    .and_modify(|e: &mut Vec<Arc<BasicBlock>>| e.push(dst_bb.clone()))
                     .or_insert_with(|| vec![dst_bb.clone()]);
                 marked.insert(src_bb);
             }
@@ -193,7 +193,7 @@ impl CFG {
     ///
     /// Returns [Option::None] if there is no next block, the current basic block does not belong to this CFG
     /// or the original BasicBlock is None.
-    pub fn next(&self, block: Option<&Rc<BasicBlock>>) -> Option<&Rc<BasicBlock>> {
+    pub fn next(&self, block: Option<&Arc<BasicBlock>>) -> Option<&Arc<BasicBlock>> {
         if let Some(bb) = block {
             let maybe_children = self.edges.get(bb);
             if let Some(children) = maybe_children {
@@ -212,7 +212,7 @@ impl CFG {
     ///
     /// Returns [Option::None] if the current basic block does not have conditional jumps, does not belong to
     /// this CFG or the original BasicBlock is None.
-    pub fn cond(&self, block: Option<&Rc<BasicBlock>>) -> Option<&Rc<BasicBlock>> {
+    pub fn cond(&self, block: Option<&Arc<BasicBlock>>) -> Option<&Arc<BasicBlock>> {
         if let Some(bb) = block {
             let maybe_children = self.edges.get(bb);
             if let Some(children) = maybe_children {
@@ -318,7 +318,7 @@ impl CFG {
                     let id = cap.get(1).unwrap().as_str().parse::<usize>()?;
                     let offset = cap.get(2).unwrap().as_str().parse::<u64>()?;
                     let length = cap.get(3).unwrap().as_str().parse::<u64>()?;
-                    let node = Rc::new(BasicBlock { offset, length });
+                    let node = Arc::new(BasicBlock { offset, length });
                     if let Some(shape) = cap.get(4) {
                         if shape.as_str() == EXTERN_DOT_ROOT {
                             root = Some(node.clone());
@@ -348,7 +348,7 @@ impl CFG {
                     let dst_node = nodes.get(&dst).ok_or_else(parse_err)?.clone();
                     edges
                         .entry(src_node.clone())
-                        .and_modify(|e: &mut Vec<Rc<BasicBlock>>| e.push(dst_node.clone()))
+                        .and_modify(|e: &mut Vec<Arc<BasicBlock>>| e.push(dst_node.clone()))
                         .or_insert_with(|| vec![dst_node]);
                 }
             }
@@ -406,7 +406,7 @@ impl CFG {
             .filter(|(_, child)| child.is_empty())
             .count();
         if exit_nodes > 1 {
-            let sink = Rc::new(BasicBlock::new_sink());
+            let sink = Arc::new(BasicBlock::new_sink());
             for (_, child) in self.edges.iter_mut() {
                 if child.is_empty() {
                     child.push(sink.clone());
@@ -433,7 +433,7 @@ impl CFG {
                 .flat_map(|(_, edge)| edge)
                 .any(|x| x == oep);
             if oep_has_preds {
-                let eep = Rc::new(BasicBlock::new_entry_point());
+                let eep = Arc::new(BasicBlock::new_entry_point());
                 self.edges
                     .insert(eep.clone(), vec![self.root.take().unwrap()]);
                 self.root = Some(eep);
@@ -444,7 +444,7 @@ impl CFG {
 }
 
 impl Graph for CFG {
-    type Item = Rc<BasicBlock>;
+    type Item = Arc<BasicBlock>;
 
     fn root(&self) -> Option<&Self::Item> {
         self.root.as_ref()
@@ -593,10 +593,7 @@ fn to_bare_cfg(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> Bar
     }
     for (off_src, off_dst) in tgmap.srcs_cond {
         let src_bb = *nodes_ordered.range(..=off_src).next_back().unwrap();
-        let next_dst = *nodes_ordered
-            .range(off_src + 1..)
-            .next()
-            .unwrap_or(&&fn_end);
+        let next_dst = *nodes_ordered.range(off_src + 1..).next().unwrap_or(&fn_end);
         edges.push((src_bb, next_dst)); // first the next stmt
         edges.push((src_bb, off_dst)); // then the cond stmt
     }
@@ -633,7 +630,7 @@ mod tests {
     use std::collections::{HashMap, HashSet};
     use std::error::Error;
     use std::io::{Read, Seek, SeekFrom, Write};
-    use std::rc::Rc;
+    use std::sync::Arc;
     use tempfile::tempfile;
 
     /// Removes unreachable nodes.
@@ -664,7 +661,7 @@ mod tests {
         let nodes = (0..)
             .take(4)
             .map(|x| {
-                Rc::new(BasicBlock {
+                Arc::new(BasicBlock {
                     offset: x,
                     length: 1,
                 })
@@ -687,7 +684,7 @@ mod tests {
         let nodes = (0..)
             .take(4)
             .map(|x| {
-                Rc::new(BasicBlock {
+                Arc::new(BasicBlock {
                     offset: x,
                     length: 1,
                 })
@@ -709,15 +706,15 @@ mod tests {
     fn from_bare_cfg() {
         //expected
         let nodes = [
-            Rc::new(BasicBlock {
+            Arc::new(BasicBlock {
                 offset: 0x1000,
                 length: 20,
             }),
-            Rc::new(BasicBlock {
+            Arc::new(BasicBlock {
                 offset: 0x1014,
                 length: 2,
             }),
-            Rc::new(BasicBlock {
+            Arc::new(BasicBlock {
                 offset: 0x1016,
                 length: 5,
             }),
@@ -766,7 +763,7 @@ mod tests {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x0, &arch);
-        let children = cfg.neighbours(&Rc::new(BasicBlock::new_sink()));
+        let children = cfg.neighbours(&Arc::new(BasicBlock::new_sink()));
         assert!(children.is_empty())
     }
 

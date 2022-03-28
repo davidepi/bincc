@@ -116,8 +116,7 @@ impl Disassembler for R2Disasm {
                 if let Some(offsets) = json.as_array() {
                     offsets
                         .iter()
-                        .map(|offset| offset.as_u64())
-                        .flatten()
+                        .filter_map(|offset| offset.as_u64())
                         .collect::<FnvHashSet<_>>()
                 } else {
                     FnvHashSet::default()
@@ -312,30 +311,27 @@ mod tests {
 
     #[test]
     fn architecture_non_binary() -> Result<(), io::Error> {
-        let disassembler;
         let project_root = env!("CARGO_MANIFEST_DIR");
         let plaintext = format!("{}/{}", project_root, "resources/tests/plaintext");
-        disassembler = R2Disasm::new(&plaintext)?;
+        let disassembler = R2Disasm::new(&plaintext)?;
         assert!(disassembler.get_arch().is_none());
         Ok(())
     }
 
     #[test]
     fn architecture_unsupported_arch() -> Result<(), io::Error> {
-        let disassembler;
         let project_root = env!("CARGO_MANIFEST_DIR");
         let riscv = format!("{}/{}", project_root, "resources/tests/riscv");
-        disassembler = R2Disasm::new(&riscv)?;
+        let disassembler = R2Disasm::new(&riscv)?;
         assert!(disassembler.get_arch().is_none());
         Ok(())
     }
 
     #[test]
     fn architecture_x86() -> Result<(), io::Error> {
-        let disassembler;
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86 = format!("{}/{}", project_root, "resources/tests/x86");
-        disassembler = R2Disasm::new(&x86)?;
+        let disassembler = R2Disasm::new(&x86)?;
         assert_eq!(
             disassembler.get_arch().unwrap().name(),
             ArchX86::new_i386().name()
@@ -345,10 +341,9 @@ mod tests {
 
     #[test]
     fn architecture_x86_64() -> Result<(), io::Error> {
-        let disassembler;
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        disassembler = R2Disasm::new(&x86_64)?;
+        let disassembler = R2Disasm::new(&x86_64)?;
         assert!(disassembler.get_arch().is_some());
         assert_eq!(
             disassembler.get_arch().unwrap().name(),
@@ -359,10 +354,9 @@ mod tests {
 
     #[test]
     fn architecture_arm() -> Result<(), io::Error> {
-        let disassembler;
         let project_root = env!("CARGO_MANIFEST_DIR");
         let armhf = format!("{}/{}", project_root, "resources/tests/armhf");
-        disassembler = R2Disasm::new(&armhf)?;
+        let disassembler = R2Disasm::new(&armhf)?;
         assert!(disassembler.get_arch().is_some());
         assert_eq!(
             disassembler.get_arch().unwrap().name(),
@@ -373,10 +367,9 @@ mod tests {
 
     #[test]
     fn architecture_aarch64() -> Result<(), io::Error> {
-        let disassembler;
         let project_root = env!("CARGO_MANIFEST_DIR");
         let aarch64 = format!("{}/{}", project_root, "resources/tests/aarch64");
-        disassembler = R2Disasm::new(&aarch64)?;
+        let disassembler = R2Disasm::new(&aarch64)?;
         assert!(disassembler.get_arch().is_some());
         assert_eq!(
             disassembler.get_arch().unwrap().name(),

@@ -2,7 +2,6 @@ use crate::analysis::blocks::StructureBlock;
 use crate::analysis::{BasicBlock, BlockType, DirectedGraph, Graph, NestedBlock, CFG};
 use fnv::FnvHashSet;
 use maplit::hashset;
-use std::array::IntoIter;
 use std::cmp::{max, Ordering};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write as WriteFmt;
@@ -12,7 +11,7 @@ use std::io;
 use std::io::Write as WriteIo;
 use std::mem::swap;
 use std::path::Path;
-use std::rc::Rc;
+use std::sync::Arc;
 
 // how many times the reduction may NOT decrease the amount of nodes before the CFS is
 // terminated.
@@ -145,7 +144,7 @@ fn reduce_self_loop<'a>(
             let children = graph.neighbours(node);
             if children.len() == 2 && children.contains(node) {
                 let next = children.iter().filter(|x| x != &node).last().unwrap();
-                let block = Rc::new(NestedBlock::new(BlockType::SelfLooping, vec![node.clone()]));
+                let block = Arc::new(NestedBlock::new(BlockType::SelfLooping, vec![node.clone()]));
                 Some(Reduction {
                     old: hashset![node],
                     new: StructureBlock::from(block),
@@ -197,7 +196,7 @@ fn reduce_switch<'a>(
             let exit = **no_exit.last().unwrap();
             components.remove(exit);
             next = Some(exit);
-            let block = Rc::new(NestedBlock::new(
+            let block = Arc::new(NestedBlock::new(
                 BlockType::Switch,
                 components.iter().copied().cloned().collect(),
             ));
@@ -214,7 +213,7 @@ fn reduce_switch<'a>(
             if exit_set.len() == 1 {
                 // all the nodes point to the same exit
                 next = Some(exit_set.into_iter().next().unwrap());
-                let block = Rc::new(NestedBlock::new(
+                let block = Arc::new(NestedBlock::new(
                     BlockType::Switch,
                     components.iter().copied().cloned().collect(),
                 ));
@@ -259,7 +258,7 @@ fn reduce_sequence<'a>(
                         // particular type of looping sequence, still don't know how to handle this
                         match reduction.new {
                             StructureBlock::Nested(ref mut nb) => {
-                                Rc::get_mut(nb).unwrap().block_type = BlockType::SelfLooping
+                                Arc::get_mut(nb).unwrap().block_type = BlockType::SelfLooping
                             }
                             _ => panic!(),
                         }
@@ -333,7 +332,7 @@ fn reduce_ifthen<'a>(
             // to the current one should point to the exit.
             let child_rev = ascend_if_chain(vec![then, head], cont, graph, preds);
             //now creates the block itself
-            let block = Rc::new(NestedBlock::new(
+            let block = Arc::new(NestedBlock::new(
                 BlockType::IfThen,
                 child_rev.iter().cloned().cloned().rev().collect(),
             ));
@@ -392,7 +391,7 @@ fn reduce_ifelse<'a>(
                 // in most cases the preds will be ok. However, to avoid wrong resolution due to
                 // visiting order, this check is inserted (mostly to avoid resolving a "proper
                 // interval" to a "if-then-else")
-                let block = Rc::new(NestedBlock::new(
+                let block = Arc::new(NestedBlock::new(
                     BlockType::IfThenElse,
                     child_rev.iter().cloned().cloned().rev().collect(),
                 ));
@@ -468,7 +467,7 @@ fn find_while<'a>(
     }
     let tail_children = graph.neighbours(tail);
     if tail_children.len() == 1 && &tail_children[0] == node && tail_preds_ok(tail, preds, lh) {
-        let block = Rc::new(NestedBlock::new(
+        let block = Arc::new(NestedBlock::new(
             BlockType::While,
             vec![node.clone(), tail.clone()],
         ));
@@ -509,7 +508,7 @@ fn find_dowhile<'a>(
                 return None;
             }
             if tail_preds_ok(tail, preds, lh) && tail_preds_ok(post_tail, preds, lh) {
-                let block = Rc::new(NestedBlock::new(
+                let block = Arc::new(NestedBlock::new(
                     BlockType::DoWhile,
                     vec![node.clone(), tail.clone(), post_tail.clone()],
                 ));
@@ -528,7 +527,7 @@ fn find_dowhile<'a>(
                 next = &tail_children[1];
             }
             if node != next && tail != next && tail_preds_ok(tail, preds, lh) {
-                let block = Rc::new(NestedBlock::new(
+                let block = Arc::new(NestedBlock::new(
                     BlockType::DoWhile,
                     vec![node.clone(), tail.clone()],
                 ));
@@ -569,7 +568,7 @@ fn reduce_improper_interval<'a>(
                 .filter(|&x| x != left && x != right)
                 .collect::<HashSet<_>>();
             if next_set.len() == 1 {
-                let block = Rc::new(NestedBlock::new(
+                let block = Arc::new(NestedBlock::new(
                     BlockType::ImproperInterval,
                     vec![node.clone(), left.clone(), right.clone()],
                 ));
@@ -683,7 +682,7 @@ fn reduce_proper_interval<'a>(
         }
         if cross_exists && next.is_some() {
             // cross exits checks avoid incorrectly resolving a if-else as proper interval
-            let block = Rc::new(NestedBlock::new(
+            let block = Arc::new(NestedBlock::new(
                 BlockType::ProperInterval,
                 content.iter().copied().cloned().collect(),
             ));
@@ -718,7 +717,7 @@ fn construct_and_flatten_sequence<'a>(
     };
     let mut reduction = Reduction {
         old: flatten(node).into_iter().chain(flatten(next)).collect(),
-        new: StructureBlock::from(Rc::new(NestedBlock::new(
+        new: StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             flatten(node)
                 .into_iter()
@@ -876,7 +875,7 @@ fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock> {
 }
 
 // calculates the depth of the spanning tree at each node.
-fn calculate_depth(cfg: &CFG) -> HashMap<Rc<BasicBlock>, usize> {
+fn calculate_depth(cfg: &CFG) -> HashMap<Arc<BasicBlock>, usize> {
     let mut depth_map = HashMap::new();
     for node in cfg.dfs_postorder() {
         let children = cfg.neighbours(node);
@@ -893,12 +892,12 @@ fn calculate_depth(cfg: &CFG) -> HashMap<Rc<BasicBlock>, usize> {
 
 // calculates the exit nodes and target (of the exit) for a node in a particular loop
 fn exits_and_targets(
-    node: &Rc<BasicBlock>,
-    sccs: &HashMap<&Rc<BasicBlock>, usize>,
+    node: &Arc<BasicBlock>,
+    sccs: &HashMap<&Arc<BasicBlock>, usize>,
     cfg: &CFG,
-) -> (HashSet<Rc<BasicBlock>>, HashSet<Rc<BasicBlock>>) {
+) -> (HashSet<Arc<BasicBlock>>, HashSet<Arc<BasicBlock>>) {
     let mut visit = vec![node];
-    let mut visited = IntoIter::new([node]).collect::<HashSet<_>>();
+    let mut visited = [node].into_iter().collect::<HashSet<_>>();
     let mut exits = HashSet::new();
     let mut targets = HashSet::new();
     // checks the exits from the loop
@@ -938,11 +937,11 @@ fn is_loop<'a, T: Hash + Eq>(sccs: &HashMap<&'a T, usize>) -> HashMap<&'a T, boo
 
 // remove all edges from a CFG that points to a list of targets
 fn remove_edges(
-    input_set: HashSet<Rc<BasicBlock>>,
-    targets: HashSet<Rc<BasicBlock>>,
+    input_set: HashSet<Arc<BasicBlock>>,
+    targets: HashSet<Arc<BasicBlock>>,
     cfg: CFG,
 ) -> CFG {
-    type EdgesMap = HashMap<Rc<BasicBlock>, Vec<Rc<BasicBlock>>>;
+    type EdgesMap = HashMap<Arc<BasicBlock>, Vec<Arc<BasicBlock>>>;
     let (keep, edit): (EdgesMap, EdgesMap) = cfg
         .edges
         .into_iter()
@@ -966,10 +965,10 @@ fn remove_edges(
 }
 
 fn denaturate_loop(
-    node: &Rc<BasicBlock>,
-    sccs: &HashMap<&Rc<BasicBlock>, usize>,
-    preds: &HashMap<&Rc<BasicBlock>, HashSet<&Rc<BasicBlock>>>,
-    depth_map: &HashMap<Rc<BasicBlock>, usize>,
+    node: &Arc<BasicBlock>,
+    sccs: &HashMap<&Arc<BasicBlock>, usize>,
+    preds: &HashMap<&Arc<BasicBlock>, HashSet<&Arc<BasicBlock>>>,
+    depth_map: &HashMap<Arc<BasicBlock>, usize>,
     mut cfg: CFG,
 ) -> CFG {
     let distance = |x, y| {
@@ -1064,8 +1063,8 @@ fn denaturate_loop(
 }
 
 fn remove_natural_loops(
-    sccs: &HashMap<&Rc<BasicBlock>, usize>,
-    preds: &HashMap<&Rc<BasicBlock>, HashSet<&Rc<BasicBlock>>>,
+    sccs: &HashMap<&Arc<BasicBlock>, usize>,
+    preds: &HashMap<&Arc<BasicBlock>, HashSet<&Arc<BasicBlock>>>,
     mut cfg: CFG,
 ) -> CFG {
     let mut loops_done = FnvHashSet::default();
@@ -1085,7 +1084,7 @@ fn remove_natural_loops(
 mod tests {
     use crate::analysis::{cfs, BasicBlock, BlockType, Graph, CFG, CFS};
     use std::collections::HashMap;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     macro_rules! create_cfg {
     (@single $($x:tt)*) => (());
@@ -1096,7 +1095,7 @@ mod tests {
             let cap = create_cfg!(@count $($src),*);
             let nodes = (0..)
                         .take(cap)
-                        .map(|x| Rc::new(BasicBlock { offset: x, length: 1 }))
+                        .map(|x| Arc::new(BasicBlock { offset: x, length: 1 }))
                         .collect::<Vec<_>>();
             #[allow(unused_mut)]
             let mut edges = std::collections::HashMap::with_capacity(cap);

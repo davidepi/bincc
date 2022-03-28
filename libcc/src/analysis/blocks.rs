@@ -2,7 +2,7 @@ use crate::analysis::BasicBlock;
 use std::collections::hash_map::DefaultHasher;
 use std::fmt::{Display, Formatter};
 use std::hash::Hash;
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum BlockType {
@@ -60,8 +60,8 @@ impl NestedBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StructureBlock {
-    Basic(Rc<BasicBlock>),
-    Nested(Rc<NestedBlock>),
+    Basic(Arc<BasicBlock>),
+    Nested(Arc<NestedBlock>),
 }
 
 impl StructureBlock {
@@ -152,14 +152,14 @@ impl StructureBlock {
     }
 }
 
-impl From<Rc<BasicBlock>> for StructureBlock {
-    fn from(bb: Rc<BasicBlock>) -> Self {
+impl From<Arc<BasicBlock>> for StructureBlock {
+    fn from(bb: Arc<BasicBlock>) -> Self {
         StructureBlock::Basic(bb)
     }
 }
 
-impl From<Rc<NestedBlock>> for StructureBlock {
-    fn from(nb: Rc<NestedBlock>) -> Self {
+impl From<Arc<NestedBlock>> for StructureBlock {
+    fn from(nb: Arc<NestedBlock>) -> Self {
         StructureBlock::Nested(nb)
     }
 }
@@ -170,7 +170,7 @@ mod tests {
     use crate::analysis::{BasicBlock, BlockType, NestedBlock};
     use std::collections::hash_map::DefaultHasher;
     use std::hash::Hasher;
-    use std::rc::Rc;
+    use std::sync::Arc;
 
     fn calculate_hashes(a: StructureBlock, b: StructureBlock) -> (u64, u64) {
         let mut hasher0 = DefaultHasher::new();
@@ -186,7 +186,7 @@ mod tests {
     fn structure_block_strong_equality() {
         // checks that despite having two different StructureBlock, if their content is the same Rc
         // equality returns true.
-        let bb = Rc::new(BasicBlock {
+        let bb = Arc::new(BasicBlock {
             offset: 1,
             length: 0xA,
         });
@@ -198,11 +198,11 @@ mod tests {
     #[test]
     fn structure_block_structural_equality() {
         // two basic blocks with different content, but structural equality should be the same
-        let bb0 = Rc::new(BasicBlock {
+        let bb0 = Arc::new(BasicBlock {
             offset: 1,
             length: 0xA,
         });
-        let bb1 = Rc::new(BasicBlock {
+        let bb1 = Arc::new(BasicBlock {
             offset: 1,
             length: 0xB,
         });
@@ -214,11 +214,11 @@ mod tests {
 
     #[test]
     fn structural_hash_different_id() {
-        let bb0 = StructureBlock::from(Rc::new(BasicBlock {
+        let bb0 = StructureBlock::from(Arc::new(BasicBlock {
             offset: 1,
             length: 0xA,
         }));
-        let bb1 = StructureBlock::from(Rc::new(BasicBlock {
+        let bb1 = StructureBlock::from(Arc::new(BasicBlock {
             offset: 0xA,
             length: 0xC,
         }));
@@ -228,23 +228,23 @@ mod tests {
 
     #[test]
     fn structural_hash_same_order() {
-        let bb = StructureBlock::from(Rc::new(BasicBlock {
+        let bb = StructureBlock::from(Arc::new(BasicBlock {
             offset: 1,
             length: 1,
         }));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+        let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
         )));
-        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new(
+        let sequence0 = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             vec![self_loop, bb.clone()],
         )));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+        let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
         )));
-        let sequence1 = StructureBlock::from(Rc::new(NestedBlock::new(
+        let sequence1 = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             vec![self_loop, bb],
         )));
@@ -254,23 +254,23 @@ mod tests {
 
     #[test]
     fn structural_equality_same_order() {
-        let bb = StructureBlock::from(Rc::new(BasicBlock {
+        let bb = StructureBlock::from(Arc::new(BasicBlock {
             offset: 1,
             length: 1,
         }));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+        let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
         )));
-        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new(
+        let sequence0 = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             vec![self_loop, bb.clone()],
         )));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+        let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
         )));
-        let sequence1 = StructureBlock::from(Rc::new(NestedBlock::new(
+        let sequence1 = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             vec![self_loop, bb],
         )));
@@ -279,23 +279,23 @@ mod tests {
 
     #[test]
     fn structural_hash_different_order() {
-        let bb = StructureBlock::from(Rc::new(BasicBlock {
+        let bb = StructureBlock::from(Arc::new(BasicBlock {
             offset: 1,
             length: 1,
         }));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+        let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
         )));
-        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new(
+        let sequence0 = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             vec![self_loop, bb.clone()],
         )));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+        let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
         )));
-        let sequence1 = StructureBlock::from(Rc::new(NestedBlock::new(
+        let sequence1 = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             vec![bb, self_loop],
         )));
@@ -305,23 +305,23 @@ mod tests {
 
     #[test]
     fn structural_equality_different_order() {
-        let bb = StructureBlock::from(Rc::new(BasicBlock {
+        let bb = StructureBlock::from(Arc::new(BasicBlock {
             offset: 1,
             length: 1,
         }));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+        let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
         )));
-        let sequence0 = StructureBlock::from(Rc::new(NestedBlock::new(
+        let sequence0 = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             vec![self_loop, bb.clone()],
         )));
-        let self_loop = StructureBlock::from(Rc::new(NestedBlock::new(
+        let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
         )));
-        let sequence1 = StructureBlock::from(Rc::new(NestedBlock::new(
+        let sequence1 = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::Sequence,
             vec![bb, self_loop],
         )));
