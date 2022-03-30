@@ -1,16 +1,16 @@
 [package]
-name = "extractor"
-description = "Extracts CFG as .dot files from binaries."
+name = "rq2"
+description = "Research question #2"
 version = "0.1.0"
 authors = [
     "Davide Pizzolotto <davide.pizzolotto@gmail.com>"
 ]
-edition = "2021"
+edition = "2018"
 license = "MIT"
 publish = false
 
 [[bin]]
-name = "extractor"
+name = "rq2"
 path = "src/main.rs"
 doc = false
 
@@ -19,8 +19,7 @@ fnv = "1.0.7"
 parse_int = "0.5"
 bcc = {path="../libcc", features=["radare2"]}
 regex = "1"
-clap="2"
-log = "0.4"
-simple-logging = "2"
-num_cpus="1"
+clap={version="3.1", features=["derive"]}
 indicatif="0.16"
+rand = "0.8"
+rayon = "1.5"

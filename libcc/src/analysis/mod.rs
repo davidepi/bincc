@@ -11,6 +11,7 @@ pub use self::cfg::SINK_ADDR;
 mod blocks;
 pub use self::blocks::BlockType;
 pub use self::blocks::NestedBlock;
+pub use self::blocks::StructureBlock;
 mod cfs;
 pub use self::cfs::CFS;
 mod comparator;

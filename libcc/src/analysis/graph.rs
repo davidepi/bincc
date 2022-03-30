@@ -35,6 +35,39 @@ pub trait Graph {
         self.len() == 0
     }
 
+    /// Returns a graphviz dot representation of the current graph.
+    fn to_dot(&self, directed: bool) -> String
+    where
+        <Self as Graph>::Item: std::fmt::Display,
+    {
+        let mut retval = String::new();
+        let connect = if directed {
+            retval.push_str("digraph G {\n");
+            "->"
+        } else {
+            retval.push_str("graph G{\n");
+            "--"
+        };
+        let mut marked = HashSet::new();
+        let mut stack = if let Some(root) = self.root() {
+            vec![root]
+        } else {
+            vec![]
+        };
+        while !stack.is_empty() {
+            let current = stack.pop().unwrap();
+            if !marked.contains(current) {
+                marked.insert(current);
+                self.neighbours(current).iter().for_each(|child| {
+                    retval.push_str(&format!("\"{}\"{connect}\"{}\"\n", current, child));
+                    stack.push(child);
+                });
+            }
+        }
+        retval.push_str("}\n");
+        retval
+    }
+
     /// Visits the graph nodes in a breadth-first fashion.
     ///
     /// Returns an iterator visiting every node reachable from `start_from` using a

@@ -7,39 +7,50 @@ use std::hash::Hasher;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ClonePair {
     a: StructureBlock,
-    aname: String,
+    a_bin: String,
+    a_fun: String,
     b: StructureBlock,
-    bname: String,
+    b_bin: String,
+    b_fun: String,
 }
 
 impl ClonePair {
-    pub fn new(a: StructureBlock, a_name: &str, b: StructureBlock, b_name: &str) -> ClonePair {
+    pub fn new(
+        a: StructureBlock,
+        a_bin: String,
+        a_fun: String,
+        b: StructureBlock,
+        b_bin: String,
+        b_fun: String,
+    ) -> Self {
         ClonePair {
             a,
+            a_bin,
+            a_fun,
             b,
-            aname: a_name.to_string(),
-            bname: b_name.to_string(),
+            b_bin,
+            b_fun,
         }
     }
 
-    pub fn first(&self) -> (&str, &StructureBlock) {
-        (&self.aname, &self.a)
+    pub fn first_bin(&self) -> &str {
+        &self.a_bin
     }
 
-    pub fn first_name(&self) -> &str {
-        &self.aname
+    pub fn first_fun(&self) -> &str {
+        &self.a_fun
     }
 
     pub fn first_tree(&self) -> &StructureBlock {
         &self.a
     }
 
-    pub fn second(&self) -> (&str, &StructureBlock) {
-        (&self.bname, &self.b)
+    pub fn second_bin(&self) -> &str {
+        &self.b_bin
     }
 
-    pub fn second_name(&self) -> &str {
-        &self.bname
+    pub fn second_fun(&self) -> &str {
+        &self.b_fun
     }
 
     pub fn second_tree(&self) -> &StructureBlock {
@@ -53,12 +64,13 @@ impl ClonePair {
 
 pub struct CFSComparator {
     hashes: FnvHashMap<u64, StructureBlock>,
-    names: HashMap<StructureBlock, String>,
+    names: HashMap<StructureBlock, (String, String)>,
+    // used to store the strings for the ClonePairs (that uses references)
     mindepth: u32,
 }
 
 impl CFSComparator {
-    pub fn new(mindepth: u32) -> CFSComparator {
+    pub fn new(mindepth: u32) -> Self {
         CFSComparator {
             hashes: FnvHashMap::default(),
             names: HashMap::new(),
@@ -68,10 +80,11 @@ impl CFSComparator {
 
     pub fn compare_and_insert(
         &mut self,
-        other: &StructureBlock,
-        identifier: &str,
-    ) -> Option<Vec<ClonePair>> {
-        let mut stack = vec![other.clone()];
+        other: StructureBlock,
+        bin_name: String,
+        func_name: String,
+    ) -> Vec<ClonePair> {
+        let mut stack = vec![other];
         let mut ret = Vec::new();
         while let Some(node) = stack.pop() {
             if node.depth() >= self.mindepth {
@@ -82,25 +95,31 @@ impl CFSComparator {
                     if original.structural_equality(&node) {
                         // pick only a_name: b is never inserted in the hashmap because it's the
                         // clone! so its name is used only in this pair and never recorded
-                        let a_name = self.names.get(original).unwrap().as_str();
-                        let pair =
-                            ClonePair::new(original.clone(), a_name, node.clone(), identifier);
+                        let (orig_bin_name, orig_func_name) = self.names.get(original).unwrap();
+                        let pair = ClonePair::new(
+                            original.clone(),
+                            orig_bin_name.clone(),
+                            orig_func_name.clone(),
+                            node.clone(),
+                            bin_name.clone(),
+                            func_name.clone(),
+                        );
                         ret.push(pair);
                     } else {
                         log::warn!("Same structural hash but different structure.");
                     }
                 } else {
                     self.hashes.insert(hash, node.clone());
-                    self.names.insert(node.clone(), identifier.to_string());
+                    self.names
+                        .insert(node.clone(), (bin_name.clone(), func_name.clone()));
                 }
-                let mut children = node.children().to_vec();
-                stack.append(&mut children)
+                stack.extend(node.children().iter().cloned());
             }
         }
         if !ret.is_empty() {
             ret = remove_overlapping(ret);
         }
-        Some(ret)
+        ret
     }
 }
 
@@ -135,8 +154,10 @@ fn remove_overlapping(mut clone_list: Vec<ClonePair>) -> Vec<ClonePair> {
 fn overlaps(a: &ClonePair, b: &ClonePair) -> bool {
     let mut retval = false;
     if a.depth() >= b.depth()
-        && a.first_name() == b.first_name()
-        && a.second_name() == b.second_name()
+        && a.a_bin == b.a_bin
+        && a.a_fun == b.a_fun
+        && a.b_bin == b.b_bin
+        && a.b_fun == b.b_fun
     {
         let mut first_ok = false;
         let mut second_ok = false;
@@ -206,18 +227,26 @@ mod tests {
         let stmts = create_function();
         let cfg = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs = CFS::new(&cfg);
-        let mut diff = CFSComparator::new(5);
-        let first = diff.compare_and_insert(&cfs.get_tree().unwrap(), "first");
-        assert!(first.is_some());
-        assert!(first.unwrap().is_empty());
-        let second = diff.compare_and_insert(&cfs.get_tree().unwrap(), "other");
-        assert!(second.is_some());
-        let s = second.unwrap();
-        assert_eq!(s.len(), 1);
-        let pair = s.last().unwrap();
+        let mut diff = CFSComparator::new(3);
+        let first = diff.compare_and_insert(
+            cfs.get_tree().unwrap(),
+            "first_bin".to_string(),
+            "first_func".to_string(),
+        );
+        assert!(first.is_empty());
+        let second = diff.compare_and_insert(
+            cfs.get_tree().unwrap(),
+            "other_bin".to_string(),
+            "other_func".to_string(),
+        );
+        assert!(!second.is_empty());
+        assert_eq!(second.len(), 1);
+        let pair = second.last().unwrap();
         assert_eq!(pair.first_tree().offset(), 0);
-        assert_eq!(s[0].first_name(), "first");
-        assert_eq!(s[0].second_name(), "other");
+        assert_eq!(second[0].first_bin(), "first_bin");
+        assert_eq!(second[0].first_fun(), "first_func");
+        assert_eq!(second[0].second_bin(), "other_bin");
+        assert_eq!(second[0].second_fun(), "other_func");
     }
 
     #[test]
@@ -226,9 +255,12 @@ mod tests {
         let cfg0 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs0 = CFS::new(&cfg0);
         let mut diff = CFSComparator::new(2);
-        let first = diff.compare_and_insert(&cfs0.get_tree().unwrap(), "first");
-        assert!(first.is_some());
-        assert!(first.unwrap().is_empty());
+        let first = diff.compare_and_insert(
+            cfs0.get_tree().unwrap(),
+            "first_bin".to_string(),
+            "first_func".to_string(),
+        );
+        assert!(first.is_empty());
         stmts = create_function();
         stmts[2] = Statement::new(0x08, "nop");
         stmts[3] = Statement::new(0x0C, "nop");
@@ -237,11 +269,16 @@ mod tests {
         stmts[12] = Statement::new(0x30, "nop");
         let cfg1 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs1 = CFS::new(&cfg1);
-        let second = diff.compare_and_insert(&cfs1.get_tree().unwrap(), "second");
-        assert!(second.is_some());
-        let s = second.unwrap();
-        assert_eq!(s.len(), 2);
-        assert_eq!(s[0].first_name(), "first");
-        assert_eq!(s[0].second_name(), "second");
+        let second = diff.compare_and_insert(
+            cfs1.get_tree().unwrap(),
+            "second_bin".to_string(),
+            "second_func".to_string(),
+        );
+        assert!(!second.is_empty());
+        assert_eq!(second.len(), 2);
+        assert_eq!(second[0].first_bin(), "first_bin");
+        assert_eq!(second[0].first_fun(), "first_func");
+        assert_eq!(second[0].second_bin(), "second_bin");
+        assert_eq!(second[0].second_fun(), "second_func");
     }
 }

@@ -1,8 +1,8 @@
 [workspace]
 members = [
     "libcc",
-    "extractor",
-    "rq1"
+    "rq1",
+    "rq2",
 ]
 
 [profile.release]

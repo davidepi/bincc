@@ -58,10 +58,25 @@ impl NestedBlock {
     }
 }
 
+impl Display for NestedBlock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.block_type, self.offset)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StructureBlock {
     Basic(Arc<BasicBlock>),
     Nested(Arc<NestedBlock>),
+}
+
+impl Display for StructureBlock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StructureBlock::Basic(bb) => write!(f, "{}", bb),
+            StructureBlock::Nested(n) => write!(f, "{}", n),
+        }
+    }
 }
 
 impl StructureBlock {

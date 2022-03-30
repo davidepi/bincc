@@ -6,6 +6,7 @@ use parse_int::parse;
 use regex::Regex;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::error::Error;
+use std::fmt::Display;
 use std::fs::File;
 use std::io;
 use std::io::{ErrorKind, Read, Write};
@@ -88,6 +89,12 @@ impl BasicBlock {
             offset: ENTRY_ADDR,
             length: 0,
         }
+    }
+}
+
+impl Display for BasicBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.offset)
     }
 }
 
