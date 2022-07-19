@@ -2,10 +2,11 @@ use bcc::analysis::{Graph, CFG, CFS};
 use bcc::disasm::radare2::R2Disasm;
 use bcc::disasm::Disassembler;
 use clap::Parser;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -24,17 +25,28 @@ struct Args {
     /// Output prefix
     #[clap(long)]
     prefix: Option<String>,
+    /// Limits the maximum amount of applications analysed concurrently.
+    #[clap(short='l', long="limit", default_value_t = num_cpus::get())]
+    limit_concurrent: usize,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
     let mut inputs = args.input;
     inputs.shuffle(&mut thread_rng());
     let prefix = args.prefix.unwrap_or_else(|| "".to_string());
-    calc_cfs(inputs, args.output, &prefix);
+    println!("Running {} concurrent jobs", args.limit_concurrent);
+    calc_cfs(inputs, args.output, &prefix, args.limit_concurrent).await;
+    println!("Done :)");
 }
 
-fn calc_cfs(input_jobs: Vec<String>, output_dir: String, output_prefix: &str) {
+async fn calc_cfs(
+    input_jobs: Vec<String>,
+    output_dir: String,
+    output_prefix: &str,
+    max_jobs: usize,
+) {
     let pb = Arc::new(ProgressBar::new(input_jobs.len() as u64));
     pb.set_style(
         ProgressStyle::default_bar()
@@ -58,78 +70,94 @@ fn calc_cfs(input_jobs: Vec<String>, output_dir: String, output_prefix: &str) {
         .unwrap()
         .write(b"config,exec,func,original,reduced\n")
         .ok();
-    jobs.par_iter().for_each(|job| {
-        let personal_pb = pb.clone();
-        let personal_out_times = out_times.clone();
-        let personal_out_funcs = out_funcs.clone();
-        const BUFFER_SIZE: usize = 10000;
-        let mut func_buffer = Vec::with_capacity(BUFFER_SIZE);
-        let job_path = Path::new(job);
-        let bin = job_path.file_name().unwrap().to_str().unwrap();
-        let config = job_path
-            .parent()
-            .unwrap()
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap();
-        let fsize = match std::fs::metadata(job_path) {
-            Ok(val) => format!("{}", val.len()),
-            Err(_) => "".to_string(),
-        };
-        if let Ok(mut disassembler) = R2Disasm::new(job_path.to_str().unwrap()) {
-            let start_t = Instant::now();
-            disassembler.analyse_functions();
-            let end_t = Instant::now();
-            let disasm_time = end_t.checked_duration_since(start_t).unwrap().as_millis();
-            let mut cfs_time_micros = 0_u128;
-            let funcs = disassembler.get_function_offsets();
-            for func in funcs {
-                if let Some(bare) = disassembler.get_function_cfg(func) {
-                    let start_t = Instant::now();
-                    let cfg = CFG::from(bare);
-                    let cfs = CFS::new(&cfg);
-                    let end_t = Instant::now();
-                    cfs_time_micros += end_t.checked_duration_since(start_t).unwrap().as_micros();
-                    let cfs_len = if cfs.get_tree().is_some() {
-                        1
-                    } else {
-                        cfs.get_graph().len()
-                    };
-                    let func_str =
-                        format!("{},{},{},{},{}\n", config, bin, func, cfg.len(), cfs_len);
-                    func_buffer.push(func_str);
-                    if func_buffer.len() >= BUFFER_SIZE {
-                        let mut locked_file = personal_out_funcs.lock().unwrap();
-                        while let Some(str) = func_buffer.pop() {
-                            locked_file.write(str.as_bytes()).ok();
-                        }
+
+    let mut futs = FuturesUnordered::new();
+    for job in jobs {
+        let fut = tokio::spawn(run_job(
+            job,
+            Arc::clone(&pb),
+            Arc::clone(&out_times),
+            Arc::clone(&out_funcs),
+        ));
+        futs.push(fut);
+        if futs.len() == max_jobs {
+            futs.next().await;
+        }
+    }
+    // wait for completion
+    for fut in futs {
+        fut.await.unwrap()
+    }
+    pb.finish();
+}
+
+async fn run_job(
+    job: String,
+    pb: Arc<ProgressBar>,
+    out_times: Arc<Mutex<File>>,
+    out_funcs: Arc<Mutex<File>>,
+) {
+    const BUFFER_SIZE: usize = 10000;
+    let mut func_buffer = Vec::with_capacity(BUFFER_SIZE);
+    let job_path = Path::new(&job);
+    let bin = job_path.file_name().unwrap().to_str().unwrap();
+    let config = job_path
+        .parent()
+        .unwrap()
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let fsize = match std::fs::metadata(job_path) {
+        Ok(val) => format!("{}", val.len()),
+        Err(_) => "".to_string(),
+    };
+    if let Ok(mut disassembler) = R2Disasm::new(job_path.to_str().unwrap()) {
+        let start_t = Instant::now();
+        disassembler.analyse_functions();
+        let end_t = Instant::now();
+        let disasm_time = end_t.checked_duration_since(start_t).unwrap().as_millis();
+        let mut cfs_time_micros = 0_u128;
+        let funcs = disassembler.get_function_offsets();
+        for func in funcs {
+            if let Some(bare) = disassembler.get_function_cfg(func) {
+                let start_t = Instant::now();
+                let cfg = CFG::from(bare);
+                let cfs = CFS::new(&cfg);
+                let end_t = Instant::now();
+                cfs_time_micros += end_t.checked_duration_since(start_t).unwrap().as_micros();
+                let cfs_len = if cfs.get_tree().is_some() {
+                    1
+                } else {
+                    cfs.get_graph().len()
+                };
+                let func_str = format!("{},{},{},{},{}\n", config, bin, func, cfg.len(), cfs_len);
+                func_buffer.push(func_str);
+                if func_buffer.len() >= BUFFER_SIZE {
+                    let mut locked_file = out_funcs.lock().unwrap();
+                    while let Some(str) = func_buffer.pop() {
+                        locked_file.write(str.as_bytes()).ok();
                     }
                 }
             }
-            let time_string = format!(
-                "{},{},{},{},{}\n",
-                config,
-                bin,
-                fsize,
-                disasm_time,
-                cfs_time_micros / 1000
-            );
-            personal_out_times
-                .lock()
-                .unwrap()
-                .write(time_string.as_bytes())
-                .ok();
-            if !func_buffer.is_empty() {
-                let mut locked_file = personal_out_funcs.lock().unwrap();
-                while let Some(str) = func_buffer.pop() {
-                    locked_file.write(str.as_bytes()).ok();
-                }
-            }
-            personal_pb.inc(1);
-        } else {
-            eprintln!("Disassembler error!");
         }
-    });
-    pb.finish();
+        let time_string = format!(
+            "{},{},{},{},{}\n",
+            config,
+            bin,
+            fsize,
+            disasm_time,
+            cfs_time_micros / 1000
+        );
+        out_times.lock().unwrap().write(time_string.as_bytes()).ok();
+        if !func_buffer.is_empty() {
+            let mut locked_file = out_funcs.lock().unwrap();
+            while let Some(str) = func_buffer.pop() {
+                locked_file.write(str.as_bytes()).ok();
+            }
+        }
+        pb.inc(1);
+    } else {
+        eprintln!("Disassembler error!");
+    }
 }

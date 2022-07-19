@@ -1,5 +1,6 @@
 use std::cmp::min;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::Write;
 use std::hash::Hash;
 
 /// A trait used to represent a generic graph.
@@ -59,7 +60,7 @@ pub trait Graph {
             if !marked.contains(current) {
                 marked.insert(current);
                 self.neighbours(current).iter().for_each(|child| {
-                    retval.push_str(&format!("\"{}\"{connect}\"{}\"\n", current, child));
+                    writeln!(retval, "\"{}\"{connect}\"{}\"", current, child).unwrap();
                     stack.push(child);
                 });
             }

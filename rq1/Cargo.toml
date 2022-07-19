@@ -16,10 +16,12 @@ doc = false
 
 [dependencies]
 fnv = "1.0.7"
-parse_int = "0.5"
+parse_int = "0.6"
 bcc = {path="../libcc", features=["radare2"]}
 regex = "1"
 clap={version="3.1", features=["derive"]}
 indicatif="0.16"
 rand = "0.8"
-rayon = "1.5"
+tokio = {version = "1", features=["time", "rt-multi-thread", "macros"]}
+futures = "0.3"
+num_cpus = "1"
