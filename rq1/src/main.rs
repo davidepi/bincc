@@ -65,7 +65,6 @@ async fn calc_cfs(
             .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7}")
             .progress_chars("#>-"),
     );
-    let jobs = input_jobs;
     let mut out_times_name = PathBuf::from(output_dir.clone());
     out_times_name.push(Path::new(&format!("{}times.csv", output_prefix)));
     let mut out_funcs_name = PathBuf::from(output_dir);
@@ -84,7 +83,7 @@ async fn calc_cfs(
         .ok();
 
     let mut tasks = FuturesUnordered::new();
-    for job in jobs {
+    for job in input_jobs {
         let fut = tokio::spawn(run_job(
             job,
             Arc::clone(&pb),
