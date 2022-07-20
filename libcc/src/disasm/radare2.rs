@@ -1,14 +1,34 @@
 use crate::disasm::architectures::{ArchARM, ArchX86, Architecture};
-use crate::disasm::{BareCFG, Disassembler, Statement};
+use crate::disasm::Statement;
 use fnv::{FnvHashMap, FnvHashSet};
 use lazy_static::lazy_static;
-use r2pipe::{R2Pipe, R2PipeSpawnOptions};
+use r2pipe::{R2PipeAsync, R2PipeSpawnOptions};
 use regex::Regex;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::str::FromStr;
 use std::{fs, io};
+
+/// A very basic Control Flow Graph.
+///
+/// This crate provide a more advanced version in [analysis::CFG].
+/// This struct, however, is used to store the data retrieved from the underlying disassembler.
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub struct BareCFG {
+    /// Address of the function entry point.
+    pub root: Option<u64>,
+    /// Vector of basic blocks. Each tuple contains a basic block in the form:
+    /// - offset of the first instruction.
+    /// - length of the basic block.
+    pub blocks: Vec<(u64, u64)>,
+    /// Vector of CFG edges. Each tuple contains an edge in the form:
+    /// - offset of the source basic block.
+    /// - offset of the destination basic block.
+    ///
+    /// The edge corresponding to the "true" condition of a conditional jump in the CFG
+    /// should come before the edge corresponding to the "false" condition.
+    pub edges: Vec<(u64, u64)>,
+}
 
 /// Disassembler using the radare2 backend.
 ///
@@ -17,7 +37,7 @@ pub struct R2Disasm {
     // pipe to the external r2 command.
     // no need for a mutex as it is not possible to invoke commands to the same external process
     // at the same time (this struct does not implement copy or clone)
-    pipe: RefCell<R2Pipe>,
+    pipe: R2PipeAsync,
 }
 
 impl R2Disasm {
@@ -36,35 +56,26 @@ impl R2Disasm {
     ///
     /// assert!(disassembler.is_ok())
     /// ```
-    pub fn new(binary: &str) -> Result<R2Disasm, io::Error> {
+    pub async fn new(binary: &str) -> Result<Self, io::Error> {
         //R2Pipe.rs error handling is garbage and will panic if file does not exist
         if fs::metadata(binary).is_ok() {
             let flags = R2PipeSpawnOptions {
                 exepath: "r2".to_string(),
                 args: vec!["-2"],
             };
-            let maybe_pipe = R2Pipe::spawn(binary, Some(flags));
+            let maybe_pipe = R2PipeAsync::spawn(binary, Some(flags)).await;
             match maybe_pipe {
-                Ok(pipe) => Ok(R2Disasm {
-                    pipe: RefCell::new(pipe),
-                }),
+                Ok(pipe) => Ok(Self { pipe }),
                 Err(err) => Err(io::Error::new(ErrorKind::BrokenPipe, err)),
             }
         } else {
             Err(io::Error::new(ErrorKind::NotFound, "Could not open file"))
         }
     }
-}
 
-impl Drop for R2Disasm {
-    fn drop(&mut self) {
-        self.pipe.borrow_mut().close()
-    }
-}
-
-impl Disassembler for R2Disasm {
-    fn analyse(&mut self) {
-        match self.pipe.borrow_mut().cmd("aaa") {
+    /// Performs analysis on the underlying binary.
+    pub async fn analyse(&mut self) {
+        match self.pipe.cmd("aaa").await {
             Ok(_) => {}
             Err(error) => {
                 log::error!("{}", error);
@@ -72,10 +83,13 @@ impl Disassembler for R2Disasm {
         }
     }
 
-    fn analyse_functions(&mut self) {
-        let mut pipe = self.pipe.borrow_mut();
-        match pipe.cmd("aa") {
-            Ok(_) => match pipe.cmd("aac") {
+    /// Performs analysis on the function bounds only.
+    ///
+    /// The default implementation calls [Disassembler::analyse] thus performing a full-binary
+    /// analysis.
+    pub async fn analyse_functions(&mut self) {
+        match self.pipe.cmd("aa").await {
+            Ok(_) => match self.pipe.cmd("aac").await {
                 Ok(_) => {}
                 Err(error) => {
                     log::error!("{}", error);
@@ -87,8 +101,16 @@ impl Disassembler for R2Disasm {
         }
     }
 
-    fn get_arch(&self) -> Option<Box<dyn Architecture>> {
-        let res = self.pipe.borrow_mut().cmdj("ij");
+    /// Returns the architecture of a specific file.
+    ///
+    /// This operation *DOES NOT* require to run [Disassembler::analyse] first.
+    ///
+    /// This implementation currently supports only the architectures defined in the enum
+    /// [Architecture].
+    ///
+    /// If the architecture can not be recognized, None is returned.
+    pub async fn get_arch(&mut self) -> Option<Box<dyn Architecture>> {
+        let res = self.pipe.cmdj("ij").await;
         match res {
             Ok(json) => match json["bin"]["arch"].as_str() {
                 Some("x86") => match json["bin"]["bits"].as_u64() {
@@ -110,8 +132,11 @@ impl Disassembler for R2Disasm {
         }
     }
 
-    fn get_function_offsets(&self) -> FnvHashSet<u64> {
-        match self.pipe.borrow_mut().cmdj("aflqj") {
+    /// Returns the starting offset of each function contained in the disassembled executable
+    ///
+    /// This operation requires calling [Disassembler::analyse] first.
+    pub async fn get_function_offsets(&mut self) -> FnvHashSet<u64> {
+        match self.pipe.cmdj("aflqj").await {
             Ok(json) => {
                 if let Some(offsets) = json.as_array() {
                     offsets
@@ -129,9 +154,14 @@ impl Disassembler for R2Disasm {
         }
     }
 
-    fn get_function_names(&self) -> HashMap<String, u64> {
+    /// Returns names and offsets of every function in the current executable.
+    ///
+    /// This operation requires calling [Disassembler::analyse] first.
+    ///
+    /// The returned map contains pairs `(function name, offset in the binary)`.
+    pub async fn get_function_names(&mut self) -> HashMap<String, u64> {
         let mut retval = HashMap::new();
-        match self.pipe.borrow_mut().cmdj("aflj") {
+        match self.pipe.cmdj("aflj").await {
             Ok(json) => {
                 if let Some(funcs) = json.as_array() {
                     for func in funcs {
@@ -150,19 +180,25 @@ impl Disassembler for R2Disasm {
         retval
     }
 
-    fn get_function_bodies(&self) -> FnvHashMap<u64, Vec<Statement>> {
+    /// Return a map containing all the statements for every function in the binary.
+    ///
+    /// The returned map contains pairs `(function offset, vector of statements)`
+    ///
+    /// This operation requires calling [Disassembler::analyse] first.
+    pub async fn get_function_bodies(&mut self) -> FnvHashMap<u64, Vec<Statement>> {
         let mut retval = FnvHashMap::default();
-        let maybe_json = self.pipe.borrow_mut().cmdj("aflqj");
+        let maybe_json = self.pipe.cmdj("aflqj").await;
         match maybe_json {
             Ok(json) => {
                 if let Some(offsets) = json.as_array() {
-                    retval = offsets
-                        .iter()
-                        .filter_map(|x| x.as_u64())
-                        .filter_map(|offset| {
-                            self.get_function_body(offset).map(|value| (offset, value))
-                        })
-                        .collect();
+                    for value in offsets {
+                        if let Some(offset) = value.as_u64() {
+                            let body = self.get_function_body(offset).await;
+                            if let Some(body) = body {
+                                retval.insert(offset, body);
+                            }
+                        }
+                    }
                 }
             }
             Err(error) => {
@@ -172,13 +208,18 @@ impl Disassembler for R2Disasm {
         retval
     }
 
-    fn get_function_body(&self, function: u64) -> Option<Vec<Statement>> {
+    /// Returns a list of statements for a given function.
+    ///
+    /// This method takes as input the function offset in the binary and returns a vector containing
+    /// the list of statements. None if the function can not be found.
+    ///
+    /// This operation requires calling [Disassembler::analyse] first.
+    pub async fn get_function_body(&mut self, function: u64) -> Option<Vec<Statement>> {
         let mut retval = None;
         let cmd_change_offset = format!("s {}", function);
-        let mut pipe = self.pipe.borrow_mut();
-        match pipe.cmd(&cmd_change_offset) {
+        match self.pipe.cmd(&cmd_change_offset).await {
             Ok(_) => {
-                if let Ok(json) = pipe.cmdj("pdrj") {
+                if let Ok(json) = self.pipe.cmdj("pdrj").await {
                     if let Some(stmts) = json.as_array() {
                         let mut list = Vec::new();
                         for stmt in stmts {
@@ -200,13 +241,21 @@ impl Disassembler for R2Disasm {
         retval
     }
 
-    fn get_function_cfg(&self, function: u64) -> Option<BareCFG> {
+    /// Returns a simple CFG for the given function.
+    ///
+    /// This method takes as input the function offset in the binary and returns its CFG generated
+    /// by the underlying disassembler.
+    ///
+    /// If the disassembler is incapable of generating a CFG or the function address is wrong,
+    /// [Option::None] is returned.
+    pub async fn get_function_cfg(&mut self, function: u64) -> Option<BareCFG> {
         let mut retval = None;
         let cmd_change_offset = format!("s {}", function);
-        let mut pipe = self.pipe.borrow_mut();
-        match pipe.cmd(&cmd_change_offset) {
+        match self.pipe.cmd(&cmd_change_offset).await {
             Ok(_) => {
-                if let (Ok(bbs), Ok(dot)) = (pipe.cmd("afb"), pipe.cmd("agfdm")) {
+                if let (Ok(bbs), Ok(dot)) =
+                    (self.pipe.cmd("afb").await, self.pipe.cmd("agfdm").await)
+                {
                     if !bbs.is_empty() && !dot.is_empty() {
                         let blocks = radare_dot_to_bare_cfg_nodes(&bbs);
                         let edges = radare_dot_to_bare_cfg_edges(&dot);
@@ -277,156 +326,156 @@ fn radare_dot_to_bare_cfg_nodes(bbs: &str) -> Vec<(u64, u64)> {
 #[cfg(test)]
 mod tests {
     use crate::disasm::architectures::{ArchARM, ArchX86};
-    use crate::disasm::radare2::R2Disasm;
-    use crate::disasm::{Architecture, BareCFG, Disassembler};
+    use crate::disasm::radare2::{BareCFG, R2Disasm};
+    use crate::disasm::Architecture;
     use serial_test::serial;
     use std::io::ErrorKind;
     use std::{fs, io};
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn new_radare2_process_not_existing() {
+    async fn new_radare2_process_not_existing() {
         let old_path = std::env::var("PATH").unwrap_or_else(|_| "".to_string());
         std::env::set_var("PATH", "");
-        let disassembler = R2Disasm::new("/bin/ls");
+        let disassembler = R2Disasm::new("/bin/ls").await;
         std::env::set_var("PATH", old_path);
         assert!(disassembler.is_err());
         assert_eq!(disassembler.err().unwrap().kind(), ErrorKind::BrokenPipe);
     }
 
-    #[test]
-    fn new_radare2_file_not_existing() {
+    #[tokio::test]
+    async fn new_radare2_file_not_existing() {
         let file = "/bin/0BXVnvGMp1OehPlTvbf7";
         assert!(fs::metadata(file).is_err());
-        let disassembler = R2Disasm::new(file);
+        let disassembler = R2Disasm::new(file).await;
         assert!(disassembler.is_err());
         assert_eq!(disassembler.err().unwrap().kind(), ErrorKind::NotFound);
     }
 
-    #[test]
-    fn new_radare2() {
-        let disassembler = R2Disasm::new("/bin/ls");
+    #[tokio::test]
+    async fn new_radare2() {
+        let disassembler = R2Disasm::new("/bin/ls").await;
         assert!(disassembler.is_ok());
     }
 
-    #[test]
-    fn architecture_non_binary() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn architecture_non_binary() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let plaintext = format!("{}/{}", project_root, "resources/tests/plaintext");
-        let disassembler = R2Disasm::new(&plaintext)?;
-        assert!(disassembler.get_arch().is_none());
+        let mut disassembler = R2Disasm::new(&plaintext).await?;
+        assert!(disassembler.get_arch().await.is_none());
         Ok(())
     }
 
-    #[test]
-    fn architecture_unsupported_arch() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn architecture_unsupported_arch() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let riscv = format!("{}/{}", project_root, "resources/tests/riscv");
-        let disassembler = R2Disasm::new(&riscv)?;
-        assert!(disassembler.get_arch().is_none());
+        let mut disassembler = R2Disasm::new(&riscv).await?;
+        assert!(disassembler.get_arch().await.is_none());
         Ok(())
     }
 
-    #[test]
-    fn architecture_x86() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn architecture_x86() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86 = format!("{}/{}", project_root, "resources/tests/x86");
-        let disassembler = R2Disasm::new(&x86)?;
+        let mut disassembler = R2Disasm::new(&x86).await?;
         assert_eq!(
-            disassembler.get_arch().unwrap().name(),
+            disassembler.get_arch().await.unwrap().name(),
             ArchX86::new_i386().name()
         );
         Ok(())
     }
 
-    #[test]
-    fn architecture_x86_64() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn architecture_x86_64() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let disassembler = R2Disasm::new(&x86_64)?;
-        assert!(disassembler.get_arch().is_some());
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        assert!(disassembler.get_arch().await.is_some());
         assert_eq!(
-            disassembler.get_arch().unwrap().name(),
+            disassembler.get_arch().await.unwrap().name(),
             ArchX86::new_amd64().name()
         );
         Ok(())
     }
 
-    #[test]
-    fn architecture_arm() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn architecture_arm() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let armhf = format!("{}/{}", project_root, "resources/tests/armhf");
-        let disassembler = R2Disasm::new(&armhf)?;
-        assert!(disassembler.get_arch().is_some());
+        let mut disassembler = R2Disasm::new(&armhf).await?;
+        assert!(disassembler.get_arch().await.is_some());
         assert_eq!(
-            disassembler.get_arch().unwrap().name(),
+            disassembler.get_arch().await.unwrap().name(),
             ArchARM::new_arm32().name()
         );
         Ok(())
     }
 
-    #[test]
-    fn architecture_aarch64() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn architecture_aarch64() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let aarch64 = format!("{}/{}", project_root, "resources/tests/aarch64");
-        let disassembler = R2Disasm::new(&aarch64)?;
-        assert!(disassembler.get_arch().is_some());
+        let mut disassembler = R2Disasm::new(&aarch64).await?;
+        assert!(disassembler.get_arch().await.is_some());
         assert_eq!(
-            disassembler.get_arch().unwrap().name(),
+            disassembler.get_arch().await.unwrap().name(),
             ArchARM::new_aarch64().name()
         );
         Ok(())
     }
 
-    #[test]
-    fn function_offsets() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_offsets() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let mut disassembler = R2Disasm::new(&x86_64)?;
-        disassembler.analyse();
-        let offsets = disassembler.get_function_offsets();
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        disassembler.analyse().await;
+        let offsets = disassembler.get_function_offsets().await;
         assert!(offsets.contains(&0x1149));
         Ok(())
     }
 
-    #[test]
-    fn function_names() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_names() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let mut disassembler = R2Disasm::new(&x86_64)?;
-        disassembler.analyse();
-        let funcs = disassembler.get_function_names();
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        disassembler.analyse().await;
+        let funcs = disassembler.get_function_names().await;
         assert_eq!(*funcs.get("main").unwrap(), 0x1149);
         Ok(())
     }
 
-    #[test]
-    fn function_names_no_analysis() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_names_no_analysis() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let disassembler = R2Disasm::new(&x86_64)?;
-        let funcs = disassembler.get_function_names();
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        let funcs = disassembler.get_function_names().await;
         assert!(funcs.is_empty());
         Ok(())
     }
 
-    #[test]
-    fn function_body_not_exist() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_body_not_exist() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let disassembler = R2Disasm::new(&x86_64)?;
-        let body = disassembler.get_function_body(0x1000);
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        let body = disassembler.get_function_body(0x1000).await;
         assert!(body.is_none());
         Ok(())
     }
 
-    #[test]
-    fn function_body_exist() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_body_exist() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let mut disassembler = R2Disasm::new(&x86_64)?;
-        disassembler.analyse();
-        let maybe_body = disassembler.get_function_body(0x1000);
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        disassembler.analyse().await;
+        let maybe_body = disassembler.get_function_body(0x1000).await;
         assert!(maybe_body.is_some());
         let body = maybe_body.unwrap();
         assert_eq!(body.len(), 8);
@@ -437,45 +486,45 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn function_bodies_not_exist() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_bodies_not_exist() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let disassembler = R2Disasm::new(&x86_64)?;
-        let bodies = disassembler.get_function_bodies();
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        let bodies = disassembler.get_function_bodies().await;
         assert_eq!(bodies.len(), 0);
         Ok(())
     }
 
-    #[test]
-    fn function_bodies_exist() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_bodies_exist() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let mut disassembler = R2Disasm::new(&x86_64)?;
-        disassembler.analyse();
-        let bodies = disassembler.get_function_bodies();
-        let last_body = disassembler.get_function_body(0x1000);
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        disassembler.analyse().await;
+        let bodies = disassembler.get_function_bodies().await;
+        let last_body = disassembler.get_function_body(0x1000).await;
         assert_eq!(bodies.get(&0x1000).unwrap(), &last_body.unwrap());
         Ok(())
     }
 
-    #[test]
-    fn function_cfg_not_exist() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_cfg_not_exist() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let disassembler = R2Disasm::new(&x86_64)?;
-        let cfg = disassembler.get_function_cfg(0x1000);
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        let cfg = disassembler.get_function_cfg(0x1000).await;
         assert!(cfg.is_none());
         Ok(())
     }
 
-    #[test]
-    fn function_cfg_exits() -> Result<(), io::Error> {
+    #[tokio::test]
+    async fn function_cfg_exits() -> Result<(), io::Error> {
         let project_root = env!("CARGO_MANIFEST_DIR");
         let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
-        let mut disassembler = R2Disasm::new(&x86_64)?;
-        disassembler.analyse();
-        let cfg = disassembler.get_function_cfg(0x1000);
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        disassembler.analyse().await;
+        let cfg = disassembler.get_function_cfg(0x1000).await;
         assert!(cfg.is_some());
         let cfg = cfg.unwrap();
         let expected = BareCFG {

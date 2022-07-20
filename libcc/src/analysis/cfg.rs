@@ -1,5 +1,6 @@
 use crate::analysis::Graph;
-use crate::disasm::{Architecture, BareCFG, JumpType, Statement};
+use crate::disasm::radare2::BareCFG;
+use crate::disasm::{Architecture, JumpType, Statement};
 use fnv::FnvHashMap;
 use lazy_static::lazy_static;
 use parse_int::parse;
@@ -632,7 +633,8 @@ fn to_bare_cfg(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> Bar
 #[cfg(test)]
 mod tests {
     use crate::analysis::{BasicBlock, Graph, CFG};
-    use crate::disasm::{ArchX86, BareCFG, Statement};
+    use crate::disasm::radare2::BareCFG;
+    use crate::disasm::{ArchX86, Statement};
     use maplit::hashmap;
     use std::collections::{HashMap, HashSet};
     use std::error::Error;

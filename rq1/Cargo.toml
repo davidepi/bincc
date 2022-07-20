@@ -17,7 +17,7 @@ doc = false
 [dependencies]
 fnv = "1.0.7"
 parse_int = "0.6"
-bcc = {path="../libcc", features=["radare2"]}
+bcc = {path="../libcc"}
 regex = "1"
 clap={version="3.1", features=["derive"]}
 indicatif="0.16"

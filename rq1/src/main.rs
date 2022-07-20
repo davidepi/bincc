@@ -1,6 +1,5 @@
 use bcc::analysis::{Graph, CFG, CFS};
 use bcc::disasm::radare2::R2Disasm;
-use bcc::disasm::Disassembler;
 use clap::Parser;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -11,7 +10,8 @@ use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use tokio::time::timeout;
 
 /// Research Question #1
 #[derive(Parser, Debug)]
@@ -28,6 +28,9 @@ struct Args {
     /// Limits the maximum amount of applications analysed concurrently.
     #[clap(short='l', long="limit", default_value_t = num_cpus::get())]
     limit_concurrent: usize,
+    /// Maximum time limit for a single application analysis, in seconds.
+    #[clap(short, long, default_value_t = u64::MAX)]
+    timeout: u64,
 }
 
 #[tokio::main]
@@ -37,7 +40,15 @@ async fn main() {
     inputs.shuffle(&mut thread_rng());
     let prefix = args.prefix.unwrap_or_else(|| "".to_string());
     println!("Running {} concurrent jobs", args.limit_concurrent);
-    calc_cfs(inputs, args.output, &prefix, args.limit_concurrent).await;
+    println!("Timeout {} s", args.timeout);
+    calc_cfs(
+        inputs,
+        args.output,
+        &prefix,
+        args.limit_concurrent,
+        args.timeout,
+    )
+    .await;
     println!("Done :)");
 }
 
@@ -46,6 +57,7 @@ async fn calc_cfs(
     output_dir: String,
     output_prefix: &str,
     max_jobs: usize,
+    timeout: u64,
 ) {
     let pb = Arc::new(ProgressBar::new(input_jobs.len() as u64));
     pb.set_style(
@@ -71,22 +83,23 @@ async fn calc_cfs(
         .write(b"config,exec,func,original,reduced\n")
         .ok();
 
-    let mut futs = FuturesUnordered::new();
+    let mut tasks = FuturesUnordered::new();
     for job in jobs {
         let fut = tokio::spawn(run_job(
             job,
             Arc::clone(&pb),
             Arc::clone(&out_times),
             Arc::clone(&out_funcs),
+            timeout,
         ));
-        futs.push(fut);
-        if futs.len() == max_jobs {
-            futs.next().await;
+        tasks.push(fut);
+        if tasks.len() == max_jobs {
+            tasks.next().await;
         }
     }
-    // wait for completion
-    for fut in futs {
-        fut.await.unwrap()
+    // wait until completion or everything is killed
+    while !tasks.is_empty() {
+        tasks.next().await;
     }
     pb.finish();
 }
@@ -96,6 +109,7 @@ async fn run_job(
     pb: Arc<ProgressBar>,
     out_times: Arc<Mutex<File>>,
     out_funcs: Arc<Mutex<File>>,
+    timeout_secs: u64,
 ) {
     const BUFFER_SIZE: usize = 10000;
     let mut func_buffer = Vec::with_capacity(BUFFER_SIZE);
@@ -112,52 +126,57 @@ async fn run_job(
         Ok(val) => format!("{}", val.len()),
         Err(_) => "".to_string(),
     };
-    if let Ok(mut disassembler) = R2Disasm::new(job_path.to_str().unwrap()) {
+    if let Ok(mut disassembler) = R2Disasm::new(job_path.to_str().unwrap()).await {
         let start_t = Instant::now();
-        disassembler.analyse_functions();
-        let end_t = Instant::now();
-        let disasm_time = end_t.checked_duration_since(start_t).unwrap().as_millis();
-        let mut cfs_time_micros = 0_u128;
-        let funcs = disassembler.get_function_offsets();
-        for func in funcs {
-            if let Some(bare) = disassembler.get_function_cfg(func) {
-                let start_t = Instant::now();
-                let cfg = CFG::from(bare);
-                let cfs = CFS::new(&cfg);
-                let end_t = Instant::now();
-                cfs_time_micros += end_t.checked_duration_since(start_t).unwrap().as_micros();
-                let cfs_len = if cfs.get_tree().is_some() {
-                    1
-                } else {
-                    cfs.get_graph().len()
-                };
-                let func_str = format!("{},{},{},{},{}\n", config, bin, func, cfg.len(), cfs_len);
-                func_buffer.push(func_str);
-                if func_buffer.len() >= BUFFER_SIZE {
-                    let mut locked_file = out_funcs.lock().unwrap();
-                    while let Some(str) = func_buffer.pop() {
-                        locked_file.write(str.as_bytes()).ok();
+        let analysis_res = timeout(Duration::from_secs(timeout_secs), disassembler.analyse()).await;
+        if analysis_res.is_ok() {
+            let end_t = Instant::now();
+            let disasm_time = end_t.checked_duration_since(start_t).unwrap().as_millis();
+            let mut cfs_time_micros = 0_u128;
+            let funcs = disassembler.get_function_offsets().await;
+            for func in funcs {
+                if let Some(bare) = disassembler.get_function_cfg(func).await {
+                    let start_t = Instant::now();
+                    let cfg = CFG::from(bare);
+                    let cfs = CFS::new(&cfg);
+                    let end_t = Instant::now();
+                    cfs_time_micros += end_t.checked_duration_since(start_t).unwrap().as_micros();
+                    let cfs_len = if cfs.get_tree().is_some() {
+                        1
+                    } else {
+                        cfs.get_graph().len()
+                    };
+                    let func_str =
+                        format!("{},{},{},{},{}\n", config, bin, func, cfg.len(), cfs_len);
+                    func_buffer.push(func_str);
+                    if func_buffer.len() >= BUFFER_SIZE {
+                        let mut locked_file = out_funcs.lock().unwrap();
+                        while let Some(str) = func_buffer.pop() {
+                            locked_file.write(str.as_bytes()).ok();
+                        }
                     }
                 }
             }
-        }
-        let time_string = format!(
-            "{},{},{},{},{}\n",
-            config,
-            bin,
-            fsize,
-            disasm_time,
-            cfs_time_micros / 1000
-        );
-        out_times.lock().unwrap().write(time_string.as_bytes()).ok();
-        if !func_buffer.is_empty() {
-            let mut locked_file = out_funcs.lock().unwrap();
-            while let Some(str) = func_buffer.pop() {
-                locked_file.write(str.as_bytes()).ok();
+            let time_string = format!(
+                "{},{},{},{},{}\n",
+                config,
+                bin,
+                fsize,
+                disasm_time,
+                cfs_time_micros / 1000
+            );
+            out_times.lock().unwrap().write(time_string.as_bytes()).ok();
+            if !func_buffer.is_empty() {
+                let mut locked_file = out_funcs.lock().unwrap();
+                while let Some(str) = func_buffer.pop() {
+                    locked_file.write(str.as_bytes()).ok();
+                }
             }
+        } else {
+            eprintln!("Killed {} (timeout)", job);
         }
-        pb.inc(1);
     } else {
-        eprintln!("Disassembler error!");
+        eprintln!("Disassembly failed for {}", job);
     }
+    pb.inc(1);
 }
