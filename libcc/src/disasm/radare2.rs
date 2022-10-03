@@ -47,15 +47,6 @@ impl R2Disasm {
     /// In case of errors [io::Error] is returned with the following ErrorKind:
     /// - [io::ErrorKind::BrokenPipe] : if the radare2 process can not be found
     /// - [io::ErrorKind::NotFound] : if the binary file can not be found or read
-    /// # Examples
-    /// Basic usage:
-    /// ```
-    /// use bcc::disasm::radare2::R2Disasm;
-    ///
-    /// let disassembler = R2Disasm::new("/bin/ls");
-    ///
-    /// assert!(disassembler.is_ok())
-    /// ```
     pub async fn new(binary: &str) -> Result<Self, io::Error> {
         //R2Pipe.rs error handling is garbage and will panic if file does not exist
         if fs::metadata(binary).is_ok() {
@@ -219,8 +210,9 @@ impl R2Disasm {
         let cmd_change_offset = format!("s {}", function);
         match self.pipe.cmd(&cmd_change_offset).await {
             Ok(_) => {
-                if let Ok(json) = self.pipe.cmdj("pdrj").await {
-                    if let Some(stmts) = json.as_array() {
+                if let Ok(json) = self.pipe.cmdj("pdfj").await {
+                    let ops = &json["ops"];
+                    if let Some(stmts) = ops.as_array() {
                         let mut list = Vec::new();
                         for stmt in stmts {
                             let maybe_offset = stmt["offset"].as_u64();
