@@ -171,6 +171,41 @@ impl R2Disasm {
         retval
     }
 
+    /// Returns the statements composing a single basic block.
+    ///
+    /// This operation requires calling [Disassembler::analyse] first.
+    pub async fn get_basic_block_body(&mut self, offset: u64) -> Option<Vec<Statement>> {
+        let mut retval = None;
+        let cmd_change_offset = format!("s {}", offset);
+        match self.pipe.cmd(&cmd_change_offset).await {
+            Ok(_) => {
+                if let Ok(json) = self.pipe.cmdj("pdbj").await {
+                    if let Some(stmts) = json.as_array() {
+                        let mut list = Vec::new();
+                        for stmt in stmts {
+                            let maybe_offset = stmt["offset"].as_u64();
+                            let maybe_type = stmt["type"].as_str();
+                            let maybe_opcode = stmt["opcode"].as_str();
+                            if let (Some(offset), Some(stype), Some(opcode)) =
+                                (maybe_offset, maybe_type, maybe_opcode)
+                            {
+                                let stype_enum =
+                                    StatementType::try_from(stype).unwrap_or(StatementType::UNK);
+                                let stmt = Statement::new(offset, stype_enum, opcode);
+                                list.push(stmt);
+                            }
+                        }
+                        retval = Some(list);
+                    }
+                }
+            }
+            Err(error) => {
+                log::error!("{}", error);
+            }
+        }
+        retval
+    }
+
     /// Return a map containing all the statements for every function in the binary.
     ///
     /// The returned map contains pairs `(function offset, vector of statements)`
@@ -502,6 +537,31 @@ mod tests {
         let bodies = disassembler.get_function_bodies().await;
         let last_body = disassembler.get_function_body(0x1000).await;
         assert_eq!(bodies.get(&0x1000).unwrap(), &last_body.unwrap());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn basic_block_body_not_exist() -> Result<(), io::Error> {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        let body = disassembler.get_basic_block_body(0x1016).await;
+        assert!(body.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn basic_block_body_exist() -> Result<(), io::Error> {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        let x86_64 = format!("{}/{}", project_root, "resources/tests/x86_64");
+        let mut disassembler = R2Disasm::new(&x86_64).await?;
+        disassembler.analyse().await;
+        let maybe_body = disassembler.get_basic_block_body(0x1016).await;
+        assert!(maybe_body.is_some());
+        let body = maybe_body.unwrap();
+        assert_eq!(body.len(), 2);
+        assert_eq!(body[0].get_mnemonic(), "add");
+        assert_eq!(body[1].get_mnemonic(), "ret");
         Ok(())
     }
 
