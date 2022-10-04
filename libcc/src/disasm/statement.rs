@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, io::ErrorKind};
 
 /// Struct representing an assembly instruction associated with an offset.
 ///
@@ -12,25 +12,28 @@ use std::cmp::Ordering;
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Statement {
     offset: u64,
+    stype: StatementType,
     instruction: String,
 }
 
 impl Statement {
     /// Creates a new statement with the following parameters:
     /// - `offset`: an offset (from which point is up to the programmer)
+    /// - `stype`: the type of this statement. This represent a more abstract categorization for
+    /// the statement, independent of its underlying architecture.
     /// - `instruction`: a string representing the actual instruction, like `"mov eax, eax"`.
     /// A space between the mnemonic and the arguments is expected in order to achieve a correct
     /// behaviour in the methods [Statement::get_mnemonic] and [Statement::get_args].
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::disasm::Statement;
-    ///
-    /// let stmt = Statement::new(600, "ret");
+    /// # use bcc::disasm::{Statement, StatementType};
+    /// let stmt = Statement::new(600, StatementType::RET, "ret");
     /// ```
-    pub fn new(offset: u64, instruction: &str) -> Statement {
+    pub fn new(offset: u64, stype: StatementType, instruction: &str) -> Statement {
         Statement {
             offset,
+            stype,
             instruction: instruction.to_ascii_lowercase().trim().to_string(),
         }
     }
@@ -41,14 +44,39 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::disasm::Statement;
-    ///
-    /// let stmt = Statement::new(0x600, "mov r9d, dword [rsp + r10 + 0x20]");
+    /// # use bcc::disasm::{Statement, StatementType};
+    /// let stmt = Statement::new(
+    ///     0x600,
+    ///     StatementType::MOV,
+    ///     "mov r9d, dword [rsp + r10 + 0x20]",
+    /// );
     ///
     /// assert_eq!(stmt.get_offset(), 0x600);
     /// ```
     pub fn get_offset(&self) -> u64 {
         self.offset
+    }
+
+    /// Returns the instruction's arguments for the current statement.
+    ///
+    /// This method is complementar to [Statement::get_mnemonic].
+    ///
+    /// If no arguments are present, an empty string is returned.
+    /// # Examples
+    /// Basic usage:
+    /// ```
+    /// # use bcc::disasm::{Statement, StatementType};
+    /// let stmt = Statement::new(
+    ///     0x600,
+    ///     StatementType::MOV,
+    ///     "mov r9d, dword [rsp + r10 + 0x20]",
+    /// );
+    ///
+    /// assert_eq!(stmt.get_args(), "r9d, dword [rsp + r10 + 0x20]");
+    /// ```
+
+    pub fn get_type(&self) -> StatementType {
+        self.stype
     }
 
     /// Returns the instruction associated with this statement.
@@ -57,9 +85,12 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::disasm::Statement;
-    ///
-    /// let stmt = Statement::new(0x600, "mov r9d, dword [rsp + r10 + 0x20]");
+    /// # use bcc::disasm::{Statement, StatementType};
+    /// let stmt = Statement::new(
+    ///     0x600,
+    ///     StatementType::MOV,
+    ///     "mov r9d, dword [rsp + r10 + 0x20]",
+    /// );
     ///
     /// assert_eq!(stmt.get_instruction(), "mov r9d, dword [rsp + r10 + 0x20]");
     /// ```
@@ -77,9 +108,12 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::disasm::Statement;
-    ///
-    /// let stmt = Statement::new(0x600, "MOV r9d, dword [rsp + r10 + 0x20]");
+    /// # use bcc::disasm::{Statement, StatementType};
+    /// let stmt = Statement::new(
+    ///     0x600,
+    ///     StatementType::MOV,
+    ///     "MOV r9d, dword [rsp + r10 + 0x20]",
+    /// );
     ///
     /// assert_eq!(stmt.get_mnemonic(), "mov");
     /// ```
@@ -98,9 +132,12 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::disasm::Statement;
-    ///
-    /// let stmt = Statement::new(0x600, "mov r9d, dword [rsp + r10 + 0x20]");
+    /// # use bcc::disasm::{Statement, StatementType};
+    /// let stmt = Statement::new(
+    ///     0x600,
+    ///     StatementType::MOV,
+    ///     "mov r9d, dword [rsp + r10 + 0x20]",
+    /// );
     ///
     /// assert_eq!(stmt.get_args(), "r9d, dword [rsp + r10 + 0x20]");
     /// ```
@@ -124,14 +161,186 @@ impl PartialOrd for Statement {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+/// Statements categorization that does not depend on the statement particular ISA.
+/// This categorization is similar to the one used in `radare2` by the variable `R_ANAL_OP_TYPE_###`
+pub enum StatementType {
+    ABS,
+    ADD,
+    AND,
+    CALL,
+    CAST,
+    CJMP,
+    CMOV,
+    CMP,
+    CPL,
+    CRYPTO,
+    DEBUG,
+    DIV,
+    FPU,
+    ILL,
+    IO,
+    JMP,
+    LEA,
+    LEAVE,
+    LENGTH,
+    LOAD,
+    MASK,
+    MOD,
+    MOV,
+    MUL,
+    NEW,
+    NOP,
+    NOR,
+    NOT,
+    NULL,
+    OR,
+    POP,
+    PRIV,
+    PUSH,
+    RET,
+    ROL,
+    ROR,
+    SAL,
+    SAR,
+    SHL,
+    SHR,
+    STORE,
+    SUB,
+    SWI,
+    SYNC,
+    TRAP,
+    UNK,
+    XCHG,
+    XOR,
+}
+
+impl StatementType {
+    /// Converts the statement type into a string representation
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Self::ABS => "abs",
+            Self::ADD => "add",
+            Self::AND => "and",
+            Self::CALL => "call",
+            Self::CAST => "cast",
+            Self::CJMP => "cjmp",
+            Self::CMOV => "cmov",
+            Self::CMP => "cmp",
+            Self::CPL => "cpl",
+            Self::CRYPTO => "crypto",
+            Self::DEBUG => "debug",
+            Self::DIV => "div",
+            Self::FPU => "fpu",
+            Self::ILL => "ill",
+            Self::IO => "io",
+            Self::JMP => "jmp",
+            Self::LEA => "lea",
+            Self::LEAVE => "leave",
+            Self::LENGTH => "length",
+            Self::LOAD => "load",
+            Self::MASK => "mask",
+            Self::MOD => "mod",
+            Self::MOV => "mov",
+            Self::MUL => "mul",
+            Self::NEW => "new",
+            Self::NOP => "nop",
+            Self::NOR => "nor",
+            Self::NOT => "not",
+            Self::NULL => "null",
+            Self::OR => "or",
+            Self::POP => "pop",
+            Self::PRIV => "priv",
+            Self::PUSH => "push",
+            Self::RET => "ret",
+            Self::ROL => "rol",
+            Self::ROR => "ror",
+            Self::SAL => "sal",
+            Self::SAR => "sar",
+            Self::SHL => "shl",
+            Self::SHR => "shr",
+            Self::STORE => "store",
+            Self::SUB => "sub",
+            Self::SWI => "swi",
+            Self::SYNC => "sync",
+            Self::TRAP => "trap",
+            Self::XCHG => "xchg",
+            Self::XOR => "xor",
+            Self::UNK => "unk",
+        }
+    }
+}
+
+impl TryFrom<&str> for StatementType {
+    type Error = std::io::Error;
+
+    fn try_from(s: &str) -> Result<StatementType, Self::Error> {
+        match s {
+            "abs" => Ok(Self::ABS),
+            "add" => Ok(Self::ADD),
+            "and" => Ok(Self::AND),
+            "call" | "icall" | "ircall" | "ucall" | "rcall" | "ccall" | "uccall" => Ok(Self::CALL),
+            "cast" => Ok(Self::CAST),
+            "cjmp" | "rcjmp" | "ucjmp" | "mcjmp" => Ok(Self::CJMP),
+            "cmov" => Ok(Self::CMOV),
+            "acmp" | "cmp" => Ok(Self::CMP),
+            "cpl" => Ok(Self::CPL),
+            "crypto" => Ok(Self::CRYPTO),
+            "debug" => Ok(Self::DEBUG),
+            "div" => Ok(Self::DIV),
+            "fpu" => Ok(Self::FPU),
+            "ill" => Ok(Self::ILL),
+            "io" => Ok(Self::IO),
+            "jmp" | "ijmp" | "irjmp" | "ujmp" | "mjmp" | "rjmp" => Ok(Self::JMP),
+            "lea" | "ulea" => Ok(Self::LEA),
+            "leave" => Ok(Self::LEAVE),
+            "length" => Ok(Self::LENGTH),
+            "load" => Ok(Self::LOAD),
+            "mask" => Ok(Self::MASK),
+            "mod" => Ok(Self::MOD),
+            "mov" => Ok(Self::MOV),
+            "mul" => Ok(Self::MUL),
+            "new" => Ok(Self::NEW),
+            "nop" => Ok(Self::NOP),
+            "nor" => Ok(Self::NOR),
+            "not" => Ok(Self::NOT),
+            "null" => Ok(Self::NULL),
+            "or" => Ok(Self::OR),
+            "pop" => Ok(Self::POP),
+            "priv" => Ok(Self::PRIV),
+            "push" | "rpush" | "upush" => Ok(Self::PUSH),
+            "ret" | "cret" => Ok(Self::RET),
+            "rol" => Ok(Self::ROL),
+            "ror" => Ok(Self::ROR),
+            "sal" => Ok(Self::SAL),
+            "sar" => Ok(Self::SAR),
+            "shl" => Ok(Self::SHL),
+            "shr" => Ok(Self::SHR),
+            "store" => Ok(Self::STORE),
+            "sub" => Ok(Self::SUB),
+            "swi" | "cswi" => Ok(Self::SWI),
+            "sync" => Ok(Self::SYNC),
+            "trap" => Ok(Self::TRAP),
+            "xchg" => Ok(Self::XCHG),
+            "xor" => Ok(Self::XOR),
+            "unk" => Ok(Self::UNK),
+            _ => Err(Self::Error::new(
+                ErrorKind::InvalidInput,
+                format!("invalid type {}", s),
+            )),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::disasm::Statement;
+    use crate::disasm::{statement::StatementType, Statement};
 
     #[test]
     fn new_no_args() {
-        let stmt = Statement::new(1552, "ret");
+        let stmt = Statement::new(1552, StatementType::RET, "ret");
         assert_eq!(stmt.get_offset(), 0x610);
+        assert_eq!(stmt.get_type(), StatementType::RET);
         assert_eq!(stmt.get_instruction(), "ret");
         assert_eq!(stmt.get_mnemonic(), "ret");
         assert_eq!(stmt.get_args(), "");
@@ -140,8 +349,9 @@ mod tests {
     #[test]
     fn new_no_args_untrimmed() {
         //corner case for getting the arguments
-        let stmt = Statement::new(1552, "ret ");
+        let stmt = Statement::new(1552, StatementType::RET, "ret ");
         assert_eq!(stmt.get_offset(), 0x610);
+        assert_eq!(stmt.get_type(), StatementType::RET);
         assert_eq!(stmt.get_instruction(), "ret");
         assert_eq!(stmt.get_mnemonic(), "ret");
         assert_eq!(stmt.get_args(), "");
@@ -149,8 +359,13 @@ mod tests {
 
     #[test]
     fn new_multi_args() {
-        let stmt = Statement::new(0x5341A5, "mov r9d, dword [rsp + r10 + 0x20]");
+        let stmt = Statement::new(
+            0x5341A5,
+            StatementType::MOV,
+            "mov r9d, dword [rsp + r10 + 0x20]",
+        );
         assert_eq!(stmt.get_offset(), 5456293);
+        assert_eq!(stmt.get_type(), StatementType::MOV);
         assert_eq!(stmt.get_instruction(), "mov r9d, dword [rsp + r10 + 0x20]");
         assert_eq!(stmt.get_mnemonic(), "mov");
         assert_eq!(stmt.get_args(), "r9d, dword [rsp + r10 + 0x20]");
@@ -158,8 +373,9 @@ mod tests {
 
     #[test]
     fn new_uppercase() {
-        let stmt = Statement::new(0x5667, "CMP RAX, r8");
+        let stmt = Statement::new(0x5667, StatementType::CMP, "CMP RAX, r8");
         assert_eq!(stmt.get_offset(), 0x5667);
+        assert_eq!(stmt.get_type(), StatementType::CMP);
         assert_eq!(stmt.get_instruction(), "cmp rax, r8");
         assert_eq!(stmt.get_mnemonic(), "cmp");
         assert_eq!(stmt.get_args(), "rax, r8");
@@ -167,8 +383,8 @@ mod tests {
 
     #[test]
     fn ord() {
-        let stmt0 = Statement::new(1552, "push");
-        let stmt1 = Statement::new(1553, "ret");
+        let stmt0 = Statement::new(1552, StatementType::PUSH, "push");
+        let stmt1 = Statement::new(1553, StatementType::RET, "ret");
         assert!(stmt0 < stmt1);
     }
 }

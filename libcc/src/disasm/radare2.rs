@@ -1,5 +1,5 @@
 use crate::disasm::architectures::{ArchARM, ArchX86, Architecture};
-use crate::disasm::Statement;
+use crate::disasm::{Statement, StatementType};
 use fnv::{FnvHashMap, FnvHashSet};
 use lazy_static::lazy_static;
 use r2pipe::{R2PipeAsync, R2PipeSpawnOptions};
@@ -216,9 +216,14 @@ impl R2Disasm {
                         let mut list = Vec::new();
                         for stmt in stmts {
                             let maybe_offset = stmt["offset"].as_u64();
+                            let maybe_type = stmt["type"].as_str();
                             let maybe_opcode = stmt["opcode"].as_str();
-                            if let (Some(offset), Some(opcode)) = (maybe_offset, maybe_opcode) {
-                                let stmt = Statement::new(offset, opcode);
+                            if let (Some(offset), Some(stype), Some(opcode)) =
+                                (maybe_offset, maybe_type, maybe_opcode)
+                            {
+                                let stype_enum =
+                                    StatementType::try_from(stype).unwrap_or(StatementType::UNK);
+                                let stmt = Statement::new(offset, stype_enum, opcode);
                                 list.push(stmt);
                             }
                         }

@@ -188,37 +188,37 @@ fn overlaps(a: &ClonePair, b: &ClonePair) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::analysis::{CFSComparator, CFG, CFS};
-    use crate::disasm::{ArchX86, Statement};
+    use crate::disasm::{ArchX86, Statement, StatementType};
 
     fn create_function() -> Vec<Statement> {
         vec![
-            Statement::new(0x00, "test eax, eax"),
-            Statement::new(0x04, "jg 0x38"),
-            Statement::new(0x08, "add ebx, 5"),
-            Statement::new(0x0C, "jmp 0x10"),
-            Statement::new(0x10, "cmp eax, ebx"),
-            Statement::new(0x14, "jne 0x20"),
-            Statement::new(0x18, "cmp ebx, 5"),
-            Statement::new(0x1C, "jne 0x18"),
-            Statement::new(0x20, "mov ecx, [ebp+8]"),
-            Statement::new(0x24, "jmp 0x28"),
-            Statement::new(0x28, "cmp ecx, eax"),
-            Statement::new(0x2C, "mov eax, -1"),
-            Statement::new(0x30, "jne 0x08"),
-            Statement::new(0x34, "ret"),
-            Statement::new(0x38, "incl eax"),
-            Statement::new(0x3C, "mov ebx, [ebp+20]"),
-            Statement::new(0x40, "cmp eax, ebx"),
-            Statement::new(0x44, "je 0x58"),
-            Statement::new(0x48, "mov ecx, [ebp+20]"),
-            Statement::new(0x4C, "decl ecx"),
-            Statement::new(0x50, "mov [ebp+20], ecx"),
-            Statement::new(0x54, "jmp 0x38"),
-            Statement::new(0x58, "test eax, eax"),
-            Statement::new(0x5C, "mov eax, 0"),
-            Statement::new(0x60, "je 0x68"),
-            Statement::new(0x64, "mov eax, 1"),
-            Statement::new(0x68, "ret"),
+            Statement::new(0x00, StatementType::CMP, "test eax, eax"),
+            Statement::new(0x04, StatementType::CJMP, "jg 0x38"),
+            Statement::new(0x08, StatementType::ADD, "add ebx, 5"),
+            Statement::new(0x0C, StatementType::JMP, "jmp 0x10"),
+            Statement::new(0x10, StatementType::CMP, "cmp eax, ebx"),
+            Statement::new(0x14, StatementType::CJMP, "jne 0x20"),
+            Statement::new(0x18, StatementType::CMP, "cmp ebx, 5"),
+            Statement::new(0x1C, StatementType::CJMP, "jne 0x18"),
+            Statement::new(0x20, StatementType::MOV, "mov ecx, [ebp+8]"),
+            Statement::new(0x24, StatementType::JMP, "jmp 0x28"),
+            Statement::new(0x28, StatementType::CMP, "cmp ecx, eax"),
+            Statement::new(0x2C, StatementType::MOV, "mov eax, -1"),
+            Statement::new(0x30, StatementType::CJMP, "jne 0x08"),
+            Statement::new(0x34, StatementType::RET, "ret"),
+            Statement::new(0x38, StatementType::ADD, "incl eax"),
+            Statement::new(0x3C, StatementType::MOV, "mov ebx, [ebp+20]"),
+            Statement::new(0x40, StatementType::CMP, "cmp eax, ebx"),
+            Statement::new(0x44, StatementType::CJMP, "je 0x58"),
+            Statement::new(0x48, StatementType::MOV, "mov ecx, [ebp+20]"),
+            Statement::new(0x4C, StatementType::SUB, "decl ecx"),
+            Statement::new(0x50, StatementType::MOV, "mov [ebp+20], ecx"),
+            Statement::new(0x54, StatementType::JMP, "jmp 0x38"),
+            Statement::new(0x58, StatementType::CMP, "test eax, eax"),
+            Statement::new(0x5C, StatementType::MOV, "mov eax, 0"),
+            Statement::new(0x60, StatementType::CJMP, "je 0x68"),
+            Statement::new(0x64, StatementType::MOV, "mov eax, 1"),
+            Statement::new(0x68, StatementType::RET, "ret"),
         ]
     }
 
@@ -262,11 +262,11 @@ mod tests {
         );
         assert!(first.is_empty());
         stmts = create_function();
-        stmts[2] = Statement::new(0x08, "nop");
-        stmts[3] = Statement::new(0x0C, "nop");
-        stmts[10] = Statement::new(0x28, "nop");
-        stmts[11] = Statement::new(0x2C, "nop");
-        stmts[12] = Statement::new(0x30, "nop");
+        stmts[2] = Statement::new(0x08, StatementType::NOP, "nop");
+        stmts[3] = Statement::new(0x0C, StatementType::NOP, "nop");
+        stmts[10] = Statement::new(0x28, StatementType::NOP, "nop");
+        stmts[11] = Statement::new(0x2C, StatementType::NOP, "nop");
+        stmts[12] = Statement::new(0x30, StatementType::NOP, "nop");
         let cfg1 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs1 = CFS::new(&cfg1);
         let second = diff.compare_and_insert(

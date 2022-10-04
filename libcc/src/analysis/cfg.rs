@@ -1,6 +1,6 @@
 use crate::analysis::Graph;
 use crate::disasm::radare2::BareCFG;
-use crate::disasm::{Architecture, JumpType, Statement};
+use crate::disasm::{Architecture, JumpType, Statement, StatementType};
 use fnv::FnvHashMap;
 use lazy_static::lazy_static;
 use parse_int::parse;
@@ -173,16 +173,15 @@ impl CFG {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::analysis::{Graph, CFG};
-    /// use bcc::disasm::{ArchX86, Statement};
-    ///
+    /// # use bcc::analysis::{Graph, CFG};
+    /// # use bcc::disasm::{ArchX86, Statement, StatementType};
     /// let stmts = vec![
-    ///     Statement::new(0x38, "cmp dword [var_4h], 0"),
-    ///     Statement::new(0x3C, "jle 0x45"),
-    ///     Statement::new(0x3E, "mov eax, 0"),
-    ///     Statement::new(0x43, "jmp 0x4a"),
-    ///     Statement::new(0x45, "mov eax, 1"),
-    ///     Statement::new(0x4A, "ret"),
+    ///     Statement::new(0x38, StatementType::CMP, "cmp dword [var_4h], 0"),
+    ///     Statement::new(0x3C, StatementType::CJMP, "jle 0x45"),
+    ///     Statement::new(0x3E, StatementType::MOV, "mov eax, 0"),
+    ///     Statement::new(0x43, StatementType::JMP, "jmp 0x4a"),
+    ///     Statement::new(0x45, StatementType::MOV, "mov eax, 1"),
+    ///     Statement::new(0x4A, StatementType::RET, "ret"),
     /// ];
     /// let arch = ArchX86::new_amd64();
     /// let cfg = CFG::new(&stmts, 0x4B, &arch);
@@ -492,7 +491,7 @@ fn get_targets(stmts: &[Statement], arch: &dyn Architecture) -> TargetMap {
     let mut srcs_uncond = FnvHashMap::default();
     let mut deadend_cond = BTreeSet::default();
     let mut deadend_uncond = BTreeSet::default();
-    let empty_stmt = Statement::new(0x0, "");
+    let empty_stmt = Statement::new(0x0, StatementType::UNK, "");
     let func_lower_bound = stmts.first().unwrap_or(&empty_stmt).get_offset();
     let func_upper_bound = stmts.last().unwrap_or(&empty_stmt).get_offset();
     let mut previous_was_jump = true;
@@ -634,7 +633,7 @@ fn to_bare_cfg(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> Bar
 mod tests {
     use crate::analysis::{BasicBlock, Graph, CFG};
     use crate::disasm::radare2::BareCFG;
-    use crate::disasm::{ArchX86, Statement};
+    use crate::disasm::{ArchX86, Statement, StatementType};
     use maplit::hashmap;
     use std::collections::{HashMap, HashSet};
     use std::error::Error;
@@ -758,8 +757,8 @@ mod tests {
     #[test]
     fn root() {
         let stmts = vec![
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x624, "ret"),
+            Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
+            Statement::new(0x624, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x625, &arch);
@@ -779,8 +778,8 @@ mod tests {
     #[test]
     fn get_children_existing_empty() {
         let stmts = vec![
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x624, "ret"),
+            Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
+            Statement::new(0x624, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x625, &arch);
@@ -791,10 +790,10 @@ mod tests {
     #[test]
     fn get_children_existing() {
         let stmts = vec![
-            Statement::new(0x610, "test edi, edi"),
-            Statement::new(0x612, "je 0x618"),
-            Statement::new(0x614, "mov eax, 6"),
-            Statement::new(0x618, "ret"),
+            Statement::new(0x610, StatementType::CMP, "test edi, edi"),
+            Statement::new(0x612, StatementType::CJMP, "je 0x618"),
+            Statement::new(0x614, StatementType::MOV, "mov eax, 6"),
+            Statement::new(0x618, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x619, &arch);
@@ -805,10 +804,10 @@ mod tests {
     #[test]
     fn len() {
         let stmts = vec![
-            Statement::new(0x610, "test edi, edi"),
-            Statement::new(0x612, "je 0x618"),
-            Statement::new(0x614, "mov eax, 6"),
-            Statement::new(0x618, "ret"),
+            Statement::new(0x610, StatementType::CMP, "test edi, edi"),
+            Statement::new(0x612, StatementType::CJMP, "je 0x618"),
+            Statement::new(0x614, StatementType::MOV, "mov eax, 6"),
+            Statement::new(0x618, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x619, &arch);
@@ -841,14 +840,14 @@ mod tests {
     #[test]
     fn build_cfg_conditional_jumps() {
         let stmts = vec![
-            Statement::new(0x610, "test edi, edi"), //0
-            Statement::new(0x612, "je 0x620"),      //0
-            Statement::new(0x614, "test esi, esi"), //1
-            Statement::new(0x616, "mov eax, 5"),    //1
-            Statement::new(0x61b, "je 0x620"),      //1
-            Statement::new(0x61d, "ret"),           //2
-            Statement::new(0x620, "mov eax, 6"),    //3
-            Statement::new(0x625, "ret"),           //3
+            Statement::new(0x610, StatementType::CMP, "test edi, edi"), //0
+            Statement::new(0x612, StatementType::CJMP, "je 0x620"),     //0
+            Statement::new(0x614, StatementType::CMP, "test esi, esi"), //1
+            Statement::new(0x616, StatementType::MOV, "mov eax, 5"),    //1
+            Statement::new(0x61b, StatementType::CJMP, "je 0x620"),     //1
+            Statement::new(0x61d, StatementType::RET, "ret"),           //2
+            Statement::new(0x620, StatementType::MOV, "mov eax, 6"),    //3
+            Statement::new(0x625, StatementType::RET, "ret"),           //3
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x626, &arch);
@@ -871,17 +870,17 @@ mod tests {
     #[test]
     fn build_cfg_unconditional_jumps() {
         let stmts = vec![
-            Statement::new(0x61E, "push rbp"),                //0
-            Statement::new(0x61F, "mov rbp, rsp"),            //0
-            Statement::new(0x622, "mov dword [var_4h], edi"), //0
-            Statement::new(0x625, "mov dword [var_8h], esi"), //0
-            Statement::new(0x628, "cmp dword [var_4h], 5"),   //0
-            Statement::new(0x62C, "jne 0x633"),               //0
-            Statement::new(0x62E, "mov eax, dword [var_8h]"), //1
-            Statement::new(0x631, "jmp 0x638"),               //1
-            Statement::new(0x633, "mov eax, 6"),              //2
-            Statement::new(0x638, "pop rbp"),                 //3
-            Statement::new(0x639, "ret"),                     //3
+            Statement::new(0x61E, StatementType::PUSH, "push rbp"), //0
+            Statement::new(0x61F, StatementType::MOV, "mov rbp, rsp"), //0
+            Statement::new(0x622, StatementType::MOV, "mov dword [var_4h], edi"), //0
+            Statement::new(0x625, StatementType::MOV, "mov dword [var_8h], esi"), //0
+            Statement::new(0x628, StatementType::CMP, "cmp dword [var_4h], 5"), //0
+            Statement::new(0x62C, StatementType::CJMP, "jne 0x633"), //0
+            Statement::new(0x62E, StatementType::MOV, "mov eax, dword [var_8h]"), //1
+            Statement::new(0x631, StatementType::JMP, "jmp 0x638"), //1
+            Statement::new(0x633, StatementType::MOV, "mov eax, 6"), //2
+            Statement::new(0x638, StatementType::POP, "pop rbp"),   //3
+            Statement::new(0x639, StatementType::RET, "ret"),       //3
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x640, &arch);
@@ -904,12 +903,12 @@ mod tests {
     fn build_cfg_long_unconditional_jump() {
         // this is crafted so offsets are completely random
         let stmts = vec![
-            Statement::new(0x610, "test edi, edi"),          //0
-            Statement::new(0x611, "je 0x613"),               //0
-            Statement::new(0x612, "jmp 0xFFFFFFFFFFFFFFFC"), //1
-            Statement::new(0x613, "jmp 0x600"),              //2
-            Statement::new(0x614, "jmp 0x615"),              //3
-            Statement::new(0x615, "ret"),                    //4
+            Statement::new(0x610, StatementType::CMP, "test edi, edi"), //0
+            Statement::new(0x611, StatementType::CMP, "je 0x613"),      //0
+            Statement::new(0x612, StatementType::JMP, "jmp 0xFFFFFFFFFFFFFFFC"), //1
+            Statement::new(0x613, StatementType::JMP, "jmp 0x600"),     //2
+            Statement::new(0x614, StatementType::JMP, "jmp 0x615"),     //3
+            Statement::new(0x615, StatementType::RET, "ret"),           //4
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x616, &arch);
@@ -926,14 +925,14 @@ mod tests {
     #[test]
     fn build_cfg_bb_offset() {
         let stmts = vec![
-            Statement::new(0x610, "test edi, edi"), //0
-            Statement::new(0x614, "je 0x628"),      //0
-            Statement::new(0x618, "test esi, esi"), //1
-            Statement::new(0x61C, "mov eax, 5"),    //1
-            Statement::new(0x620, "je 0x628"),      //1
-            Statement::new(0x624, "ret"),           //2
-            Statement::new(0x628, "mov eax, 6"),    //3
-            Statement::new(0x62C, "ret"),           //3
+            Statement::new(0x610, StatementType::CMP, "test edi, edi"), //0
+            Statement::new(0x614, StatementType::CMP, "je 0x628"),      //0
+            Statement::new(0x618, StatementType::CMP, "test esi, esi"), //1
+            Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),    //1
+            Statement::new(0x620, StatementType::CMP, "je 0x628"),      //1
+            Statement::new(0x624, StatementType::RET, "ret"),           //2
+            Statement::new(0x628, StatementType::MOV, "mov eax, 6"),    //3
+            Statement::new(0x62C, StatementType::RET, "ret"),           //3
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x630, &arch);
@@ -960,20 +959,20 @@ mod tests {
     #[test]
     fn build_cfg_offset_64bit() {
         let stmts = vec![
-            Statement::new(0x3FD1A7EF534, "jmp 0x3FD1A7EF538"),
-            Statement::new(0x3FD1A7EF538, "incl eax"),
-            Statement::new(0x3FD1A7EF53C, "mov ebx, [ebp+20]"),
-            Statement::new(0x3FD1A7EF540, "cmp eax, ebx"),
-            Statement::new(0x3FD1A7EF544, "je 0x3FD1A7EF558"),
-            Statement::new(0x3FD1A7EF548, "mov ecx, [ebp+20]"),
-            Statement::new(0x3FD1A7EF54C, "decl ecx"),
-            Statement::new(0x3FD1A7EF550, "mov [ebp+20], ecx"),
-            Statement::new(0x3FD1A7EF554, "jmp 0x3FD1A7EF538"),
-            Statement::new(0x3FD1A7EF558, "test eax, eax"),
-            Statement::new(0x3FD1A7EF55C, "mov eax, 0"),
-            Statement::new(0x3FD1A7EF560, "je 0x3FD1A7EF568"),
-            Statement::new(0x3FD1A7EF564, "mov eax, 1"),
-            Statement::new(0x3FD1A7EF568, "ret"),
+            Statement::new(0x3FD1A7EF534, StatementType::JMP, "jmp 0x3FD1A7EF538"),
+            Statement::new(0x3FD1A7EF538, StatementType::ADD, "incl eax"),
+            Statement::new(0x3FD1A7EF53C, StatementType::MOV, "mov ebx, [ebp+20]"),
+            Statement::new(0x3FD1A7EF540, StatementType::CMP, "cmp eax, ebx"),
+            Statement::new(0x3FD1A7EF544, StatementType::CJMP, "je 0x3FD1A7EF558"),
+            Statement::new(0x3FD1A7EF548, StatementType::MOV, "mov ecx, [ebp+20]"),
+            Statement::new(0x3FD1A7EF54C, StatementType::SUB, "decl ecx"),
+            Statement::new(0x3FD1A7EF550, StatementType::MOV, "mov [ebp+20], ecx"),
+            Statement::new(0x3FD1A7EF554, StatementType::JMP, "jmp 0x3FD1A7EF538"),
+            Statement::new(0x3FD1A7EF558, StatementType::CMP, "test eax, eax"),
+            Statement::new(0x3FD1A7EF55C, StatementType::MOV, "mov eax, 0"),
+            Statement::new(0x3FD1A7EF560, StatementType::CJMP, "je 0x3FD1A7EF568"),
+            Statement::new(0x3FD1A7EF564, StatementType::MOV, "mov eax, 1"),
+            Statement::new(0x3FD1A7EF568, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x3FD1A7EF56C, &arch);
@@ -998,15 +997,15 @@ mod tests {
     #[test]
     fn save_and_retrieve() -> Result<(), Box<dyn Error>> {
         let stmts = vec![
-            Statement::new(0x61E, "push rbp"),                //0
-            Statement::new(0x622, "mov dword [var_4h], edi"), //0
-            Statement::new(0x628, "cmp dword [var_4h], 5"),   //0
-            Statement::new(0x62C, "jne 0x633"),               //0
-            Statement::new(0x62E, "mov eax, dword [var_8h]"), //1
-            Statement::new(0x631, "jmp 0x638"),               //1
-            Statement::new(0x633, "mov eax, 6"),              //2
-            Statement::new(0x638, "pop rbp"),                 //3
-            Statement::new(0x639, "ret"),                     //3
+            Statement::new(0x61E, StatementType::PUSH, "push rbp"), //0
+            Statement::new(0x622, StatementType::MOV, "mov dword [var_4h], edi"), //0
+            Statement::new(0x628, StatementType::CMP, "cmp dword [var_4h], 5"), //0
+            Statement::new(0x62C, StatementType::CJMP, "jne 0x633"), //0
+            Statement::new(0x62E, StatementType::MOV, "mov eax, dword [var_8h]"), //1
+            Statement::new(0x631, StatementType::JMP, "jmp 0x638"), //1
+            Statement::new(0x633, StatementType::MOV, "mov eax, 6"), //2
+            Statement::new(0x638, StatementType::POP, "pop rbp"),   //3
+            Statement::new(0x639, StatementType::RET, "ret"),       //3
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x640, &arch);
@@ -1023,12 +1022,12 @@ mod tests {
     #[test]
     fn save_and_retrieve_with_entry_point() -> Result<(), Box<dyn Error>> {
         let stmts = vec![
-            Statement::new(0x61E, "push rbp"),                //0
-            Statement::new(0x622, "mov dword [var_4h], edi"), //0
-            Statement::new(0x62C, "jne 0x638"),               //0
-            Statement::new(0x62E, "ret"),                     //1
-            Statement::new(0x638, "pop rbp"),                 //2
-            Statement::new(0x639, "ret"),                     //2
+            Statement::new(0x61E, StatementType::PUSH, "push rbp"), //0
+            Statement::new(0x622, StatementType::MOV, "mov dword [var_4h], edi"), //0
+            Statement::new(0x62C, StatementType::CJMP, "jne 0x638"), //0
+            Statement::new(0x62E, StatementType::RET, "ret"),       //1
+            Statement::new(0x638, StatementType::POP, "pop rbp"),   //2
+            Statement::new(0x639, StatementType::RET, "ret"),       //2
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x640, &arch);
@@ -1056,11 +1055,11 @@ mod tests {
     #[test]
     fn add_sink_necessary() {
         let stmts = vec![
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x620, "je 0x628"),
-            Statement::new(0x624, "ret"),
-            Statement::new(0x628, "mov eax, 6"),
-            Statement::new(0x62C, "ret"),
+            Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
+            Statement::new(0x620, StatementType::CJMP, "je 0x628"),
+            Statement::new(0x624, StatementType::RET, "ret"),
+            Statement::new(0x628, StatementType::MOV, "mov eax, 6"),
+            Statement::new(0x62C, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x630, &arch);
@@ -1072,8 +1071,8 @@ mod tests {
     #[test]
     fn add_sink_unnecessary() {
         let stmts = vec![
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x624, "ret"),
+            Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
+            Statement::new(0x624, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x625, &arch);
@@ -1084,9 +1083,9 @@ mod tests {
     #[test]
     fn add_extra_entry_point() {
         let stmts = vec![
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x620, "jne 0x61c"),
-            Statement::new(0x624, "ret"),
+            Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
+            Statement::new(0x620, StatementType::CJMP, "jne 0x61c"),
+            Statement::new(0x624, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x625, &arch);
@@ -1113,8 +1112,8 @@ mod tests {
     #[test]
     fn add_extra_entry_point_unnecessary() {
         let stmts = vec![
-            Statement::new(0x61C, "mov eax, 5"),
-            Statement::new(0x624, "ret"),
+            Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
+            Statement::new(0x624, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x625, &arch);
@@ -1186,11 +1185,11 @@ mod tests {
     #[test]
     fn new_root_midway() {
         let stmts = vec![
-            Statement::new(0x538, "jne 0x712"),
-            Statement::new(0x548, "jmp 0x712"),
-            Statement::new(0x580, "jne 0x538"),
-            Statement::new(0x596, "jmp 0x538"),
-            Statement::new(0x712, "ret"),
+            Statement::new(0x538, StatementType::CJMP, "jne 0x712"),
+            Statement::new(0x548, StatementType::JMP, "jmp 0x712"),
+            Statement::new(0x580, StatementType::CJMP, "jne 0x538"),
+            Statement::new(0x596, StatementType::JMP, "jmp 0x538"),
+            Statement::new(0x712, StatementType::RET, "ret"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x713, &arch);
@@ -1214,8 +1213,8 @@ mod tests {
     #[test]
     fn new_everybody_has_preds() {
         let stmts = vec![
-            Statement::new(0x61C, "jmp 0x620"),
-            Statement::new(0x620, "jmp 0x61c"),
+            Statement::new(0x61C, StatementType::JMP, "jmp 0x620"),
+            Statement::new(0x620, StatementType::JMP, "jmp 0x61c"),
         ];
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x62C, &arch);
