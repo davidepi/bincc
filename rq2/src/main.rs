@@ -56,6 +56,7 @@ async fn calc_cfs(
 ) -> Vec<(String, String, StructureBlock)> {
     let style = ProgressStyle::default_bar()
         .template("{msg} {pos:>7}/{len:7} [{bar:40.cyan/blue}] [{elapsed_precise}]")
+        .unwrap()
         .progress_chars("#>-");
     let pb = Arc::new(
         ProgressBar::new(jobs.len() as u64)

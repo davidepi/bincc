@@ -63,6 +63,7 @@ async fn calc_cfs(
     pb.set_style(
         ProgressStyle::default_bar()
             .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7}")
+            .unwrap()
             .progress_chars("#>-"),
     );
     let mut out_times_name = PathBuf::from(output_dir.clone());
