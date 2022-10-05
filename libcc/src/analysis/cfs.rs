@@ -851,13 +851,13 @@ fn build_cfs(cfg: &CFG) -> DirectedGraph<StructureBlock> {
 fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock> {
     let mut graph = DirectedGraph::default();
     if !cfg.is_empty() {
-        let root = cfg.root.as_ref().unwrap().clone();
-        graph.root = Some(StructureBlock::from(root.clone()));
+        let root = *cfg.root.as_ref().unwrap();
+        graph.root = Some(StructureBlock::from(root));
         let mut stack = vec![root];
         let mut visited = HashSet::with_capacity(cfg.len());
         while let Some(node) = stack.pop() {
             if !visited.contains(&node) {
-                visited.insert(node.clone());
+                visited.insert(node);
                 let children = cfg
                     .edges
                     .get(&node)
@@ -875,7 +875,7 @@ fn deep_copy(cfg: &CFG) -> DirectedGraph<StructureBlock> {
 }
 
 // calculates the depth of the spanning tree at each node.
-fn calculate_depth(cfg: &CFG) -> HashMap<Arc<BasicBlock>, usize> {
+fn calculate_depth(cfg: &CFG) -> HashMap<BasicBlock, usize> {
     let mut depth_map = HashMap::new();
     for node in cfg.dfs_postorder() {
         let children = cfg.neighbours(node);
@@ -885,35 +885,35 @@ fn calculate_depth(cfg: &CFG) -> HashMap<Arc<BasicBlock>, usize> {
                 depth = max(depth, child_depth + 1);
             }
         }
-        depth_map.insert(node.clone(), depth);
+        depth_map.insert(*node, depth);
     }
     depth_map
 }
 
 // calculates the exit nodes and target (of the exit) for a node in a particular loop
 fn exits_and_targets(
-    node: &Arc<BasicBlock>,
-    sccs: &HashMap<&Arc<BasicBlock>, usize>,
+    node: BasicBlock,
+    sccs: &HashMap<&BasicBlock, usize>,
     cfg: &CFG,
-) -> (HashSet<Arc<BasicBlock>>, HashSet<Arc<BasicBlock>>) {
+) -> (HashSet<BasicBlock>, HashSet<BasicBlock>) {
     let mut visit = vec![node];
     let mut visited = [node].into_iter().collect::<HashSet<_>>();
     let mut exits = HashSet::new();
     let mut targets = HashSet::new();
     // checks the exits from the loop
     while let Some(node) = visit.pop() {
-        let node_scc_id = *sccs.get(node).unwrap();
-        for child in cfg.neighbours(node) {
+        let node_scc_id = *sccs.get(&node).unwrap();
+        for child in cfg.neighbours(&node) {
             let child_scc_id = *sccs.get(child).unwrap();
             if child_scc_id != node_scc_id {
-                exits.insert(node.clone());
-                targets.insert(child.clone());
+                exits.insert(node);
+                targets.insert(*child);
             } else if !visited.contains(child) {
                 // continue the visit only if the scc is the same and the node is not visited
                 // |-> stay in the loop
-                visit.push(child);
+                visit.push(*child);
             }
-            visited.insert(child);
+            visited.insert(*child);
         }
     }
     (exits, targets)
@@ -936,12 +936,8 @@ fn is_loop<'a, T: Hash + Eq>(sccs: &HashMap<&'a T, usize>) -> HashMap<&'a T, boo
 }
 
 // remove all edges from a CFG that points to a list of targets
-fn remove_edges(
-    input_set: HashSet<Arc<BasicBlock>>,
-    targets: HashSet<Arc<BasicBlock>>,
-    cfg: CFG,
-) -> CFG {
-    type EdgesMap = HashMap<Arc<BasicBlock>, Vec<Arc<BasicBlock>>>;
+fn remove_edges(input_set: HashSet<BasicBlock>, targets: HashSet<BasicBlock>, cfg: CFG) -> CFG {
+    type EdgesMap = HashMap<BasicBlock, Vec<BasicBlock>>;
     let (keep, edit): (EdgesMap, EdgesMap) = cfg
         .edges
         .into_iter()
@@ -965,10 +961,10 @@ fn remove_edges(
 }
 
 fn denaturate_loop(
-    node: &Arc<BasicBlock>,
-    sccs: &HashMap<&Arc<BasicBlock>, usize>,
-    preds: &HashMap<&Arc<BasicBlock>, HashSet<&Arc<BasicBlock>>>,
-    depth_map: &HashMap<Arc<BasicBlock>, usize>,
+    node: BasicBlock,
+    sccs: &HashMap<&BasicBlock, usize>,
+    preds: &HashMap<&BasicBlock, HashSet<&BasicBlock>>,
+    depth_map: &HashMap<BasicBlock, usize>,
     mut cfg: CFG,
 ) -> CFG {
     let distance = |x, y| {
@@ -979,11 +975,11 @@ fn denaturate_loop(
         }
     };
     let (exits, mut targets) = exits_and_targets(node, sccs, &cfg);
-    let is_loop = *is_loop(sccs).get(node).unwrap();
+    let is_loop = *is_loop(sccs).get(&node).unwrap();
     if exits.len() > 1 && is_loop {
         // harder case, more than 2 output targets, keep the target with the highest depth
         if targets.len() >= 2 {
-            let correct = targets
+            let correct = *targets
                 .iter()
                 .reduce(|a, b| {
                     // keep the deepest. If two or more have the same depth keep closest to me
@@ -1013,16 +1009,15 @@ fn denaturate_loop(
                         Ordering::Greater => a,
                     }
                 })
-                .unwrap()
-                .clone();
+                .unwrap();
             targets.remove(&correct);
             cfg = remove_edges(exits, targets, cfg);
         }
         let (exits, target) = exits_and_targets(node, sccs, &cfg);
-        let correct_exit = if let Some(head) = exits.get(node) {
+        let correct_exit = if let Some(head) = exits.get(&node) {
             // keep the exit which is either: the head (while case)
             let mut set = HashSet::new();
-            set.insert(head.clone());
+            set.insert(*head);
             set
         } else {
             // or farther away from the entry point (do-while case) -> highest predecessor number
@@ -1046,7 +1041,7 @@ fn denaturate_loop(
                     .map(|(index, value)| (value, index))
                     .max()
                     .unwrap();
-                exits_vec[index_max_diff].clone()
+                exits_vec[index_max_diff]
             };
             let mut set = HashSet::new();
             set.insert(exit);
@@ -1063,8 +1058,8 @@ fn denaturate_loop(
 }
 
 fn remove_natural_loops(
-    sccs: &HashMap<&Arc<BasicBlock>, usize>,
-    preds: &HashMap<&Arc<BasicBlock>, HashSet<&Arc<BasicBlock>>>,
+    sccs: &HashMap<&BasicBlock, usize>,
+    preds: &HashMap<&BasicBlock, HashSet<&BasicBlock>>,
     mut cfg: CFG,
 ) -> CFG {
     let mut loops_done = FnvHashSet::default();
@@ -1073,7 +1068,7 @@ fn remove_natural_loops(
     for node in nodes {
         let scc_id = sccs.get(&node).unwrap();
         if !loops_done.contains(scc_id) {
-            cfg = denaturate_loop(&node, sccs, preds, &depth_map, cfg);
+            cfg = denaturate_loop(node, sccs, preds, &depth_map, cfg);
             loops_done.insert(scc_id);
         }
     }
@@ -1084,7 +1079,6 @@ fn remove_natural_loops(
 mod tests {
     use crate::analysis::{cfs, BasicBlock, BlockType, Graph, CFG, CFS};
     use std::collections::HashMap;
-    use std::sync::Arc;
 
     macro_rules! create_cfg {
     (@single $($x:tt)*) => (());
@@ -1095,7 +1089,7 @@ mod tests {
             let cap = create_cfg!(@count $($src),*);
             let nodes = (0..)
                         .take(cap)
-                        .map(|x| Arc::new(BasicBlock { offset: x, length: 1 }))
+                        .map(|x| BasicBlock { offset: x, length: 1 })
                         .collect::<Vec<_>>();
             #[allow(unused_mut)]
             let mut edges = std::collections::HashMap::with_capacity(cap);

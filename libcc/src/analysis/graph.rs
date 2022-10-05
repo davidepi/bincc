@@ -15,7 +15,7 @@ pub trait Graph {
     /// Type of elements contained in the graph
     type Item: Hash + Eq;
 
-    /// Returns the starting node of the graph.
+    /// Returns a reference to the starting node of the graph.
     ///
     /// Note that graphs may not be rooted. In this case this method should return any node
     /// belonging to the graph, but consider that any visit of the graph will start from this node.

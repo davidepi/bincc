@@ -66,7 +66,7 @@ impl Display for NestedBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StructureBlock {
-    Basic(Arc<BasicBlock>),
+    Basic(BasicBlock),
     Nested(Arc<NestedBlock>),
 }
 
@@ -167,8 +167,8 @@ impl StructureBlock {
     }
 }
 
-impl From<Arc<BasicBlock>> for StructureBlock {
-    fn from(bb: Arc<BasicBlock>) -> Self {
+impl From<BasicBlock> for StructureBlock {
+    fn from(bb: BasicBlock) -> Self {
         StructureBlock::Basic(bb)
     }
 }
@@ -201,11 +201,11 @@ mod tests {
     fn structure_block_strong_equality() {
         // checks that despite having two different StructureBlock, if their content is the same Rc
         // equality returns true.
-        let bb = Arc::new(BasicBlock {
+        let bb = BasicBlock {
             offset: 1,
             length: 0xA,
-        });
-        let sb0 = StructureBlock::from(bb.clone());
+        };
+        let sb0 = StructureBlock::from(bb);
         let sb1 = StructureBlock::from(bb);
         assert_eq!(sb0, sb1);
     }
@@ -213,14 +213,14 @@ mod tests {
     #[test]
     fn structure_block_structural_equality() {
         // two basic blocks with different content, but structural equality should be the same
-        let bb0 = Arc::new(BasicBlock {
+        let bb0 = BasicBlock {
             offset: 1,
             length: 0xA,
-        });
-        let bb1 = Arc::new(BasicBlock {
+        };
+        let bb1 = BasicBlock {
             offset: 1,
             length: 0xB,
-        });
+        };
         let sb0 = StructureBlock::from(bb0);
         let sb1 = StructureBlock::from(bb1);
         assert_ne!(sb0, sb1);
@@ -229,24 +229,24 @@ mod tests {
 
     #[test]
     fn structural_hash_different_id() {
-        let bb0 = StructureBlock::from(Arc::new(BasicBlock {
+        let bb0 = StructureBlock::from(BasicBlock {
             offset: 1,
             length: 0xA,
-        }));
-        let bb1 = StructureBlock::from(Arc::new(BasicBlock {
+        });
+        let bb1 = StructureBlock::from(BasicBlock {
             offset: 0xA,
             length: 0xC,
-        }));
+        });
         let hashes = calculate_hashes(bb0, bb1);
         assert_eq!(hashes.0, hashes.1)
     }
 
     #[test]
     fn structural_hash_same_order() {
-        let bb = StructureBlock::from(Arc::new(BasicBlock {
+        let bb = StructureBlock::from(BasicBlock {
             offset: 1,
             length: 1,
-        }));
+        });
         let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
@@ -269,10 +269,10 @@ mod tests {
 
     #[test]
     fn structural_equality_same_order() {
-        let bb = StructureBlock::from(Arc::new(BasicBlock {
+        let bb = StructureBlock::from(BasicBlock {
             offset: 1,
             length: 1,
-        }));
+        });
         let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
@@ -294,10 +294,10 @@ mod tests {
 
     #[test]
     fn structural_hash_different_order() {
-        let bb = StructureBlock::from(Arc::new(BasicBlock {
+        let bb = StructureBlock::from(BasicBlock {
             offset: 1,
             length: 1,
-        }));
+        });
         let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],
@@ -320,10 +320,10 @@ mod tests {
 
     #[test]
     fn structural_equality_different_order() {
-        let bb = StructureBlock::from(Arc::new(BasicBlock {
+        let bb = StructureBlock::from(BasicBlock {
             offset: 1,
             length: 1,
-        }));
+        });
         let self_loop = StructureBlock::from(Arc::new(NestedBlock::new(
             BlockType::SelfLooping,
             vec![bb.clone()],

@@ -12,7 +12,6 @@ use std::fs::File;
 use std::io;
 use std::io::{ErrorKind, Read, Write};
 use std::path::Path;
-use std::sync::Arc;
 
 /// Offset of an artificially created exit node.
 pub const SINK_ADDR: u64 = u64::MAX;
@@ -37,8 +36,8 @@ const EXTERN_DOT_JUMP_COLOUR: &str = "dodgerblue";
 /// This is a graph representation of all the possible execution paths in a function.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CFG {
-    pub(super) root: Option<Arc<BasicBlock>>,
-    pub(super) edges: HashMap<Arc<BasicBlock>, Vec<Arc<BasicBlock>>>,
+    pub(super) root: Option<BasicBlock>,
+    pub(super) edges: HashMap<BasicBlock, Vec<BasicBlock>>,
 }
 
 /// Minimum portion of code without any jump.
@@ -52,7 +51,7 @@ pub struct CFG {
 ///
 /// This class does not contains the actual statements, rather than their offsets in the original
 /// code.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct BasicBlock {
     /// Offset, in the original code, of the **first** instruction belonging to this basic block.
     pub offset: u64,
@@ -115,10 +114,10 @@ impl From<BareCFG> for CFG {
             .map(|(first, length)| {
                 (
                     first,
-                    Arc::new(BasicBlock {
+                    BasicBlock {
                         offset: first,
                         length,
-                    }),
+                    },
                 )
             })
             .collect::<HashMap<_, _>>();
@@ -132,9 +131,9 @@ impl From<BareCFG> for CFG {
             let dst_bb = bbs.get(&dst);
             if let (Some(src_bb), Some(dst_bb)) = (src_bb, dst_bb) {
                 edges
-                    .entry(src_bb.clone())
-                    .and_modify(|e: &mut Vec<Arc<BasicBlock>>| e.push(dst_bb.clone()))
-                    .or_insert_with(|| vec![dst_bb.clone()]);
+                    .entry(*src_bb)
+                    .and_modify(|e: &mut Vec<BasicBlock>| e.push(*dst_bb))
+                    .or_insert_with(|| vec![*dst_bb]);
                 marked.insert(src_bb);
             }
         }
@@ -142,7 +141,7 @@ impl From<BareCFG> for CFG {
         bbs.iter()
             .filter(|(_, val)| !marked.contains(*val))
             .for_each(|(_, val)| {
-                edges.insert(val.clone(), Vec::with_capacity(0));
+                edges.insert(*val, Vec::with_capacity(0));
             });
         let mut root = bbs
             .iter()
@@ -200,7 +199,7 @@ impl CFG {
     ///
     /// Returns [Option::None] if there is no next block, the current basic block does not belong to this CFG
     /// or the original BasicBlock is None.
-    pub fn next(&self, block: Option<&Arc<BasicBlock>>) -> Option<&Arc<BasicBlock>> {
+    pub fn next(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
         if let Some(bb) = block {
             let maybe_children = self.edges.get(bb);
             if let Some(children) = maybe_children {
@@ -219,7 +218,7 @@ impl CFG {
     ///
     /// Returns [Option::None] if the current basic block does not have conditional jumps, does not belong to
     /// this CFG or the original BasicBlock is None.
-    pub fn cond(&self, block: Option<&Arc<BasicBlock>>) -> Option<&Arc<BasicBlock>> {
+    pub fn cond(&self, block: Option<&BasicBlock>) -> Option<&BasicBlock> {
         if let Some(bb) = block {
             let maybe_children = self.edges.get(bb);
             if let Some(children) = maybe_children {
@@ -325,13 +324,13 @@ impl CFG {
                     let id = cap.get(1).unwrap().as_str().parse::<usize>()?;
                     let offset = cap.get(2).unwrap().as_str().parse::<u64>()?;
                     let length = cap.get(3).unwrap().as_str().parse::<u64>()?;
-                    let node = Arc::new(BasicBlock { offset, length });
+                    let node = BasicBlock { offset, length };
                     if let Some(shape) = cap.get(4) {
                         if shape.as_str() == EXTERN_DOT_ROOT {
-                            root = Some(node.clone());
+                            root = Some(node);
                         }
                     }
-                    nodes.insert(id, node.clone());
+                    nodes.insert(id, node);
                 } else if let Some(cap) = DOT_EDGES_RE.captures(line) {
                     let from = cap.get(1).unwrap().as_str().parse::<usize>()?;
                     let to = cap.get(2).unwrap().as_str().parse::<usize>()?;
@@ -350,12 +349,12 @@ impl CFG {
                 ))
             };
             for (src, dst_vec) in edges_ids {
-                let src_node = nodes.get(&src).ok_or_else(parse_err)?.clone();
+                let src_node = *nodes.get(&src).ok_or_else(parse_err)?;
                 for dst in dst_vec {
-                    let dst_node = nodes.get(&dst).ok_or_else(parse_err)?.clone();
+                    let dst_node = *nodes.get(&dst).ok_or_else(parse_err)?;
                     edges
-                        .entry(src_node.clone())
-                        .and_modify(|e: &mut Vec<Arc<BasicBlock>>| e.push(dst_node.clone()))
+                        .entry(src_node)
+                        .and_modify(|e: &mut Vec<BasicBlock>| e.push(dst_node))
                         .or_insert_with(|| vec![dst_node]);
                 }
             }
@@ -413,10 +412,10 @@ impl CFG {
             .filter(|(_, child)| child.is_empty())
             .count();
         if exit_nodes > 1 {
-            let sink = Arc::new(BasicBlock::new_sink());
+            let sink = BasicBlock::new_sink();
             for (_, child) in self.edges.iter_mut() {
                 if child.is_empty() {
-                    child.push(sink.clone());
+                    child.push(sink);
                 }
             }
             self.edges.insert(sink, Vec::with_capacity(0));
@@ -440,9 +439,8 @@ impl CFG {
                 .flat_map(|(_, edge)| edge)
                 .any(|x| x == oep);
             if oep_has_preds {
-                let eep = Arc::new(BasicBlock::new_entry_point());
-                self.edges
-                    .insert(eep.clone(), vec![self.root.take().unwrap()]);
+                let eep = BasicBlock::new_entry_point();
+                self.edges.insert(eep, vec![self.root.take().unwrap()]);
                 self.root = Some(eep);
             }
         }
@@ -451,7 +449,7 @@ impl CFG {
 }
 
 impl Graph for CFG {
-    type Item = Arc<BasicBlock>;
+    type Item = BasicBlock;
 
     fn root(&self) -> Option<&Self::Item> {
         self.root.as_ref()
@@ -620,7 +618,7 @@ fn to_bare_cfg(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> Bar
         .min();
     if !preds_no.is_empty() && root.is_none() {
         // every preds has at least 1 entry, pick the lowest offset
-        root = nodes.iter().min().map(|(first, _)| first).cloned();
+        root = nodes.iter().min().map(|(first, _)| first).copied();
     }
     BareCFG {
         root,
@@ -638,7 +636,6 @@ mod tests {
     use std::collections::{HashMap, HashSet};
     use std::error::Error;
     use std::io::{Read, Seek, SeekFrom, Write};
-    use std::sync::Arc;
     use tempfile::tempfile;
 
     /// Removes unreachable nodes.
@@ -668,21 +665,19 @@ mod tests {
     fn sequence() -> CFG {
         let nodes = (0..)
             .take(4)
-            .map(|x| {
-                Arc::new(BasicBlock {
-                    offset: x,
-                    length: 1,
-                })
+            .map(|x| BasicBlock {
+                offset: x,
+                length: 1,
             })
             .collect::<Vec<_>>();
         let edges = hashmap![
-            nodes[0].clone() => vec![nodes[1].clone()],
-            nodes[1].clone() => vec![nodes[2].clone()],
-            nodes[2].clone() => vec![nodes[3].clone()],
-            nodes[3].clone() => vec![],
+            nodes[0] => vec![nodes[1]],
+            nodes[1] => vec![nodes[2]],
+            nodes[2] => vec![nodes[3]],
+            nodes[3] => vec![],
         ];
         CFG {
-            root: Some(nodes[0].clone()),
+            root: Some(nodes[0]),
             edges,
         }
     }
@@ -691,21 +686,19 @@ mod tests {
     fn two_sequences() -> CFG {
         let nodes = (0..)
             .take(4)
-            .map(|x| {
-                Arc::new(BasicBlock {
-                    offset: x,
-                    length: 1,
-                })
+            .map(|x| BasicBlock {
+                offset: x,
+                length: 1,
             })
             .collect::<Vec<_>>();
         let edges = hashmap![
-            nodes[0].clone() => vec![nodes[1].clone()],
-            nodes[1].clone() => vec![],
-            nodes[2].clone() => vec![nodes[3].clone()],
-            nodes[3].clone() => vec![],
+            nodes[0] => vec![nodes[1]],
+            nodes[1] => vec![],
+            nodes[2] => vec![nodes[3]],
+            nodes[3] => vec![],
         ];
         CFG {
-            root: Some(nodes[0].clone()),
+            root: Some(nodes[0]),
             edges,
         }
     }
@@ -714,26 +707,41 @@ mod tests {
     fn from_bare_cfg() {
         //expected
         let nodes = [
-            Arc::new(BasicBlock {
+            BasicBlock {
                 offset: 0x1000,
                 length: 20,
-            }),
-            Arc::new(BasicBlock {
+            },
+            BasicBlock {
                 offset: 0x1014,
                 length: 2,
-            }),
-            Arc::new(BasicBlock {
+            },
+            BasicBlock {
                 offset: 0x1016,
                 length: 5,
-            }),
+            },
         ];
         let edges = hashmap![
-            nodes[0].clone() => vec![nodes[1].clone(), nodes[2].clone()],
-            nodes[1].clone() => vec![nodes[2].clone()],
-            nodes[2].clone() => vec![],
+            nodes[0] => vec![nodes[1], nodes[2]],
+            nodes[1] => vec![nodes[2]],
+            nodes[2] => vec![],
         ];
         let expected = CFG {
-            root: Some(nodes[0].clone()),
+            root: Some(
+                [
+                    BasicBlock {
+                        offset: 0x1000,
+                        length: 20,
+                    },
+                    BasicBlock {
+                        offset: 0x1014,
+                        length: 2,
+                    },
+                    BasicBlock {
+                        offset: 0x1016,
+                        length: 5,
+                    },
+                ][0],
+            ),
             edges,
         };
         //conversion
@@ -771,7 +779,7 @@ mod tests {
         let stmts = Vec::new();
         let arch = ArchX86::new_amd64();
         let cfg = CFG::new(&stmts, 0x0, &arch);
-        let children = cfg.neighbours(&Arc::new(BasicBlock::new_sink()));
+        let children = cfg.neighbours(&BasicBlock::new_sink());
         assert!(children.is_empty())
     }
 
