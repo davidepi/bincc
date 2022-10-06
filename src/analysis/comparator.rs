@@ -12,6 +12,14 @@ pub struct CloneClass<'a> {
 }
 
 impl<'a> CloneClass<'a> {
+    pub fn len(&self) -> usize {
+        self.structures.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn nth(&self, index: usize) -> Option<(&'a str, &'a str, StructureBlock)> {
         if let (Some(bin), Some(fun), Some(cfs)) = (
             self.binaries.get(index),
@@ -76,9 +84,9 @@ impl CFSComparator {
     /// The actual comparison is done by calling the [`CFSComparator::clones`] function.
     pub fn insert(&mut self, structure: StructureBlock, bin_name: String, func_name: String) {
         let next_id = self.names.len() as u32;
-        let binary_id = *self.names.entry(bin_name.clone()).or_insert(next_id);
+        let binary_id = *self.names.entry(bin_name).or_insert(next_id);
         let next_id = self.names.len() as u32;
-        let function_id = *self.names.entry(func_name.clone()).or_insert(next_id);
+        let function_id = *self.names.entry(func_name).or_insert(next_id);
         let mut stack = vec![structure];
         while let Some(node) = stack.pop() {
             if node.depth() >= self.mindepth {
@@ -187,7 +195,7 @@ mod tests {
         let clones = diff.clones();
         assert_eq!(clones.len(), 1);
         let class = &clones[0];
-        assert_eq!(class.iter().count(), 5);
+        assert_eq!(class.len(), 5);
     }
 
     #[test]

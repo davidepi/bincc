@@ -5,21 +5,51 @@ use fnv::FnvHashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
+use std::cmp::Reverse;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::timeout;
 
-/// Research Question #2
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
+#[derive(clap::ValueEnum, Copy, Clone)]
+enum SortResult {
+    /// Do not sort the results.
+    None,
+    /// Sorts by clone class structural depth, ascending.
+    DepthAsc,
+    /// Sorts by clone class structural depth, descending.
+    DepthDesc,
+    /// Sorts by amount of clones inside a clone class, ascending.
+    SizeAsc,
+    /// Sorts by amount of clones inside a clone class, descending.
+    SizeDesc,
+}
+
+/// Detects code clones in the given binary files.
+///
+/// The report will be printed to stdout and will contains all the clones divided in clone classes.
+/// Each clone class has the following format:
+///
+/// CLONE CLASS (depth)
+/// <clone_binary> :: <clone_function> [basic blocks...]
+///
+/// For example CLONE CLASS (3) means that the clone class contains clones of at least 3 nested
+/// structures.
+#[derive(Parser)]
+#[clap(author, version, about, verbatim_doc_comment)]
 struct Args {
     /// Files that will be compared against eachother for function clones.
     #[clap(required = true)]
     input: Vec<String>,
     /// Minimum threshold to consider a structural clone, measured in amount of nested structures.
-    #[clap(short = 's', long, default_value = "5")]
+    #[clap(short, long, default_value = "5")]
     min_depth: u32,
+    /// Prints also the basic blocks offets composing each clone.
+    #[clap(short, long, default_value = "false")]
+    basic_blocks: bool,
+    /// Sorts the results.
+    #[clap(short, long, default_value = "none")]
+    sort: SortResult,
     /// Limits the maximum amount of applications analysed concurrently.
     #[clap(short='l', long="limit", default_value_t = num_cpus::get())]
     limit_concurrent: usize,
@@ -35,13 +65,35 @@ async fn main() {
     let cfss = calc_cfs(args.input, args.limit_concurrent, args.timeout).await;
     cfss.into_iter()
         .for_each(|(bin, func, res)| comps.insert(res, bin, func));
+    print_results(comps, args.sort, args.basic_blocks);
+}
+
+fn print_results(comps: CFSComparator, sort: SortResult, bbs: bool) {
     let mut clones = 0;
-    let classes = comps.clones();
+    let mut classes = comps.clones();
+    match sort {
+        SortResult::None => (),
+        SortResult::DepthAsc => classes.sort_unstable_by_key(|a| a.depth()),
+        SortResult::DepthDesc => classes.sort_unstable_by_key(|a| Reverse(a.depth())),
+        SortResult::SizeAsc => classes.sort_unstable_by_key(|a| a.len()),
+        SortResult::SizeDesc => classes.sort_unstable_by_key(|a| Reverse(a.len())),
+    }
     for class in &classes {
         println!("----- CLONE CLASS ({}) -----", class.depth());
-        for (bin, func, _) in class.iter() {
+        for (bin, func, cfs) in class.iter() {
             clones += 1;
-            println!("{} :: {}", bin, func);
+            if !bbs {
+                println!("{} :: {}", bin, func);
+            } else {
+                let bbs = cfs
+                    .basic_blocks()
+                    .into_iter()
+                    .map(|bb| bb.offset)
+                    .map(|o| format!("0x{:x}", o))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                println!("{} :: {} [{}]", bin, func, bbs);
+            }
         }
     }
     println!("----------------------------");
