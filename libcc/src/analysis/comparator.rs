@@ -1,75 +1,68 @@
 use crate::analysis::blocks::StructureBlock;
 use fnv::FnvHashMap;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hasher;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ClonePair {
-    a: StructureBlock,
-    a_bin: String,
-    a_fun: String,
-    b: StructureBlock,
-    b_bin: String,
-    b_fun: String,
+pub struct CloneClass<'a> {
+    binaries: Vec<&'a str>,
+    functions: Vec<&'a str>,
+    structures: Vec<StructureBlock>,
 }
 
-impl ClonePair {
-    pub fn new(
-        a: StructureBlock,
-        a_bin: String,
-        a_fun: String,
-        b: StructureBlock,
-        b_bin: String,
-        b_fun: String,
-    ) -> Self {
-        ClonePair {
-            a,
-            a_bin,
-            a_fun,
-            b,
-            b_bin,
-            b_fun,
+impl<'a> CloneClass<'a> {
+    pub fn nth(&self, index: usize) -> Option<(&'a str, &'a str, StructureBlock)> {
+        if let (Some(bin), Some(fun), Some(cfs)) = (
+            self.binaries.get(index),
+            self.functions.get(index),
+            self.structures.get(index),
+        ) {
+            Some((bin, fun, cfs.clone()))
+        } else {
+            None
         }
     }
 
-    pub fn first_bin(&self) -> &str {
-        &self.a_bin
-    }
-
-    pub fn first_fun(&self) -> &str {
-        &self.a_fun
-    }
-
-    pub fn first_tree(&self) -> &StructureBlock {
-        &self.a
-    }
-
-    pub fn second_bin(&self) -> &str {
-        &self.b_bin
-    }
-
-    pub fn second_fun(&self) -> &str {
-        &self.b_fun
-    }
-
-    pub fn second_tree(&self) -> &StructureBlock {
-        &self.b
+    pub fn iter(&self) -> impl Iterator<Item = (&'a str, &'a str, StructureBlock)> + '_ {
+        self.binaries
+            .iter()
+            .zip(self.functions.iter())
+            .zip(self.structures.iter().cloned())
+            .map(|((&a, &b), c)| (a, b, c))
     }
 
     pub fn depth(&self) -> u32 {
-        self.a.depth() // b should be same depth
+        if let Some(first) = self.structures.first() {
+            first.depth()
+        } else {
+            0
+        }
     }
 }
 
+#[derive(Debug, Clone)]
+struct CloneCandidate {
+    binary_id: u32,
+    function_id: u32,
+    structure: StructureBlock,
+}
+
+/// Compares several CFS and discovers binary clones.
 pub struct CFSComparator {
-    hashes: FnvHashMap<u64, StructureBlock>,
-    names: HashMap<StructureBlock, (String, String)>,
-    // used to store the strings for the ClonePairs (that uses references)
+    /// Contains the CFS hashes and the possible clone with that hash
+    hashes: FnvHashMap<u64, Vec<CloneCandidate>>,
+    /// Assigns an ID to binary/function names
+    names: HashMap<String, u32>,
+    /// Discard CFSs smaller than this length
     mindepth: u32,
 }
 
 impl CFSComparator {
+    /// Creates a new comparator with the given threshold.
+    ///
+    ///  The threshold `mindepth` (called `θ` in the paper) is the minimum number of nested nodes
+    ///  contained in the CFS.
     pub fn new(mindepth: u32) -> Self {
         CFSComparator {
             hashes: FnvHashMap::default(),
@@ -78,113 +71,71 @@ impl CFSComparator {
         }
     }
 
-    pub fn compare_and_insert(
-        &mut self,
-        other: StructureBlock,
-        bin_name: String,
-        func_name: String,
-    ) -> Vec<ClonePair> {
-        let mut stack = vec![other];
-        let mut ret = Vec::new();
+    /// Inserts a new function in the comparator.
+    ///
+    /// The actual comparison is done by calling the [`CFSComparator::clones`] function.
+    pub fn insert(&mut self, structure: StructureBlock, bin_name: String, func_name: String) {
+        let next_id = self.names.len() as u32;
+        let binary_id = *self.names.entry(bin_name.clone()).or_insert(next_id);
+        let next_id = self.names.len() as u32;
+        let function_id = *self.names.entry(func_name.clone()).or_insert(next_id);
+        let mut stack = vec![structure];
         while let Some(node) = stack.pop() {
             if node.depth() >= self.mindepth {
+                let candidate = CloneCandidate {
+                    binary_id,
+                    function_id,
+                    structure: node.clone(),
+                };
                 let mut hasher = DefaultHasher::new();
                 node.structural_hash(&mut hasher);
                 let hash = hasher.finish();
-                if let Some(original) = self.hashes.get(&hash) {
-                    if original.structural_equality(&node) {
-                        // pick only a_name: b is never inserted in the hashmap because it's the
-                        // clone! so its name is used only in this pair and never recorded
-                        let (orig_bin_name, orig_func_name) = self.names.get(original).unwrap();
-                        let pair = ClonePair::new(
-                            original.clone(),
-                            orig_bin_name.clone(),
-                            orig_func_name.clone(),
-                            node.clone(),
-                            bin_name.clone(),
-                            func_name.clone(),
-                        );
-                        ret.push(pair);
-                    } else {
-                        log::warn!("Same structural hash but different structure.");
-                    }
-                } else {
-                    self.hashes.insert(hash, node.clone());
-                    self.names
-                        .insert(node.clone(), (bin_name.clone(), func_name.clone()));
-                }
+                self.hashes
+                    .entry(hash)
+                    .and_modify(|e| e.push(candidate.clone()))
+                    .or_insert_with(|| vec![candidate.clone()]);
                 stack.extend(node.children().iter().cloned());
             }
         }
-        if !ret.is_empty() {
-            ret = remove_overlapping(ret);
-        }
-        ret
     }
-}
 
-fn remove_overlapping(mut clone_list: Vec<ClonePair>) -> Vec<ClonePair> {
-    // drop intervals that are contained inside each other
-    // partially overlapping intervals can not exists (can't think of an example)
-    // probably not efficient O(n^2)? but I don't expect a big list here and deadline
-    // is close
-    let mut todo = clone_list.clone();
-    // this minimizes the number of comparisons (sorting is nlogn, the removal is n^2)
-    todo.sort_unstable_by_key(|a| std::cmp::Reverse(a.depth()));
-    let mut removed = HashSet::new();
-    while !todo.is_empty() {
-        let current = todo.pop().unwrap();
-        let mut keep = Vec::with_capacity(clone_list.len());
-        while let Some(compare) = clone_list.pop() {
-            if !removed.contains(&compare) {
-                if current.depth() != compare.depth() && overlaps(&current, &compare) {
-                    // not same depth (otherwise I remove myself),
-                    // and one is contained inside the other one
-                    removed.insert(compare);
-                } else {
-                    keep.push(compare);
+    /// Retrieves the clone class from this comparator.
+    ///
+    /// The various functions to be checcked for clones should be inserted by calling
+    /// [`CFSComparator::insert`] prior to this function.
+    pub fn clones(&self) -> Vec<CloneClass> {
+        let mut retval = Vec::new();
+        let mut reverse_tmp = self
+            .names
+            .iter()
+            .map(|(name, id)| (*id, name.as_str()))
+            .collect::<Vec<_>>();
+        reverse_tmp.sort_unstable();
+        let reverse_names = reverse_tmp
+            .into_iter()
+            .map(|(_, name)| name)
+            .collect::<Vec<_>>();
+        for class_candidate in self.hashes.values() {
+            let class_len = class_candidate.len();
+            if class_len > 1 {
+                let mut binaries = Vec::with_capacity(class_len);
+                let mut functions = Vec::with_capacity(class_len);
+                let mut structures = Vec::with_capacity(class_len);
+                for clone in class_candidate {
+                    binaries.push(reverse_names[clone.binary_id as usize]);
+                    functions.push(reverse_names[clone.function_id as usize]);
+                    structures.push(clone.structure.clone());
                 }
+                retval.push(CloneClass {
+                    binaries,
+                    functions,
+                    structures,
+                });
             }
         }
-        clone_list = keep;
+        retval
     }
-    clone_list
 }
-
-fn overlaps(a: &ClonePair, b: &ClonePair) -> bool {
-    let mut retval = false;
-    if a.depth() >= b.depth()
-        && a.a_bin == b.a_bin
-        && a.a_fun == b.a_fun
-        && a.b_bin == b.b_bin
-        && a.b_fun == b.b_fun
-    {
-        let mut first_ok = false;
-        let mut second_ok = false;
-        let mut stack = a.a.children().iter().collect::<Vec<_>>();
-        while let Some(child) = stack.pop() {
-            if child.offset() == b.a.offset() {
-                first_ok = true;
-                break;
-            } else {
-                stack.extend(child.children());
-            }
-        }
-        if first_ok {
-            stack.clear();
-            stack.extend(a.b.children());
-            while let Some(child) = stack.pop() {
-                if child.offset() == b.b.offset() {
-                    second_ok = true;
-                    break;
-                }
-            }
-        }
-        retval = first_ok && second_ok;
-    }
-    retval
-}
-
 #[cfg(test)]
 mod tests {
     use crate::analysis::{CFSComparator, CFG, CFS};
@@ -227,26 +178,16 @@ mod tests {
         let stmts = create_function();
         let cfg = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs = CFS::new(&cfg);
-        let mut diff = CFSComparator::new(3);
-        let first = diff.compare_and_insert(
-            cfs.get_tree().unwrap(),
-            "first_bin".to_string(),
-            "first_func".to_string(),
-        );
-        assert!(first.is_empty());
-        let second = diff.compare_and_insert(
-            cfs.get_tree().unwrap(),
-            "other_bin".to_string(),
-            "other_func".to_string(),
-        );
-        assert!(!second.is_empty());
-        assert_eq!(second.len(), 1);
-        let pair = second.last().unwrap();
-        assert_eq!(pair.first_tree().offset(), 0);
-        assert_eq!(second[0].first_bin(), "first_bin");
-        assert_eq!(second[0].first_fun(), "first_func");
-        assert_eq!(second[0].second_bin(), "other_bin");
-        assert_eq!(second[0].second_fun(), "other_func");
+        let mut diff = CFSComparator::new(7);
+        diff.insert(cfs.get_tree().unwrap(), "ab".to_string(), "af".to_string());
+        diff.insert(cfs.get_tree().unwrap(), "bb".to_string(), "bf".to_string());
+        diff.insert(cfs.get_tree().unwrap(), "cb".to_string(), "cf".to_string());
+        diff.insert(cfs.get_tree().unwrap(), "db".to_string(), "df".to_string());
+        diff.insert(cfs.get_tree().unwrap(), "eb".to_string(), "ef".to_string());
+        let clones = diff.clones();
+        assert_eq!(clones.len(), 1);
+        let class = &clones[0];
+        assert_eq!(class.iter().count(), 5);
     }
 
     #[test]
@@ -255,12 +196,7 @@ mod tests {
         let cfg0 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs0 = CFS::new(&cfg0);
         let mut diff = CFSComparator::new(2);
-        let first = diff.compare_and_insert(
-            cfs0.get_tree().unwrap(),
-            "first_bin".to_string(),
-            "first_func".to_string(),
-        );
-        assert!(first.is_empty());
+        diff.insert(cfs0.get_tree().unwrap(), "ab".to_string(), "af".to_string());
         stmts = create_function();
         stmts[2] = Statement::new(0x08, StatementType::NOP, "nop");
         stmts[3] = Statement::new(0x0C, StatementType::NOP, "nop");
@@ -269,16 +205,14 @@ mod tests {
         stmts[12] = Statement::new(0x30, StatementType::NOP, "nop");
         let cfg1 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
         let cfs1 = CFS::new(&cfg1);
-        let second = diff.compare_and_insert(
-            cfs1.get_tree().unwrap(),
-            "second_bin".to_string(),
-            "second_func".to_string(),
-        );
-        assert!(!second.is_empty());
-        assert_eq!(second.len(), 2);
-        assert_eq!(second[0].first_bin(), "first_bin");
-        assert_eq!(second[0].first_fun(), "first_func");
-        assert_eq!(second[0].second_bin(), "second_bin");
-        assert_eq!(second[0].second_fun(), "second_func");
+        diff.insert(cfs1.get_tree().unwrap(), "bb".to_string(), "bf".to_string());
+        assert!(!cfs0
+            .get_tree()
+            .unwrap()
+            .structural_equality(&cfs1.get_tree().unwrap()));
+        let clones = diff.clones();
+        assert_eq!(clones.len(), 2);
+        assert_eq!(clones[0].depth(), 2);
+        assert_eq!(clones[1].depth(), 2);
     }
 }

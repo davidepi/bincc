@@ -33,20 +33,19 @@ async fn main() {
     let args = Args::parse();
     let mut comps = CFSComparator::new(args.min_depth);
     let cfss = calc_cfs(args.input, args.limit_concurrent, args.timeout).await;
-    let clones = cfss
-        .into_iter()
-        .flat_map(|(bin, func, res)| comps.compare_and_insert(res, bin, func))
-        .collect::<Vec<_>>();
-    println!("bin_a,func_a,offset_a,bin_b,func_b,offset_b");
-    for clone in clones {
-        print!("{},", clone.first_bin());
-        print!("{},", clone.first_fun());
-        print!("{:#x},", clone.first_tree().offset());
-        print!("{},", clone.second_bin());
-        print!("{},", clone.second_fun());
-        print!("{:#x} ", clone.second_tree().offset());
-        println!();
+    cfss.into_iter()
+        .for_each(|(bin, func, res)| comps.insert(res, bin, func));
+    let mut clones = 0;
+    let classes = comps.clones();
+    for class in &classes {
+        println!("----- CLONE CLASS ({}) -----", class.depth());
+        for (bin, func, _) in class.iter() {
+            clones += 1;
+            println!("{} :: {}", bin, func);
+        }
     }
+    println!("----------------------------");
+    println!("Classes: {} Clones: {}", classes.len(), clones);
 }
 
 async fn calc_cfs(

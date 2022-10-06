@@ -115,15 +115,10 @@ impl StructureBlock {
             if children_a.is_empty() && children_b.is_empty() {
                 true //basic block
             } else if children_a.len() == children_b.len() {
-                let mut retval = true;
-                let mut i = 0;
-                while retval && i < children_a.len() {
-                    let child_a = &children_a[i];
-                    let child_b = &children_b[i];
-                    retval &= child_a.structural_equality(child_b);
-                    i += 1;
-                }
-                retval
+                children_a
+                    .iter()
+                    .zip(children_b.iter())
+                    .fold(true, |acc, (a, b)| acc & a.structural_equality(b))
             } else {
                 false
             }
@@ -164,6 +159,20 @@ impl StructureBlock {
             StructureBlock::Basic(bb) => bb.offset,
             StructureBlock::Nested(nb) => nb.offset,
         }
+    }
+
+    pub fn basic_blocks(&self) -> Vec<BasicBlock> {
+        let mut retval = Vec::new();
+        let mut stack = vec![self];
+        while let Some(node) = stack.pop() {
+            if let StructureBlock::Basic(bb) = node {
+                retval.push(*bb);
+            } else {
+                stack.extend(node.children());
+            }
+        }
+        retval.sort_unstable();
+        retval
     }
 }
 
@@ -341,5 +350,38 @@ mod tests {
             vec![bb, self_loop],
         )));
         assert!(!sequence0.structural_equality(&sequence1));
+    }
+
+    #[test]
+    fn retrieve_basic_blocks_from_structure_block() {
+        let bb0 = StructureBlock::from(BasicBlock {
+            offset: 1,
+            length: 1,
+        });
+        let bb1 = StructureBlock::from(BasicBlock {
+            offset: 10,
+            length: 1,
+        });
+        let bb2 = StructureBlock::from(BasicBlock {
+            offset: 100,
+            length: 1,
+        });
+        let bb3 = StructureBlock::from(BasicBlock {
+            offset: 1000,
+            length: 1,
+        });
+        let ifelse = StructureBlock::from(Arc::new(NestedBlock::new(
+            BlockType::IfThenElse,
+            vec![bb1, bb2, bb3],
+        )));
+        let sequence = StructureBlock::from(Arc::new(NestedBlock::new(
+            BlockType::Sequence,
+            vec![bb0, ifelse],
+        )));
+        let bbs = sequence.basic_blocks();
+        assert_eq!(bbs[0].offset, 1);
+        assert_eq!(bbs[1].offset, 10);
+        assert_eq!(bbs[2].offset, 100);
+        assert_eq!(bbs[3].offset, 1000);
     }
 }
