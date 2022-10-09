@@ -42,11 +42,17 @@ struct Args {
     #[clap(required = true)]
     input: Vec<String>,
     /// Minimum threshold to consider a structural clone, measured in amount of nested structures.
-    #[clap(short, long, default_value = "5")]
+    #[clap(short, long, default_value = "3")]
     min_depth: u32,
     /// Prints also the basic blocks offets composing each clone.
     #[clap(short, long, default_value = "false")]
     basic_blocks: bool,
+    /// Outputs the result as Comma Separated Value content.
+    ///
+    /// The CSV will have the following structure:
+    /// binary_a, function_a, clone_class_id, class_depth
+    #[clap(short, long, default_value = "false")]
+    csv: bool,
     /// Sorts the results.
     #[clap(short, long, default_value = "none")]
     sort: SortResult,
@@ -65,10 +71,10 @@ async fn main() {
     let cfss = calc_cfs(args.input, args.limit_concurrent, args.timeout).await;
     cfss.into_iter()
         .for_each(|(bin, func, res)| comps.insert(res, bin, func));
-    print_results(comps, args.sort, args.basic_blocks);
+    print_results(comps, args.sort, args.basic_blocks, args.csv);
 }
 
-fn print_results(comps: CFSComparator, sort: SortResult, bbs: bool) {
+fn print_results(comps: CFSComparator, sort: SortResult, bbs: bool, csv: bool) {
     let mut clones = 0;
     let mut classes = comps.clones();
     match sort {
@@ -78,26 +84,52 @@ fn print_results(comps: CFSComparator, sort: SortResult, bbs: bool) {
         SortResult::SizeAsc => classes.sort_unstable_by_key(|a| a.len()),
         SortResult::SizeDesc => classes.sort_unstable_by_key(|a| Reverse(a.len())),
     }
-    for class in &classes {
-        println!("----- CLONE CLASS ({}) -----", class.depth());
-        for (bin, func, cfs) in class.iter() {
-            clones += 1;
-            if !bbs {
-                println!("{} :: {}", bin, func);
-            } else {
-                let bbs = cfs
-                    .basic_blocks()
-                    .into_iter()
-                    .map(|bb| bb.offset)
-                    .map(|o| format!("0x{:x}", o))
-                    .collect::<Vec<_>>()
-                    .join(",");
-                println!("{} :: {} [{}]", bin, func, bbs);
+    if csv {
+        print!("binary_a,function_a,clone_class_id,class_depth");
+        if bbs {
+            println!(",basic_blocks");
+        } else {
+            println!();
+        }
+        for (class_id, class) in classes.iter().enumerate() {
+            for (bin, func, cfs) in class.iter() {
+                print!("{},{},{},{}", bin, func, class_id, class.depth());
+                if bbs {
+                    let bbs = cfs
+                        .basic_blocks()
+                        .into_iter()
+                        .filter(|bb| !bb.is_sink())
+                        .map(|bb| format!("0x{:x}", bb.offset))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    println!(",\"{}\"", bbs);
+                } else {
+                    println!();
+                }
             }
         }
+    } else {
+        for class in &classes {
+            println!("----- CLONE CLASS ({}) -----", class.depth());
+            for (bin, func, cfs) in class.iter() {
+                clones += 1;
+                if !bbs {
+                    println!("{} :: {}", bin, func);
+                } else {
+                    let bbs = cfs
+                        .basic_blocks()
+                        .into_iter()
+                        .filter(|bb| !bb.is_sink())
+                        .map(|bb| format!("0x{:x}", bb.offset))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    println!("{} :: {} [{}]", bin, func, bbs);
+                }
+            }
+        }
+        println!("----------------------------");
+        println!("Classes: {} Clones: {}", classes.len(), clones);
     }
-    println!("----------------------------");
-    println!("Classes: {} Clones: {}", classes.len(), clones);
 }
 
 async fn calc_cfs(
