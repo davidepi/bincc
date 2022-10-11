@@ -6,6 +6,7 @@ use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -39,8 +40,8 @@ async fn main() {
     let mut inputs = args.input;
     inputs.shuffle(&mut thread_rng());
     let prefix = args.prefix.unwrap_or_else(|| "".to_string());
-    println!("Running {} concurrent jobs", args.limit_concurrent);
-    println!("Timeout {} s", args.timeout);
+    eprintln!("Running {} concurrent jobs", args.limit_concurrent);
+    eprintln!("Timeout {} s", args.timeout);
     calc_cfs(
         inputs,
         args.output,
@@ -49,7 +50,7 @@ async fn main() {
         args.timeout,
     )
     .await;
-    println!("Done :)");
+    eprintln!("Done :)");
 }
 
 async fn calc_cfs(
@@ -132,6 +133,12 @@ async fn run_job(
         if analysis_res.is_ok() {
             let end_t = Instant::now();
             let disasm_time = end_t.checked_duration_since(start_t).unwrap().as_millis();
+            let names = disassembler
+                .get_function_names()
+                .await
+                .into_iter()
+                .map(|(name, offset)| (offset, name))
+                .collect::<HashMap<_, _>>();
             let mut cfs_time_micros = 0_u128;
             let funcs = disassembler.get_function_offsets().await;
             for func in funcs {
@@ -142,8 +149,19 @@ async fn run_job(
                     let end_t = Instant::now();
                     cfs_time_micros += end_t.checked_duration_since(start_t).unwrap().as_micros();
                     let cfs_len = if cfs.get_tree().is_some() {
+                        if cfg.len() > 1 {
+                            println!(
+                                "{},{},{}",
+                                bin,
+                                names.get(&func).unwrap(),
+                                cfs.get_tree().unwrap().depth()
+                            );
+                        }
                         1
                     } else {
+                        if cfg.len() > 1 {
+                            println!("{},{},0", bin, names.get(&func).unwrap());
+                        }
                         cfs.get_graph().len()
                     };
                     let func_str =

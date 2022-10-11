@@ -1,5 +1,5 @@
 use crate::disasm::architectures::Architecture;
-use crate::disasm::{Statement, StatementType};
+use crate::disasm::{Statement, StatementFamily};
 use fnv::{FnvHashMap, FnvHashSet};
 use lazy_static::lazy_static;
 use r2pipe::{R2PipeAsync, R2PipeSpawnOptions};
@@ -199,8 +199,8 @@ impl R2Disasm {
                             if let (Some(offset), Some(stype), Some(opcode)) =
                                 (maybe_offset, maybe_type, maybe_opcode)
                             {
-                                let stype_enum =
-                                    StatementType::try_from(stype).unwrap_or(StatementType::UNK);
+                                let stype_enum = StatementFamily::try_from(stype)
+                                    .unwrap_or(StatementFamily::UNK);
                                 let stmt = Statement::new(offset, stype_enum, opcode);
                                 list.push(stmt);
                             }
@@ -266,8 +266,8 @@ impl R2Disasm {
                             if let (Some(offset), Some(stype), Some(opcode)) =
                                 (maybe_offset, maybe_type, maybe_opcode)
                             {
-                                let stype_enum =
-                                    StatementType::try_from(stype).unwrap_or(StatementType::UNK);
+                                let stype_enum = StatementFamily::try_from(stype)
+                                    .unwrap_or(StatementFamily::UNK);
                                 let stmt = Statement::new(offset, stype_enum, opcode);
                                 list.push(stmt);
                             }

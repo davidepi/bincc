@@ -1,6 +1,6 @@
 mod statement;
 pub use self::statement::Statement;
-pub use self::statement::StatementType;
+pub use self::statement::StatementFamily;
 mod function;
 pub use self::function::Function;
 mod architectures;

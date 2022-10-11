@@ -17,3 +17,5 @@ pub use self::cfs::CFS;
 mod comparator;
 pub use self::comparator::CFSComparator;
 pub use self::comparator::CloneClass;
+pub use self::comparator::FVec;
+pub use self::comparator::SemanticComparator;

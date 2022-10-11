@@ -1,4 +1,6 @@
-use bcc::analysis::{CFSComparator, StructureBlock, CFG, CFS};
+use bcc::analysis::{
+    CFSComparator, CloneClass, FVec, Graph, SemanticComparator, StructureBlock, CFG, CFS,
+};
 use bcc::disasm::radare2::R2Disasm;
 use clap::Parser;
 use fnv::FnvHashMap;
@@ -6,9 +8,10 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::cmp::Reverse;
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tokio::time::timeout;
 
 #[derive(clap::ValueEnum, Copy, Clone)]
@@ -35,7 +38,7 @@ enum SortResult {
 ///
 /// For example CLONE CLASS (3) means that the clone class contains clones of at least 3 nested
 /// structures.
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[clap(author, version, about, verbatim_doc_comment)]
 struct Args {
     /// Files that will be compared against eachother for function clones.
@@ -44,15 +47,26 @@ struct Args {
     /// Minimum threshold to consider a structural clone, measured in amount of nested structures.
     #[clap(short, long, default_value = "3")]
     min_depth: u32,
+    /// Minimum threshold to consider a semantic clone, measure in cosine similarity.
+    #[clap(long, default_value = "0.85")]
+    min_similarity: f32,
     /// Prints also the basic blocks offets composing each clone.
-    #[clap(short, long, default_value = "false")]
+    #[clap(short, long)]
     basic_blocks: bool,
     /// Outputs the result as Comma Separated Value content.
     ///
     /// The CSV will have the following structure:
     /// binary, function, clone_class_id, class_depth
-    #[clap(short, long, default_value = "false")]
+    #[clap(short, long)]
     csv: bool,
+    /// Disable the structural comparison step.
+    ///
+    /// WARNING: without this step the execution time may increase dramatically.
+    #[clap(long)]
+    disable_structural: bool,
+    /// Disable the semantic comparison step.
+    #[clap(long)]
+    disable_semantic: bool,
     /// Sorts the results.
     #[clap(short, long, default_value = "none")]
     sort: SortResult,
@@ -67,16 +81,71 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let mut comps = CFSComparator::new(args.min_depth);
-    let cfss = calc_cfs(args.input, args.limit_concurrent, args.timeout).await;
-    cfss.into_iter()
-        .for_each(|(bin, func, res)| comps.insert(res, bin, func));
-    print_results(comps, args.sort, args.basic_blocks, args.csv);
+    let cross_arch = same_arch(&args.input).await;
+    if cross_arch {
+        eprintln!("Cross architecture detection");
+    } else {
+        eprintln!("Same architecture detection");
+    }
+    // storing all opcodes for every function will go out of memory really quickly.
+    // I will just store the frequency and use an ID to identify them.
+    let analysis_result = analyse(args.clone(), cross_arch).await;
+    let clones = if args.disable_semantic {
+        structural_analysis_only(&analysis_result, args.min_depth)
+    } else if args.disable_structural {
+        semantic_analysis_only(&analysis_result, args.min_similarity)
+    } else {
+        structural_semantic_combined(&analysis_result, args.min_depth, args.min_similarity)
+    };
+    print_results(clones, args.sort, args.basic_blocks, args.csv);
 }
 
-fn print_results(comps: CFSComparator, sort: SortResult, bbs: bool, csv: bool) {
-    let mut clones = 0;
-    let mut classes = comps.clones();
+fn structural_analysis_only(analysis_res: &AnalysisResult, threshold: u32) -> Vec<CloneClass> {
+    eprintln!(
+        "Structural analysis: {} candidates",
+        analysis_res
+            .result
+            .iter()
+            .filter(|res| res.cfs.is_some())
+            .count()
+    );
+    let mut comps = CFSComparator::new(threshold);
+    let iter = analysis_res
+        .result
+        .iter()
+        .filter(|res| res.cfs.is_some())
+        .map(|res| (res.cfs.as_ref().unwrap(), res.bin, res.func));
+    for (cfs, bin, func) in iter {
+        comps.insert(bin, func, cfs);
+    }
+    comps.clones(&analysis_res.string_cache)
+}
+
+fn semantic_analysis_only(analysis_res: &AnalysisResult, threshold: f32) -> Vec<CloneClass> {
+    let mut comps = SemanticComparator::new(threshold);
+    eprintln!(
+        "Semantic analysis: {} candidates",
+        analysis_res
+            .result
+            .iter()
+            .filter(|res| res.fvec.is_some())
+            .count()
+    );
+    for res in analysis_res.result.iter().filter(|res| res.fvec.is_some()) {
+        comps.insert(res.bin, res.func, res.fvec.as_ref().unwrap());
+    }
+    comps.clones(&analysis_res.string_cache)
+}
+
+fn structural_semantic_combined(
+    analysis_res: &AnalysisResult,
+    threshold_structural: u32,
+    threshold_semantic: f32,
+) -> Vec<CloneClass> {
+    todo!()
+}
+
+fn print_results(mut classes: Vec<CloneClass>, sort: SortResult, bbs: bool, csv: bool) {
     match sort {
         SortResult::None => (),
         SortResult::DepthAsc => classes.sort_unstable_by_key(|a| a.depth()),
@@ -85,16 +154,50 @@ fn print_results(comps: CFSComparator, sort: SortResult, bbs: bool, csv: bool) {
         SortResult::SizeDesc => classes.sort_unstable_by_key(|a| Reverse(a.len())),
     }
     if csv {
-        print!("binary,function,clone_class_id,class_depth");
-        if bbs {
-            println!(",basic_blocks");
-        } else {
-            println!();
+        print_csv(classes, bbs)
+    } else {
+        print_stdout(classes, bbs)
+    }
+}
+
+fn print_stdout(classes: Vec<CloneClass>, bbs: bool) {
+    let mut clones = 0;
+    let classes_no = classes.len();
+    for class in classes {
+        println!("----- CLONE CLASS ({}) -----", class.depth());
+        for (bin, func, maybe_cfs) in class {
+            clones += 1;
+            if !bbs {
+                println!("{} :: {}", bin, func);
+            } else if let Some(cfs) = maybe_cfs {
+                let bbs = cfs
+                    .basic_blocks()
+                    .into_iter()
+                    .filter(|bb| !bb.is_sink())
+                    .map(|bb| format!("0x{:x}", bb.offset))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                println!("{} :: {} [{}]", bin, func, bbs);
+            }
         }
-        for (class_id, class) in classes.iter().enumerate() {
-            for (bin, func, cfs) in class.iter() {
-                print!("{},{},{},{}", bin, func, class_id, class.depth());
-                if bbs {
+    }
+    println!("----------------------------");
+    println!("Classes: {} Clones: {}", classes_no, clones);
+}
+
+fn print_csv(classes: Vec<CloneClass>, bbs: bool) {
+    print!("binary,function,clone_class_id,class_depth");
+    if bbs {
+        println!(",basic_blocks");
+    } else {
+        println!();
+    }
+    for (class_id, class) in classes.into_iter().enumerate() {
+        let class_depth = class.depth();
+        for (bin, func, maybe_cfs) in class {
+            print!("{},{},{},{}", bin, func, class_id, class_depth);
+            if bbs {
+                if let Some(cfs) = maybe_cfs {
                     let bbs = cfs
                         .basic_blocks()
                         .into_iter()
@@ -106,75 +209,117 @@ fn print_results(comps: CFSComparator, sort: SortResult, bbs: bool, csv: bool) {
                 } else {
                     println!();
                 }
+            } else {
+                println!();
             }
         }
-    } else {
-        for class in &classes {
-            println!("----- CLONE CLASS ({}) -----", class.depth());
-            for (bin, func, cfs) in class.iter() {
-                clones += 1;
-                if !bbs {
-                    println!("{} :: {}", bin, func);
-                } else {
-                    let bbs = cfs
-                        .basic_blocks()
-                        .into_iter()
-                        .filter(|bb| !bb.is_sink())
-                        .map(|bb| format!("0x{:x}", bb.offset))
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    println!("{} :: {} [{}]", bin, func, bbs);
-                }
-            }
-        }
-        println!("----------------------------");
-        println!("Classes: {} Clones: {}", classes.len(), clones);
     }
 }
 
-async fn calc_cfs(
-    jobs: Vec<String>,
-    max_jobs: usize,
-    timeout_secs: u64,
-) -> Vec<(String, String, StructureBlock)> {
+struct AnalysisResult {
+    // reversed cache containing all the bin/fun names
+    string_cache: FnvHashMap<u32, String>,
+    // result of the analysis
+    result: Vec<AnalysisStepResult>,
+}
+
+async fn analyse(args: Args, cross_arch: bool) -> AnalysisResult {
     let style = ProgressStyle::default_bar()
         .template("{msg} {pos:>7}/{len:7} [{bar:40.cyan/blue}] [{elapsed_precise}]")
         .unwrap()
         .progress_chars("#>-");
     let pb = Arc::new(
-        ProgressBar::new(jobs.len() as u64)
+        ProgressBar::new(args.input.len() as u64)
             .with_style(style)
             .with_message("Disassembling..."),
     );
     let mut tasks = FuturesUnordered::new();
-    let mut cfss = Vec::new();
-    for job in jobs {
-        let fut = tokio::spawn(cfs_job(job, Arc::clone(&pb), timeout_secs));
+    let string_cache = Arc::new(Mutex::new(HashMap::new()));
+    let opcode_cache = Arc::new(Mutex::new(HashMap::new()));
+    let mut analysis_all_res = Vec::new();
+    for job in args.input {
+        let fut = tokio::spawn(gather_analysis_data_job(
+            job,
+            Arc::clone(&pb),
+            Arc::clone(&string_cache),
+            Arc::clone(&opcode_cache),
+            args.disable_structural,
+            args.disable_semantic,
+            args.timeout,
+            cross_arch,
+        ));
         tasks.push(fut);
-        if tasks.len() == max_jobs {
+        if tasks.len() == args.limit_concurrent {
             if let Some(Ok(result)) = tasks.next().await {
-                cfss.extend(result);
+                analysis_all_res.extend(result);
             }
         }
     }
     // wait until completion or everything is killed
     while !tasks.is_empty() {
         if let Some(Ok(result)) = tasks.next().await {
-            cfss.extend(result);
+            analysis_all_res.extend(result);
         }
     }
     pb.finish();
-    cfss
+    let string_cache = Arc::try_unwrap(string_cache)
+        .unwrap()
+        .into_inner()
+        .unwrap()
+        .into_iter()
+        .map(|(k, v)| (v, k))
+        .collect::<FnvHashMap<_, _>>();
+    AnalysisResult {
+        string_cache,
+        result: analysis_all_res,
+    }
 }
 
-async fn cfs_job(
+async fn same_arch(jobs: &[String]) -> bool {
+    let mut archs = Vec::with_capacity(jobs.len());
+    for job in jobs {
+        let job_path = Path::new(&job);
+        if let Ok(mut disassembler) = R2Disasm::new(job_path.to_str().unwrap()).await {
+            if let Some(arch) = disassembler.get_arch().await {
+                archs.push(arch);
+            } else {
+                eprintln!(
+                    "Failed to recognize architecture of file {}. Exiting.",
+                    job_path.display()
+                );
+                std::process::exit(1);
+            }
+        } else {
+            eprintln!("Disassembler error for {}", job_path.display());
+            std::process::exit(1)
+        }
+    }
+    archs.dedup();
+    archs.len() > 1
+}
+
+struct AnalysisStepResult {
+    bin: u32,
+    func: u32,
+    cfs: Option<StructureBlock>,
+    cfs_time: u64,
+    // (opcode ID, frequency)
+    fvec: Option<FVec>,
+}
+
+async fn gather_analysis_data_job(
     job: String,
     pb: Arc<ProgressBar>,
+    string_cache: Arc<Mutex<HashMap<String, u32>>>,
+    opcode_cache: Arc<Mutex<HashMap<String, u16>>>,
+    disable_structural: bool,
+    disable_semantic: bool,
     timeout_secs: u64,
-) -> Vec<(String, String, StructureBlock)> {
+    cross_arch: bool,
+) -> Vec<AnalysisStepResult> {
     let job_path = Path::new(&job);
     let bin = job_path.to_str().unwrap().to_string();
-    let mut cfss = Vec::new();
+    let mut result = Vec::new();
     if let Ok(mut disassembler) = R2Disasm::new(job_path.to_str().unwrap()).await {
         let analysis_res = timeout(Duration::from_secs(timeout_secs), disassembler.analyse()).await;
         if analysis_res.is_ok() {
@@ -189,9 +334,41 @@ async fn cfs_job(
                 if let Some(bare) = disassembler.get_function_cfg(func).await {
                     if let Some(func_name) = names.get(&func) {
                         let cfg = CFG::from(bare);
-                        let cfs = CFS::new(&cfg);
-                        if let Some(tree) = cfs.get_tree() {
-                            cfss.push((bin.clone(), func_name.clone(), tree));
+                        if cfg.len() > 1 {
+                            let (cfs, cfs_time) = if !disable_structural {
+                                let start_t = Instant::now();
+                                let cfs = CFS::new(&cfg).get_tree();
+                                let end_t = Instant::now();
+                                let cfs_time =
+                                    end_t.checked_duration_since(start_t).unwrap().as_micros()
+                                        as u64;
+                                (cfs, cfs_time)
+                            } else {
+                                (None, 0)
+                            };
+                            let fvec = if !disable_semantic {
+                                disassembler.get_function_body(func).await.map(|stmts| {
+                                    FVec::new(stmts, &mut opcode_cache.lock().unwrap(), cross_arch)
+                                })
+                            } else {
+                                None
+                            };
+                            if let Ok(mut cache) = string_cache.lock() {
+                                let next_id = cache.len() as u32;
+                                let bin_id = *cache.entry(bin.clone()).or_insert(next_id);
+                                let next_id = cache.len() as u32;
+                                let func_id =
+                                    *cache.entry(func_name.to_string()).or_insert(next_id);
+                                result.push(AnalysisStepResult {
+                                    bin: bin_id,
+                                    func: func_id,
+                                    cfs,
+                                    cfs_time,
+                                    fvec,
+                                })
+                            } else {
+                                panic!("Mutex poisoned")
+                            }
                         }
                     }
                 }
@@ -203,5 +380,5 @@ async fn cfs_job(
         eprintln!("Disassembler error for {}", bin);
     }
     pb.inc(1);
-    cfss
+    result
 }

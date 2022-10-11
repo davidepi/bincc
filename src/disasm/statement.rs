@@ -12,7 +12,7 @@ use std::{cmp::Ordering, io::ErrorKind};
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Statement {
     offset: u64,
-    stype: StatementType,
+    stype: StatementFamily,
     instruction: String,
 }
 
@@ -30,7 +30,7 @@ impl Statement {
     /// # use bcc::disasm::{Statement, StatementType};
     /// let stmt = Statement::new(600, StatementType::RET, "ret");
     /// ```
-    pub fn new(offset: u64, stype: StatementType, instruction: &str) -> Statement {
+    pub fn new(offset: u64, stype: StatementFamily, instruction: &str) -> Statement {
         Statement {
             offset,
             stype,
@@ -57,11 +57,8 @@ impl Statement {
         self.offset
     }
 
-    /// Returns the instruction's arguments for the current statement.
+    /// Returns the group this statement belongs to.
     ///
-    /// This method is complementar to [Statement::get_mnemonic].
-    ///
-    /// If no arguments are present, an empty string is returned.
     /// # Examples
     /// Basic usage:
     /// ```
@@ -72,10 +69,9 @@ impl Statement {
     ///     "mov r9d, dword [rsp + r10 + 0x20]",
     /// );
     ///
-    /// assert_eq!(stmt.get_args(), "r9d, dword [rsp + r10 + 0x20]");
+    /// assert_eq!(stmt.get_family(), StatementType::MOV);
     /// ```
-
-    pub fn get_type(&self) -> StatementType {
+    pub fn get_family(&self) -> StatementFamily {
         self.stype
     }
 
@@ -164,7 +160,7 @@ impl PartialOrd for Statement {
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 /// Statements categorization that does not depend on the statement particular ISA.
 /// This categorization is similar to the one used in `radare2` by the variable `R_ANAL_OP_TYPE_###`
-pub enum StatementType {
+pub enum StatementFamily {
     ABS,
     ADD,
     AND,
@@ -215,7 +211,7 @@ pub enum StatementType {
     XOR,
 }
 
-impl StatementType {
+impl StatementFamily {
     /// Converts the statement type into a string representation
     pub fn to_str(&self) -> &'static str {
         match self {
@@ -271,10 +267,10 @@ impl StatementType {
     }
 }
 
-impl TryFrom<&str> for StatementType {
+impl TryFrom<&str> for StatementFamily {
     type Error = std::io::Error;
 
-    fn try_from(s: &str) -> Result<StatementType, Self::Error> {
+    fn try_from(s: &str) -> Result<StatementFamily, Self::Error> {
         match s {
             "abs" => Ok(Self::ABS),
             "add" => Ok(Self::ADD),
@@ -334,13 +330,13 @@ impl TryFrom<&str> for StatementType {
 
 #[cfg(test)]
 mod tests {
-    use crate::disasm::{statement::StatementType, Statement};
+    use crate::disasm::{statement::StatementFamily, Statement};
 
     #[test]
     fn new_no_args() {
-        let stmt = Statement::new(1552, StatementType::RET, "ret");
+        let stmt = Statement::new(1552, StatementFamily::RET, "ret");
         assert_eq!(stmt.get_offset(), 0x610);
-        assert_eq!(stmt.get_type(), StatementType::RET);
+        assert_eq!(stmt.get_family(), StatementFamily::RET);
         assert_eq!(stmt.get_instruction(), "ret");
         assert_eq!(stmt.get_mnemonic(), "ret");
         assert_eq!(stmt.get_args(), "");
@@ -349,9 +345,9 @@ mod tests {
     #[test]
     fn new_no_args_untrimmed() {
         //corner case for getting the arguments
-        let stmt = Statement::new(1552, StatementType::RET, "ret ");
+        let stmt = Statement::new(1552, StatementFamily::RET, "ret ");
         assert_eq!(stmt.get_offset(), 0x610);
-        assert_eq!(stmt.get_type(), StatementType::RET);
+        assert_eq!(stmt.get_family(), StatementFamily::RET);
         assert_eq!(stmt.get_instruction(), "ret");
         assert_eq!(stmt.get_mnemonic(), "ret");
         assert_eq!(stmt.get_args(), "");
@@ -361,11 +357,11 @@ mod tests {
     fn new_multi_args() {
         let stmt = Statement::new(
             0x5341A5,
-            StatementType::MOV,
+            StatementFamily::MOV,
             "mov r9d, dword [rsp + r10 + 0x20]",
         );
         assert_eq!(stmt.get_offset(), 5456293);
-        assert_eq!(stmt.get_type(), StatementType::MOV);
+        assert_eq!(stmt.get_family(), StatementFamily::MOV);
         assert_eq!(stmt.get_instruction(), "mov r9d, dword [rsp + r10 + 0x20]");
         assert_eq!(stmt.get_mnemonic(), "mov");
         assert_eq!(stmt.get_args(), "r9d, dword [rsp + r10 + 0x20]");
@@ -373,9 +369,9 @@ mod tests {
 
     #[test]
     fn new_uppercase() {
-        let stmt = Statement::new(0x5667, StatementType::CMP, "CMP RAX, r8");
+        let stmt = Statement::new(0x5667, StatementFamily::CMP, "CMP RAX, r8");
         assert_eq!(stmt.get_offset(), 0x5667);
-        assert_eq!(stmt.get_type(), StatementType::CMP);
+        assert_eq!(stmt.get_family(), StatementFamily::CMP);
         assert_eq!(stmt.get_instruction(), "cmp rax, r8");
         assert_eq!(stmt.get_mnemonic(), "cmp");
         assert_eq!(stmt.get_args(), "rax, r8");
@@ -383,8 +379,8 @@ mod tests {
 
     #[test]
     fn ord() {
-        let stmt0 = Statement::new(1552, StatementType::PUSH, "push");
-        let stmt1 = Statement::new(1553, StatementType::RET, "ret");
+        let stmt0 = Statement::new(1552, StatementFamily::PUSH, "push");
+        let stmt1 = Statement::new(1553, StatementFamily::RET, "ret");
         assert!(stmt0 < stmt1);
     }
 }
