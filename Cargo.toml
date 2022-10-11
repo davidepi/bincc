@@ -50,3 +50,8 @@ build-bin=["clap","indicatif","rand","tokio","futures","num_cpus"]
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+
+[profile.release]
+lto = true
+strip = true
+opt-level = 3
