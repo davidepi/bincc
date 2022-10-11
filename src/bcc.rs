@@ -50,7 +50,7 @@ struct Args {
     /// Outputs the result as Comma Separated Value content.
     ///
     /// The CSV will have the following structure:
-    /// binary_a, function_a, clone_class_id, class_depth
+    /// binary, function, clone_class_id, class_depth
     #[clap(short, long, default_value = "false")]
     csv: bool,
     /// Sorts the results.
@@ -85,7 +85,7 @@ fn print_results(comps: CFSComparator, sort: SortResult, bbs: bool, csv: bool) {
         SortResult::SizeDesc => classes.sort_unstable_by_key(|a| Reverse(a.len())),
     }
     if csv {
-        print!("binary_a,function_a,clone_class_id,class_depth");
+        print!("binary,function,clone_class_id,class_depth");
         if bbs {
             println!(",basic_blocks");
         } else {

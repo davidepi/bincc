@@ -147,7 +147,7 @@ impl CFSComparator {
 #[cfg(test)]
 mod tests {
     use crate::analysis::{CFSComparator, CFG, CFS};
-    use crate::disasm::{ArchX86, Statement, StatementType};
+    use crate::disasm::{Architecture, Statement, StatementType};
 
     fn create_function() -> Vec<Statement> {
         vec![
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn cloned_full() {
         let stmts = create_function();
-        let cfg = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
+        let cfg = CFG::new(&stmts, 0x6C, Architecture::X86(64)).add_sink();
         let cfs = CFS::new(&cfg);
         let mut diff = CFSComparator::new(7);
         diff.insert(cfs.get_tree().unwrap(), "ab".to_string(), "af".to_string());
@@ -201,7 +201,7 @@ mod tests {
     #[test]
     fn cloned_partial() {
         let mut stmts = create_function();
-        let cfg0 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
+        let cfg0 = CFG::new(&stmts, 0x6C, Architecture::X86(64)).add_sink();
         let cfs0 = CFS::new(&cfg0);
         let mut diff = CFSComparator::new(2);
         diff.insert(cfs0.get_tree().unwrap(), "ab".to_string(), "af".to_string());
@@ -211,7 +211,7 @@ mod tests {
         stmts[10] = Statement::new(0x28, StatementType::NOP, "nop");
         stmts[11] = Statement::new(0x2C, StatementType::NOP, "nop");
         stmts[12] = Statement::new(0x30, StatementType::NOP, "nop");
-        let cfg1 = CFG::new(&stmts, 0x6C, &ArchX86::new_amd64()).add_sink();
+        let cfg1 = CFG::new(&stmts, 0x6C, Architecture::X86(64)).add_sink();
         let cfs1 = CFS::new(&cfg1);
         diff.insert(cfs1.get_tree().unwrap(), "bb".to_string(), "bf".to_string());
         assert!(!cfs0

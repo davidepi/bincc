@@ -173,7 +173,7 @@ impl CFG {
     /// Basic usage:
     /// ```
     /// # use bcc::analysis::{Graph, CFG};
-    /// # use bcc::disasm::{ArchX86, Statement, StatementType};
+    /// # use bcc::disasm::{Architecture, Statement, StatementType};
     /// let stmts = vec![
     ///     Statement::new(0x38, StatementType::CMP, "cmp dword [var_4h], 0"),
     ///     Statement::new(0x3C, StatementType::CJMP, "jle 0x45"),
@@ -182,12 +182,12 @@ impl CFG {
     ///     Statement::new(0x45, StatementType::MOV, "mov eax, 1"),
     ///     Statement::new(0x4A, StatementType::RET, "ret"),
     /// ];
-    /// let arch = ArchX86::new_amd64();
-    /// let cfg = CFG::new(&stmts, 0x4B, &arch);
+    /// let arch = Architecture::X86(64);
+    /// let cfg = CFG::new(&stmts, 0x4B, arch);
     ///
     /// assert_eq!(cfg.len(), 4);
     /// ```
-    pub fn new(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> CFG {
+    pub fn new(stmts: &[Statement], fn_end: u64, arch: Architecture) -> CFG {
         CFG::from(to_bare_cfg(stmts, fn_end, arch))
     }
 
@@ -483,7 +483,7 @@ struct TargetMap {
 }
 
 // given a list of Statements and an Architecture creates the TargetMap struct
-fn get_targets(stmts: &[Statement], arch: &dyn Architecture) -> TargetMap {
+fn get_targets(stmts: &[Statement], arch: Architecture) -> TargetMap {
     let mut targets = BTreeSet::default();
     let mut srcs_cond = FnvHashMap::default();
     let mut srcs_uncond = FnvHashMap::default();
@@ -552,7 +552,7 @@ fn get_targets(stmts: &[Statement], arch: &dyn Architecture) -> TargetMap {
 }
 
 // actual cfg building
-fn to_bare_cfg(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> BareCFG {
+fn to_bare_cfg(stmts: &[Statement], fn_end: u64, arch: Architecture) -> BareCFG {
     let tgmap = get_targets(stmts, arch);
     // This target is used for a strictly lower bound.
     let mut nodes = Vec::with_capacity(tgmap.targets.len());
@@ -631,7 +631,7 @@ fn to_bare_cfg(stmts: &[Statement], fn_end: u64, arch: &dyn Architecture) -> Bar
 mod tests {
     use crate::analysis::{BasicBlock, Graph, CFG};
     use crate::disasm::radare2::BareCFG;
-    use crate::disasm::{ArchX86, Statement, StatementType};
+    use crate::disasm::{Architecture, Statement, StatementType};
     use maplit::hashmap;
     use std::collections::{HashMap, HashSet};
     use std::error::Error;
@@ -757,8 +757,8 @@ mod tests {
     #[test]
     fn root_empty() {
         let stmts = Vec::new();
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x0, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x0, arch);
         assert!(cfg.root().is_none());
     }
 
@@ -768,8 +768,8 @@ mod tests {
             Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
             Statement::new(0x624, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x625, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x625, arch);
         assert!(cfg.root().is_some());
         assert_eq!(cfg.root().unwrap().offset, 0x61C);
     }
@@ -777,8 +777,8 @@ mod tests {
     #[test]
     fn get_children_nonexisting() {
         let stmts = Vec::new();
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x0, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x0, arch);
         let children = cfg.neighbours(&BasicBlock::new_sink());
         assert!(children.is_empty())
     }
@@ -789,8 +789,8 @@ mod tests {
             Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
             Statement::new(0x624, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x625, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x625, arch);
         let children = cfg.neighbours(cfg.root().unwrap());
         assert!(children.is_empty());
     }
@@ -803,8 +803,8 @@ mod tests {
             Statement::new(0x614, StatementType::MOV, "mov eax, 6"),
             Statement::new(0x618, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x619, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x619, arch);
         let children = cfg.neighbours(cfg.root().unwrap());
         assert_eq!(children.len(), 2);
     }
@@ -817,16 +817,16 @@ mod tests {
             Statement::new(0x614, StatementType::MOV, "mov eax, 6"),
             Statement::new(0x618, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x619, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x619, arch);
         assert_eq!(cfg.len(), 3);
     }
 
     #[test]
     fn build_cfg_empty() {
         let stmts = Vec::new();
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x0, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x0, arch);
         assert!(cfg.is_empty());
         assert_eq!(cfg.len(), 0);
     }
@@ -857,8 +857,8 @@ mod tests {
             Statement::new(0x620, StatementType::MOV, "mov eax, 6"),    //3
             Statement::new(0x625, StatementType::RET, "ret"),           //3
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x626, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x626, arch);
         assert!(!cfg.is_empty());
         assert_eq!(cfg.len(), 4);
         let node0 = cfg.root();
@@ -890,8 +890,8 @@ mod tests {
             Statement::new(0x638, StatementType::POP, "pop rbp"),   //3
             Statement::new(0x639, StatementType::RET, "ret"),       //3
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x640, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x640, arch);
         assert_eq!(cfg.len(), 4);
         let node0 = cfg.root();
         let node1 = cfg.next(node0);
@@ -918,8 +918,8 @@ mod tests {
             Statement::new(0x614, StatementType::JMP, "jmp 0x615"),     //3
             Statement::new(0x615, StatementType::RET, "ret"),           //4
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x616, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x616, arch);
         assert_eq!(cfg.len(), 5);
         let node0 = cfg.root();
         let node1 = cfg.next(node0);
@@ -942,8 +942,8 @@ mod tests {
             Statement::new(0x628, StatementType::MOV, "mov eax, 6"),    //3
             Statement::new(0x62C, StatementType::RET, "ret"),           //3
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x630, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x630, arch);
         assert_eq!(cfg.len(), 4);
         let node0 = cfg.root();
         let node1 = cfg.next(node0);
@@ -982,16 +982,16 @@ mod tests {
             Statement::new(0x3FD1A7EF564, StatementType::MOV, "mov eax, 1"),
             Statement::new(0x3FD1A7EF568, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x3FD1A7EF56C, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x3FD1A7EF56C, arch);
         assert_eq!(cfg.len(), 6);
     }
 
     #[test]
     fn save_and_retrieve_empty() -> Result<(), Box<dyn Error>> {
         let stmts = Vec::new();
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x0, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x0, arch);
         let mut file = tempfile()?;
         file.write_all(cfg.to_dot().as_bytes())?;
         file.seek(SeekFrom::Start(0))?;
@@ -1015,8 +1015,8 @@ mod tests {
             Statement::new(0x638, StatementType::POP, "pop rbp"),   //3
             Statement::new(0x639, StatementType::RET, "ret"),       //3
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x640, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x640, arch);
         let mut file = tempfile()?;
         file.write_all(cfg.to_dot().as_bytes())?;
         file.seek(SeekFrom::Start(0))?;
@@ -1037,8 +1037,8 @@ mod tests {
             Statement::new(0x638, StatementType::POP, "pop rbp"),   //2
             Statement::new(0x639, StatementType::RET, "ret"),       //2
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x640, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x640, arch);
         let cfg_sink_eep = cfg.clone().add_entry_point().add_sink();
         assert_ne!(cfg, cfg_sink_eep);
         let mut file = tempfile()?;
@@ -1054,8 +1054,8 @@ mod tests {
     #[test]
     fn add_sink_empty() {
         let stmts = Vec::new();
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x0, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x0, arch);
         let cfg_with_sink = cfg.add_sink();
         assert!(cfg_with_sink.is_empty());
     }
@@ -1069,8 +1069,8 @@ mod tests {
             Statement::new(0x628, StatementType::MOV, "mov eax, 6"),
             Statement::new(0x62C, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x630, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x630, arch);
         assert_eq!(cfg.len(), 3);
         let cfg_with_sink = cfg.add_sink();
         assert_eq!(cfg_with_sink.len(), 4);
@@ -1082,8 +1082,8 @@ mod tests {
             Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
             Statement::new(0x624, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x625, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x625, arch);
         let cfg_with_sink = cfg.clone().add_sink();
         assert_eq!(cfg.len(), cfg_with_sink.len());
     }
@@ -1095,8 +1095,8 @@ mod tests {
             Statement::new(0x620, StatementType::CJMP, "jne 0x61c"),
             Statement::new(0x624, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x625, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x625, arch);
         assert_eq!(cfg.len(), 2);
         let cfg_with_eep = cfg.clone().add_entry_point();
         assert_eq!(cfg_with_eep.len(), 3);
@@ -1123,8 +1123,8 @@ mod tests {
             Statement::new(0x61C, StatementType::MOV, "mov eax, 5"),
             Statement::new(0x624, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x625, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x625, arch);
         assert_eq!(cfg.len(), 1);
         let cfg_with_eep = cfg.clone().add_entry_point();
         assert_eq!(cfg_with_eep, cfg);
@@ -1199,8 +1199,8 @@ mod tests {
             Statement::new(0x596, StatementType::JMP, "jmp 0x538"),
             Statement::new(0x712, StatementType::RET, "ret"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x713, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x713, arch);
         assert_eq!(cfg.len(), 5);
     }
 
@@ -1224,8 +1224,8 @@ mod tests {
             Statement::new(0x61C, StatementType::JMP, "jmp 0x620"),
             Statement::new(0x620, StatementType::JMP, "jmp 0x61c"),
         ];
-        let arch = ArchX86::new_amd64();
-        let cfg = CFG::new(&stmts, 0x62C, &arch);
+        let arch = Architecture::X86(64);
+        let cfg = CFG::new(&stmts, 0x62C, arch);
         assert!(cfg.root().is_some());
         assert_eq!(cfg.root().unwrap().offset, 0x61C);
     }
