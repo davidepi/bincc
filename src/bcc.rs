@@ -242,7 +242,7 @@ fn print_stdout(classes: Vec<CloneClass>, bbs: bool) {
 }
 
 fn print_csv(classes: Vec<CloneClass>, bbs: bool) {
-    print!("binary,function,clone_class_id,class_depth");
+    print!("arch,bits,binary,function,clone_class_id,class_depth");
     if bbs {
         println!(",basic_blocks");
     } else {
@@ -251,7 +251,17 @@ fn print_csv(classes: Vec<CloneClass>, bbs: bool) {
     for (class_id, class) in classes.into_iter().enumerate() {
         let class_depth = class.depth();
         for (bin, func, maybe_cfs) in class {
-            print!("{},{},{},{}", bin, func, class_id, class_depth);
+            // arch substring is appended by this program, it's always ASCII so this call is safe
+            let archbits_substring_end = bin.find(']').unwrap();
+            let archbits_substring = &bin[1..archbits_substring_end];
+            let arch_substring_end = archbits_substring.find('_').unwrap();
+            let arch_substring = &bin[1..arch_substring_end + 1];
+            let bits_substring = &bin[arch_substring_end + 2..archbits_substring_end];
+            let bin_substring = &bin[archbits_substring_end + 1..];
+            print!(
+                "{},{},{},{},{},{}",
+                arch_substring, bits_substring, bin_substring, func, class_id, class_depth
+            );
             if bbs {
                 if let Some(cfs) = maybe_cfs {
                     let bbs = cfs
@@ -378,6 +388,11 @@ async fn gather_analysis_data_job(
     if let Ok(mut disassembler) = R2Disasm::new(job_path.to_str().unwrap()).await {
         let analysis_res = timeout(Duration::from_secs(timeout_secs), disassembler.analyse()).await;
         if analysis_res.is_ok() {
+            let arch = disassembler
+                .get_arch()
+                .await
+                .expect("Unsupported architecture");
+            let bin_with_arch = format!("[{}_{}]{}", arch.name(), arch.bits(), bin);
             let funcs = disassembler.get_function_offsets().await;
             let names = disassembler
                 .get_function_names()
@@ -404,7 +419,7 @@ async fn gather_analysis_data_job(
                             };
                             if let Ok(mut cache) = string_cache.lock() {
                                 let next_id = cache.len() as u32;
-                                let bin_id = *cache.entry(bin.clone()).or_insert(next_id);
+                                let bin_id = *cache.entry(bin_with_arch.clone()).or_insert(next_id);
                                 let next_id = cache.len() as u32;
                                 let func_id =
                                     *cache.entry(func_name.to_string()).or_insert(next_id);
