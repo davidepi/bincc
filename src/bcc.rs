@@ -115,10 +115,15 @@ fn structural_analysis_only(analysis_res: &AnalysisResult, threshold: u32) -> Ve
         .iter()
         .filter(|res| res.cfs.is_some())
         .map(|res| (res.cfs.as_ref().unwrap(), res.bin, res.func));
+    let start_t = Instant::now();
     for (cfs, bin, func) in iter {
         comps.insert(bin, func, cfs);
     }
-    comps.clones(&analysis_res.string_cache)
+    let clones = comps.clones(&analysis_res.string_cache);
+    let end_t = Instant::now();
+    let sa_time = end_t.checked_duration_since(start_t).unwrap().as_micros() as u64;
+    eprintln!("Structural analysis took {} µs", sa_time);
+    clones
 }
 
 fn semantic_analysis_only(analysis_res: &AnalysisResult, threshold: f32) -> Vec<CloneClass> {
@@ -131,10 +136,15 @@ fn semantic_analysis_only(analysis_res: &AnalysisResult, threshold: f32) -> Vec<
             .filter(|res| res.fvec.is_some())
             .count()
     );
+    let start_t = Instant::now();
     for res in analysis_res.result.iter().filter(|res| res.fvec.is_some()) {
-        comps.insert(res.bin, res.func, res.fvec.as_ref().unwrap());
+        comps.insert(res.bin, res.func, res.fvec.as_ref().unwrap(), None);
     }
-    comps.clones(&analysis_res.string_cache)
+    let clones = comps.clones(&analysis_res.string_cache);
+    let end_t = Instant::now();
+    let se_time = end_t.checked_duration_since(start_t).unwrap().as_micros() as u64;
+    eprintln!("Semantic analysis took {} µs", se_time);
+    clones
 }
 
 fn structural_semantic_combined(
@@ -142,7 +152,53 @@ fn structural_semantic_combined(
     threshold_structural: u32,
     threshold_semantic: f32,
 ) -> Vec<CloneClass> {
-    todo!()
+    let reverse_map = analysis_res
+        .string_cache
+        .iter()
+        .map(|(k, v)| (v.as_str(), k))
+        .collect::<HashMap<_, _>>();
+    let fvec_map = analysis_res
+        .result
+        .iter()
+        .map(|res| ((res.bin, res.func), res.fvec.as_ref().unwrap()))
+        .collect::<FnvHashMap<_, _>>();
+    let mut comps = CFSComparator::new(threshold_structural);
+    let iter = analysis_res
+        .result
+        .iter()
+        .filter(|res| res.cfs.is_some())
+        .map(|res| (res.cfs.as_ref().unwrap(), res.bin, res.func));
+    let start_t = Instant::now();
+    for (cfs, bin, func) in iter {
+        comps.insert(bin, func, cfs);
+    }
+    let structural_clones = comps.clones(&analysis_res.string_cache);
+    let end_t = Instant::now();
+    let sa_time = end_t.checked_duration_since(start_t).unwrap().as_micros() as u64;
+    let mut comparison_done = 0;
+    let mut retval = Vec::new();
+    let start_t = Instant::now();
+    for clone_class in structural_clones {
+        let mut comps = SemanticComparator::new(threshold_semantic);
+        for (bin, func, structure) in clone_class {
+            let bin_id = **reverse_map.get(bin).unwrap();
+            let fun_id = **reverse_map.get(func).unwrap();
+            let structure = structure.unwrap();
+            let fvec = *fvec_map.get(&(bin_id, fun_id)).unwrap();
+            comps.insert(bin_id, fun_id, fvec, Some(structure));
+            comparison_done += 1;
+        }
+        retval.extend(comps.clones(&analysis_res.string_cache));
+    }
+    let end_t = Instant::now();
+    let se_time = end_t.checked_duration_since(start_t).unwrap().as_micros() as u64;
+    eprintln!(
+        "Structural+Semantic analysis: {} comparisons",
+        comparison_done
+    );
+    eprintln!("Structural analysis took {} µs", sa_time);
+    eprintln!("Semantic analysis took {} µs", se_time);
+    retval
 }
 
 fn print_results(mut classes: Vec<CloneClass>, sort: SortResult, bbs: bool, csv: bool) {
@@ -302,11 +358,10 @@ struct AnalysisStepResult {
     bin: u32,
     func: u32,
     cfs: Option<StructureBlock>,
-    cfs_time: u64,
-    // (opcode ID, frequency)
     fvec: Option<FVec>,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn gather_analysis_data_job(
     job: String,
     pb: Arc<ProgressBar>,
@@ -335,16 +390,10 @@ async fn gather_analysis_data_job(
                     if let Some(func_name) = names.get(&func) {
                         let cfg = CFG::from(bare);
                         if cfg.len() > 1 {
-                            let (cfs, cfs_time) = if !disable_structural {
-                                let start_t = Instant::now();
-                                let cfs = CFS::new(&cfg).get_tree();
-                                let end_t = Instant::now();
-                                let cfs_time =
-                                    end_t.checked_duration_since(start_t).unwrap().as_micros()
-                                        as u64;
-                                (cfs, cfs_time)
+                            let cfs = if !disable_structural {
+                                CFS::new(&cfg).get_tree()
                             } else {
-                                (None, 0)
+                                None
                             };
                             let fvec = if !disable_semantic {
                                 disassembler.get_function_body(func).await.map(|stmts| {
@@ -363,7 +412,6 @@ async fn gather_analysis_data_job(
                                     bin: bin_id,
                                     func: func_id,
                                     cfs,
-                                    cfs_time,
                                     fvec,
                                 })
                             } else {

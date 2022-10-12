@@ -133,6 +133,7 @@ pub struct SemanticComparator<'a> {
     bin_id: Vec<u32>,
     fun_id: Vec<u32>,
     fvec: Vec<&'a FVec>,
+    structures: Vec<&'a StructureBlock>,
     min_similarity: f32,
 }
 
@@ -142,34 +143,56 @@ impl<'a> SemanticComparator<'a> {
             bin_id: Vec::new(),
             fun_id: Vec::new(),
             fvec: Vec::new(),
+            structures: Vec::new(),
             min_similarity,
         }
     }
 
-    pub fn insert(&mut self, binary_id: u32, function_id: u32, fvec: &'a FVec) {
+    pub fn insert(
+        &mut self,
+        binary_id: u32,
+        function_id: u32,
+        fvec: &'a FVec,
+        structure: Option<&'a StructureBlock>,
+    ) {
         self.bin_id.push(binary_id);
         self.fun_id.push(function_id);
         self.fvec.push(fvec);
+        if let Some(structure) = structure {
+            self.structures.push(structure);
+        }
     }
 
-    pub fn clones<'b>(&self, string_cache: &'b FnvHashMap<u32, String>) -> Vec<CloneClass<'b>> {
+    pub fn clones<'b>(&self, string_cache: &'b FnvHashMap<u32, String>) -> Vec<CloneClass<'b>>
+    where
+        'a: 'b,
+    {
         let mut retval = HashSet::new();
+        let use_structures = self.fvec.len() == self.structures.len();
         for a in self.fvec.iter() {
             let mut binaries = Vec::new();
             let mut functions = Vec::new();
+            let mut structures = Vec::new();
             for (index_b, b) in self.fvec.iter().enumerate() {
                 if a.cosine_similarity(b) > self.min_similarity {
                     let bin_b = string_cache.get(&self.bin_id[index_b]).unwrap().as_str();
                     let func_b = string_cache.get(&self.fun_id[index_b]).unwrap().as_str();
                     binaries.push(bin_b);
                     functions.push(func_b);
+                    if use_structures {
+                        structures.push(self.structures[index_b]);
+                    }
                 }
             }
             if binaries.len() > 1 {
                 retval.insert(CloneClass {
                     binaries,
                     functions,
-                    structures: None,
+                    structures: if use_structures {
+                        Some(structures)
+                    } else {
+                        None
+                    },
                     iterator_index: 0,
                 });
             }
@@ -337,11 +360,11 @@ mod tests {
         let mut opcode_map = HashMap::new();
         let fvec = FVec::new(stmts, &mut opcode_map, false);
         let mut diff = SemanticComparator::new(0.7);
-        diff.insert(0, 10, &fvec);
-        diff.insert(1, 11, &fvec);
-        diff.insert(2, 12, &fvec);
-        diff.insert(3, 13, &fvec);
-        diff.insert(4, 14, &fvec);
+        diff.insert(0, 10, &fvec, None);
+        diff.insert(1, 11, &fvec, None);
+        diff.insert(2, 12, &fvec, None);
+        diff.insert(3, 13, &fvec, None);
+        diff.insert(4, 14, &fvec, None);
         let string_cache = create_string_cache();
         let clones = diff.clones(&string_cache);
         assert_eq!(clones.len(), 1);
@@ -355,13 +378,13 @@ mod tests {
         let mut opcode_map = HashMap::new();
         let fvec = FVec::new(stmts, &mut opcode_map, false);
         let mut diff = SemanticComparator::new(0.7);
-        diff.insert(0, 10, &fvec);
+        diff.insert(0, 10, &fvec, None);
         let mut stmts = create_function();
         for stmt in &mut stmts[..15] {
             *stmt = Statement::new(0x2C, StatementFamily::NOP, "nop");
         }
         let fvec = FVec::new(stmts, &mut opcode_map, false);
-        diff.insert(1, 11, &fvec);
+        diff.insert(1, 11, &fvec, None);
         let string_cache = create_string_cache();
         let clones = diff.clones(&string_cache);
         assert_eq!(clones.len(), 0);

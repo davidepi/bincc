@@ -27,8 +27,8 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementType};
-    /// let stmt = Statement::new(600, StatementType::RET, "ret");
+    /// # use bcc::disasm::{Statement, StatementFamily};
+    /// let stmt = Statement::new(600, StatementFamily::RET, "ret");
     /// ```
     pub fn new(offset: u64, stype: StatementFamily, instruction: &str) -> Statement {
         Statement {
@@ -44,10 +44,10 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementType};
+    /// # use bcc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
-    ///     StatementType::MOV,
+    ///     StatementFamily::MOV,
     ///     "mov r9d, dword [rsp + r10 + 0x20]",
     /// );
     ///
@@ -62,14 +62,14 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementType};
+    /// # use bcc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
-    ///     StatementType::MOV,
+    ///     StatementFamily::MOV,
     ///     "mov r9d, dword [rsp + r10 + 0x20]",
     /// );
     ///
-    /// assert_eq!(stmt.get_family(), StatementType::MOV);
+    /// assert_eq!(stmt.get_family(), StatementFamily::MOV);
     /// ```
     pub fn get_family(&self) -> StatementFamily {
         self.stype
@@ -81,10 +81,10 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementType};
+    /// # use bcc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
-    ///     StatementType::MOV,
+    ///     StatementFamily::MOV,
     ///     "mov r9d, dword [rsp + r10 + 0x20]",
     /// );
     ///
@@ -104,10 +104,10 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementType};
+    /// # use bcc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
-    ///     StatementType::MOV,
+    ///     StatementFamily::MOV,
     ///     "MOV r9d, dword [rsp + r10 + 0x20]",
     /// );
     ///
@@ -128,10 +128,10 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementType};
+    /// # use bcc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
-    ///     StatementType::MOV,
+    ///     StatementFamily::MOV,
     ///     "mov r9d, dword [rsp + r10 + 0x20]",
     /// );
     ///

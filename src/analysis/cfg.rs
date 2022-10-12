@@ -173,14 +173,14 @@ impl CFG {
     /// Basic usage:
     /// ```
     /// # use bcc::analysis::{Graph, CFG};
-    /// # use bcc::disasm::{Architecture, Statement, StatementType};
+    /// # use bcc::disasm::{Architecture, Statement, StatementFamily};
     /// let stmts = vec![
-    ///     Statement::new(0x38, StatementType::CMP, "cmp dword [var_4h], 0"),
-    ///     Statement::new(0x3C, StatementType::CJMP, "jle 0x45"),
-    ///     Statement::new(0x3E, StatementType::MOV, "mov eax, 0"),
-    ///     Statement::new(0x43, StatementType::JMP, "jmp 0x4a"),
-    ///     Statement::new(0x45, StatementType::MOV, "mov eax, 1"),
-    ///     Statement::new(0x4A, StatementType::RET, "ret"),
+    ///     Statement::new(0x38, StatementFamily::CMP, "cmp dword [var_4h], 0"),
+    ///     Statement::new(0x3C, StatementFamily::CJMP, "jle 0x45"),
+    ///     Statement::new(0x3E, StatementFamily::MOV, "mov eax, 0"),
+    ///     Statement::new(0x43, StatementFamily::JMP, "jmp 0x4a"),
+    ///     Statement::new(0x45, StatementFamily::MOV, "mov eax, 1"),
+    ///     Statement::new(0x4A, StatementFamily::RET, "ret"),
     /// ];
     /// let arch = Architecture::X86(64);
     /// let cfg = CFG::new(&stmts, 0x4B, arch);
