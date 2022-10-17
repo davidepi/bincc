@@ -28,6 +28,14 @@ enum SortResult {
     SizeDesc,
 }
 
+#[derive(clap::ValueEnum, Copy, Clone, PartialEq, Eq)]
+enum SemanticAnalysisType {
+    /// Assume the binaries are from the same architecture in the semantic analysis.
+    Same,
+    /// Assume the binaries are from different architectures in the semantic analysis.
+    Cross,
+}
+
 /// Detects code clones in the given binary files.
 ///
 /// The report will be printed to stdout and will contains all the clones divided in clone classes.
@@ -44,11 +52,18 @@ struct Args {
     /// Files that will be compared against eachother for function clones.
     #[clap(required = true)]
     input: Vec<String>,
+    /// Specify if the input binaries belongs to the same architecture or not.
+    ///
+    /// If this parameter is not provided, it will be detected by the disassembler.
+    ///
+    /// This parameter is ignored if only the structural analysis is used.
+    #[clap(short, long)]
+    architecture: Option<SemanticAnalysisType>,
     /// Minimum threshold to consider a structural clone, measured in amount of nested structures.
     #[clap(short, long, default_value = "3")]
     min_depth: u32,
-    /// Minimum threshold to consider a semantic clone, measure in cosine similarity.
-    #[clap(long, default_value = "0.85")]
+    /// Minimum threshold to consider a semantic clone, measured in cosine similarity.
+    #[clap(long, default_value = "0.99")]
     min_similarity: f32,
     /// Prints also the basic blocks offets composing each clone.
     #[clap(short, long)]
@@ -56,7 +71,7 @@ struct Args {
     /// Outputs the result as Comma Separated Value content.
     ///
     /// The CSV will have the following structure:
-    /// binary, function, clone_class_id, class_depth
+    /// architecture, bits, binary, function, clone_class_id, class_depth
     #[clap(short, long)]
     csv: bool,
     /// Disable the structural comparison step.
@@ -81,12 +96,18 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    let cross_arch = same_arch(&args.input).await;
-    if cross_arch {
-        eprintln!("Cross architecture detection");
+    // First detect the architecture for the semantic analysis
+    let cross_arch = if let Some(semtype) = args.architecture {
+        semtype == SemanticAnalysisType::Cross
+    } else if args.disable_structural {
+        // no need this value
+        true
     } else {
-        eprintln!("Same architecture detection");
-    }
+        eprint!("Selecting semantic analysis type... ");
+        let cross_arch = !same_arch(&args.input).await;
+        eprintln!("Done");
+        cross_arch
+    };
     // storing all opcodes for every function will go out of memory really quickly.
     // I will just store the frequency and use an ID to identify them.
     let analysis_result = analyse(args.clone(), cross_arch).await;
