@@ -22,6 +22,13 @@ impl<'a> CloneClass<'a> {
         self.len() == 0
     }
 
+    pub fn iter_names(&self) -> impl Iterator<Item = (&'a str, &'a str)> + '_ {
+        self.binaries
+            .iter()
+            .copied()
+            .zip(self.functions.iter().copied())
+    }
+
     pub fn depth(&self) -> u32 {
         if let Some(structures) = &self.structures {
             structures.first().map(|s| s.depth()).unwrap_or(0)

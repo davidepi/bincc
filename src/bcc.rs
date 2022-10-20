@@ -85,6 +85,9 @@ struct Args {
     /// Sorts the results.
     #[clap(short, long, default_value = "none")]
     sort: SortResult,
+    /// Don't remove duplicate clone classes from the results.
+    #[clap(long)]
+    no_filter: bool,
     /// Limits the maximum amount of applications analysed concurrently.
     #[clap(short='l', long="limit", default_value_t = num_cpus::get())]
     limit_concurrent: usize,
@@ -118,7 +121,13 @@ async fn main() {
     } else {
         structural_semantic_combined(&analysis_result, args.min_depth, args.min_similarity)
     };
-    print_results(clones, args.sort, args.basic_blocks, args.csv);
+    print_results(
+        clones,
+        args.sort,
+        args.basic_blocks,
+        args.csv,
+        !args.no_filter,
+    );
 }
 
 fn structural_analysis_only(analysis_res: &AnalysisResult, threshold: u32) -> Vec<CloneClass> {
@@ -222,7 +231,28 @@ fn structural_semantic_combined(
     retval
 }
 
-fn print_results(mut classes: Vec<CloneClass>, sort: SortResult, bbs: bool, csv: bool) {
+fn print_results(
+    mut classes: Vec<CloneClass>,
+    sort: SortResult,
+    bbs: bool,
+    csv: bool,
+    filter: bool,
+) {
+    if filter {
+        let mut map: HashMap<Vec<(&str, &str)>, CloneClass> = HashMap::new();
+        for class in classes {
+            let mut content = class.iter_names().collect::<Vec<_>>();
+            content.sort_unstable();
+            if let Some(value) = map.get_mut(&content) {
+                if value.depth() < class.depth() {
+                    *value = class;
+                }
+            } else {
+                map.insert(content, class);
+            }
+        }
+        classes = map.into_values().collect::<Vec<_>>();
+    }
     match sort {
         SortResult::None => (),
         SortResult::DepthAsc => classes.sort_unstable_by_key(|a| a.depth()),
