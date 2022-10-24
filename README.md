@@ -1,35 +1,31 @@
-# BCC
+# BinCC
 
 This is the companion code for the paper 
-> **Function Clones Detection in Cross-Architectural Binary Code using Structural Analysis**
+> BinCC: Scalable Function Similarity Detection in Multiple Cross-Architectural Binaries
 >
 > D. Pizzolotto, K. Inoue
 >
 
 ## Pre-requisites
-In order to run the code:
-- rust must be installed in the system. This can be easily done following [these instructions](https://www.rust-lang.org/tools/install).
-- `radare2` must be installed in the system and on PATH. This disassembler can be found in most linux package managers and even on homebrew on macOS. Alternatively it can be downloaded and compiled from source [here](https://github.com/radareorg/radare2).
+Dependencies required to run the code:
+- [Rust](https://www.rust-lang.org/tools/install).
+- [radare2](https://github.com/radareorg/radare2). This software must be in the PATH.
 
-## Dataset
-The manually generated dataset can be found at the 
-[following link](https://zenodo.org/record/3865122#.X0XzttP7T_Q).
-
-Not every archive on the previous link is necessary though: in the experiments on the paper we used only the following folder: `amd64-gcc-o0`, `amd64-gcc-o2`, `amd64-gcc-os`, `aarch64-gcc-o0`, `aarch64-gcc-o2`, `aarch64-gcc-os`.
-
-## Compilation
+## Compiling
 Compilation can be done with the following command
 ```bash
 cargo build --release
 ```
-The compiled executables will be in the folder `target/release`
+The compiled executable `bincc` will be in the folder `target/release`
+
+Please run `cargo test -q` to ensure the program is working correctly. No test should fail.
 
 ## Usage
-After compilation, two executables will be present in the `target/release` folder: `rq1` and `rq2`.
-`rq1` was used to perform Research Questions #1 and #4, while `rq2` was used for Research Questions #2 and #3.
+Running `bincc --help` should list a verbose help with the various configuration settings that can be used.
 
-`rq1` is used to measure the high level reconstruction accuracy/time of this sofware.
-`rq2` can be used to check multiple binaries for function-level clones (reported as function names).
+For a quick usage, `bincc <binary1> <binary2> [<binary3> ...]` should list the binary clones using the default parameters.
 
-The input order can be found by invoking each program with `--help`
+## Experiments and Replication
 
+The experimental results provided in the paper can be found in a folder called `experiments` in the experiments branch of this repository. 
+Follow the README contained in that folder to replicate the results provided in the paper.
