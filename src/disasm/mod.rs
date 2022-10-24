@@ -7,4 +7,5 @@ mod architectures;
 pub use self::architectures::Architecture;
 pub use self::architectures::JumpType;
 
+/// Contains disassembler routines specific to radare2.
 pub mod radare2;

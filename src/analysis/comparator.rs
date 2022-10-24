@@ -6,22 +6,29 @@ use std::hash::Hash;
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// Contains all the binaries and function names belonging to the same clone class.
+///
+/// A clone class groups together several clone snippets exhibiting the same behaviour.
 pub struct CloneClass<'a> {
     binaries: Vec<&'a str>,
     functions: Vec<&'a str>,
     structures: Option<Vec<&'a StructureBlock>>,
+    // used by the iterator to know the current index.
     iterator_index: usize,
 }
 
 impl<'a> CloneClass<'a> {
+    /// Returns the amount of cloned functions contained in this class.
     pub fn len(&self) -> usize {
         self.binaries.len()
     }
 
+    /// Returns true if the clone class is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Iterate the binary and function names contained in this clone class.
     pub fn iter_names(&self) -> impl Iterator<Item = (&'a str, &'a str)> + '_ {
         self.binaries
             .iter()
@@ -29,6 +36,10 @@ impl<'a> CloneClass<'a> {
             .zip(self.functions.iter().copied())
     }
 
+    /// Returns the depth of the [`StructureBlock`] represented by this clone class.
+    ///
+    /// Returns 0 if there is no [`StructureBlock`] associated with this clone class
+    /// (i.e. in case of semantic analysis).
     pub fn depth(&self) -> u32 {
         if let Some(structures) = &self.structures {
             structures.first().map(|s| s.depth()).unwrap_or(0)
@@ -55,6 +66,7 @@ impl<'a> Iterator for CloneClass<'a> {
 }
 
 #[derive(Debug, Clone)]
+// Temp value representing a CloneClass, but using ids instead of strings
 struct CloneCandidate<'a> {
     bin_id: u32,
     func_id: u32,
@@ -136,6 +148,7 @@ impl<'a> CFSComparator<'a> {
     }
 }
 
+/// Compares several [`FVec`]s and discovers binary clones.
 pub struct SemanticComparator<'a> {
     bin_id: Vec<u32>,
     fun_id: Vec<u32>,
@@ -145,6 +158,10 @@ pub struct SemanticComparator<'a> {
 }
 
 impl<'a> SemanticComparator<'a> {
+    /// Creates a new comparator with the given threshold.
+    ///
+    ///  The threshold `min_similarity` refers to the minimum cosine similarity of two frequency
+    ///  vectors, in order for them to be considered the same.
     pub fn new(min_similarity: f32) -> Self {
         SemanticComparator {
             bin_id: Vec::new(),
@@ -155,6 +172,11 @@ impl<'a> SemanticComparator<'a> {
         }
     }
 
+    /// Inserts a new function in the comparator.
+    ///
+    /// The actual comparison is done by calling the [`SemanticComparator::clones`] function.
+    ///
+    /// binary_id and function_id are unique identifiers for a binary or a function.
     pub fn insert(
         &mut self,
         binary_id: u32,
@@ -170,6 +192,10 @@ impl<'a> SemanticComparator<'a> {
         }
     }
 
+    /// Retrieves the clone class from this comparator.
+    ///
+    /// The various functions to be checcked for clones should be inserted by calling
+    /// [`SemanticComparator::insert`] prior to this function.
     pub fn clones<'b>(&self, string_cache: &'b FnvHashMap<u32, String>) -> Vec<CloneClass<'b>>
     where
         'a: 'b,
@@ -209,11 +235,16 @@ impl<'a> SemanticComparator<'a> {
 }
 
 #[derive(Debug, Clone)]
+/// Frequency vector, used to calculate the distribution of opcodes in a sequence of
+/// [`Statement`]s.
 pub struct FVec {
     sparse: FnvHashMap<u16, f32>,
 }
 
 impl FVec {
+    /// Creates a new frequency vector, based on the given statements.
+    ///
+    /// The `opcode_map` is used to assign an unique identifier to each opcode.
     pub fn new(
         stmts: Vec<Statement>,
         opcode_map: &mut HashMap<String, u16>,
@@ -242,6 +273,9 @@ impl FVec {
         }
     }
 
+    /// Returns the cosine similarity of two similarity vectors.
+    ///
+    /// **NOTE:**The `opcode_map` used to create the two FVec must be the same.
     pub fn cosine_similarity(&self, other: &FVec) -> f32 {
         let my_max = self.sparse.keys().max().copied().unwrap_or(0);
         let other_max = other.sparse.keys().max().copied().unwrap_or(0);

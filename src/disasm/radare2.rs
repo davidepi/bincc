@@ -11,7 +11,7 @@ use std::{fs, io};
 
 /// A very basic Control Flow Graph.
 ///
-/// This crate provide a more advanced version in [analysis::CFG].
+/// This crate provide a more advanced version in [crate::analysis::CFG].
 /// This struct, however, is used to store the data retrieved from the underlying disassembler.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct BareCFG {
@@ -76,7 +76,7 @@ impl R2Disasm {
 
     /// Performs analysis on the function bounds only.
     ///
-    /// The default implementation calls [Disassembler::analyse] thus performing a full-binary
+    /// The default implementation calls [R2Disasm::analyse] thus performing a full-binary
     /// analysis.
     pub async fn analyse_functions(&mut self) {
         match self.pipe.cmd("aa").await {
@@ -94,7 +94,7 @@ impl R2Disasm {
 
     /// Returns the architecture of a specific file.
     ///
-    /// This operation *DOES NOT* require to run [Disassembler::analyse] first.
+    /// This operation *DOES NOT* require to run [R2Disasm::analyse] first.
     ///
     /// If the architecture can not be recognized, None is returned.
     pub async fn get_arch(&mut self) -> Option<Architecture> {
@@ -135,7 +135,7 @@ impl R2Disasm {
 
     /// Returns the starting offset of each function contained in the disassembled executable
     ///
-    /// This operation requires calling [Disassembler::analyse] first.
+    /// This operation requires calling [R2Disasm::analyse] first.
     pub async fn get_function_offsets(&mut self) -> FnvHashSet<u64> {
         match self.pipe.cmdj("aflqj").await {
             Ok(json) => {
@@ -157,7 +157,7 @@ impl R2Disasm {
 
     /// Returns names and offsets of every function in the current executable.
     ///
-    /// This operation requires calling [Disassembler::analyse] first.
+    /// This operation requires calling [R2Disasm::analyse] first.
     ///
     /// The returned map contains pairs `(function name, offset in the binary)`.
     pub async fn get_function_names(&mut self) -> HashMap<String, u64> {
@@ -183,7 +183,7 @@ impl R2Disasm {
 
     /// Returns the statements composing a single basic block.
     ///
-    /// This operation requires calling [Disassembler::analyse] first.
+    /// This operation requires calling [R2Disasm::analyse] first.
     pub async fn get_basic_block_body(&mut self, offset: u64) -> Option<Vec<Statement>> {
         let mut retval = None;
         let cmd_change_offset = format!("s {}", offset);
@@ -220,7 +220,7 @@ impl R2Disasm {
     ///
     /// The returned map contains pairs `(function offset, vector of statements)`
     ///
-    /// This operation requires calling [Disassembler::analyse] first.
+    /// This operation requires calling [R2Disasm::analyse] first.
     pub async fn get_function_bodies(&mut self) -> FnvHashMap<u64, Vec<Statement>> {
         let mut retval = FnvHashMap::default();
         let maybe_json = self.pipe.cmdj("aflqj").await;
@@ -249,7 +249,7 @@ impl R2Disasm {
     /// This method takes as input the function offset in the binary and returns a vector containing
     /// the list of statements. None if the function can not be found.
     ///
-    /// This operation requires calling [Disassembler::analyse] first.
+    /// This operation requires calling [R2Disasm::analyse] first.
     pub async fn get_function_body(&mut self, function: u64) -> Option<Vec<Statement>> {
         let mut retval = None;
         let cmd_change_offset = format!("s {}", function);

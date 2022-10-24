@@ -20,12 +20,18 @@ use std::sync::Arc;
 const BUILD_TOLERANCE: usize = 32;
 
 #[derive(Clone)]
+/// A High-Level control flow structure, representing a function in form of [`StructureBlock`]
+/// tree.
 pub struct CFS {
     cfg: CFG,
     tree: DirectedGraph<StructureBlock>,
 }
 
 impl CFS {
+    /// Creates the control flow structure from a [`CFG`].
+    ///
+    /// This procedure is **NOT** guaranteed to complete successfully. If the procedure fails, the
+    /// [`CFS::get_tree`] method will return [`None`].
     pub fn new(cfg: &CFG) -> CFS {
         let sinked_cfg = cfg.clone();
         let tree = build_cfs(&sinked_cfg);
@@ -35,10 +41,16 @@ impl CFS {
         }
     }
 
+    /// Returns the final result of the [`CFS`] creation.
+    ///
+    /// If the process fails, a graph will be created, otherwise a tree will be created.
     pub fn get_graph(&self) -> &DirectedGraph<StructureBlock> {
         &self.tree
     }
 
+    /// Returns the final result of the [`CFS`] creations only if successfull.
+    ///
+    /// This method will always return a [`StructureBlock`] tree.
     pub fn get_tree(&self) -> Option<StructureBlock> {
         if self.tree.len() == 1 {
             Some(self.tree.root.clone().unwrap())
@@ -47,10 +59,15 @@ impl CFS {
         }
     }
 
+    /// Returns the original [`CFG`] used for the [`CFS`] creation.
     pub fn get_cfg(&self) -> &CFG {
         &self.cfg
     }
 
+    //// Returns a string representing the current [`CFS`] in Graphviz dot format.
+    ///
+    /// The representation will contain the original [`CFG`] with nodes composing
+    /// [`StructureBlock`]s clustered together.
     pub fn to_dot(&self) -> String {
         let mut dot = self.cfg.to_dot();
         dot.pop();
@@ -63,11 +80,15 @@ impl CFS {
         dot
     }
 
+    ///  Writes the current [`CFS`] into a file in Graphviz dot format.
+    ///
+    ///  This is equivalent to saving the [`CFS::to_dot`] string into a file.
     pub fn to_file<S: AsRef<Path>>(&self, filename: S) -> Result<(), io::Error> {
         let mut file = File::create(filename)?;
         file.write_all(self.to_dot().as_bytes())
     }
 
+    /// Returns the tree structure of the [`CFS`] in form of Graphviz dot format.
     pub fn to_dot_tree(&self) -> String {
         let mut dot = "digraph {\n".to_string();
         let mut stack = self.get_tree().iter().cloned().collect::<Vec<_>>();
@@ -96,6 +117,9 @@ impl CFS {
         dot
     }
 
+    ///  Writes the current [`CFS`] tree into a file in Graphviz dot format.
+    ///
+    ///  This is equivalent to saving the [`CFS::to_dot_tree`] string into a file.
     pub fn to_file_tree<S: AsRef<Path>>(&self, filename: S) -> Result<(), io::Error> {
         let mut file = File::create(filename)?;
         file.write_all(self.to_dot_tree().as_bytes())

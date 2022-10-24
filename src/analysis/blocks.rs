@@ -4,6 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
 
+/// High-level structure label assigned to a [`NestedBlock`].
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum BlockType {
     Basic,
@@ -35,6 +36,7 @@ impl Display for BlockType {
     }
 }
 
+/// A group of [`StructureBlock`] with the same [`BlockType`] label.
 #[derive(Debug, PartialEq, Eq, Hash)]
 pub struct NestedBlock {
     pub(crate) offset: u64,
@@ -44,14 +46,15 @@ pub struct NestedBlock {
 }
 
 impl NestedBlock {
-    pub fn new(bt: BlockType, children: Vec<StructureBlock>) -> NestedBlock {
+    /// Creates a new nested block with the given label and children.
+    pub fn new(label: BlockType, children: Vec<StructureBlock>) -> NestedBlock {
         let old_depth = children.iter().fold(0, |max, val| max.max(val.depth()));
         let offset = children
             .iter()
             .fold(u64::MAX, |min, val| min.min(val.offset()));
         NestedBlock {
             offset,
-            block_type: bt,
+            block_type: label,
             content: children,
             depth: old_depth + 1,
         }
@@ -64,6 +67,7 @@ impl Display for NestedBlock {
     }
 }
 
+/// Contains either a [`BasicBlock`] or a [`NestedBlock`].
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StructureBlock {
     Basic(BasicBlock),
@@ -80,6 +84,7 @@ impl Display for StructureBlock {
 }
 
 impl StructureBlock {
+    /// Returns the label of this block.
     pub fn block_type(&self) -> BlockType {
         match self {
             StructureBlock::Basic(_) => BlockType::Basic,
@@ -87,6 +92,9 @@ impl StructureBlock {
         }
     }
 
+    /// Returns the amount of nested structures in this block.
+    ///
+    /// If this block contains only basic blocks, 0 is returned.
     pub fn depth(&self) -> u32 {
         match self {
             StructureBlock::Basic(_) => 0,
@@ -94,6 +102,7 @@ impl StructureBlock {
         }
     }
 
+    /// Returns the children of this block.
     pub fn children(&self) -> &[StructureBlock] {
         match self {
             StructureBlock::Basic(_) => &[],
@@ -101,6 +110,7 @@ impl StructureBlock {
         }
     }
 
+    /// Calculate a unique hash for this block that does not account for basic block offsets.
     pub fn structural_hash(&self, state: &mut DefaultHasher) {
         self.children()
             .iter()
@@ -108,6 +118,7 @@ impl StructureBlock {
         self.block_type().hash(state);
     }
 
+    /// Checks if two blocks have the same structure (does not check for basic blocks equality).
     pub fn structural_equality(&self, b: &StructureBlock) -> bool {
         if self.block_type() == b.block_type() {
             let children_a = self.children();
@@ -127,14 +138,17 @@ impl StructureBlock {
         }
     }
 
+    /// Returns the amount of children in this block.
     pub fn len(&self) -> usize {
         self.children().len()
     }
 
+    /// Returns true if this block has no children.
     pub fn is_empty(&self) -> bool {
         self.children().is_empty()
     }
 
+    /// Returns a string representing this block type.
     pub fn get_type_name(&self) -> &'static str {
         let bt = match self {
             StructureBlock::Basic(_) => BlockType::Basic,
@@ -154,6 +168,7 @@ impl StructureBlock {
         }
     }
 
+    /// Returns the offset of the first basic block contained in this cluster.
     pub fn offset(&self) -> u64 {
         match self {
             StructureBlock::Basic(bb) => bb.offset,
@@ -161,6 +176,7 @@ impl StructureBlock {
         }
     }
 
+    /// Returns the list of basic blocks contained in this cluster, ordered by offset.
     pub fn basic_blocks(&self) -> Vec<BasicBlock> {
         let mut retval = Vec::new();
         let mut stack = vec![self];
