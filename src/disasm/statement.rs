@@ -27,7 +27,7 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementFamily};
+    /// # use bincc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(600, StatementFamily::RET, "ret");
     /// ```
     pub fn new(offset: u64, stype: StatementFamily, instruction: &str) -> Statement {
@@ -44,7 +44,7 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementFamily};
+    /// # use bincc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
     ///     StatementFamily::MOV,
@@ -62,7 +62,7 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementFamily};
+    /// # use bincc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
     ///     StatementFamily::MOV,
@@ -81,7 +81,7 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementFamily};
+    /// # use bincc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
     ///     StatementFamily::MOV,
@@ -104,7 +104,7 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementFamily};
+    /// # use bincc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
     ///     StatementFamily::MOV,
@@ -128,7 +128,7 @@ impl Statement {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Statement, StatementFamily};
+    /// # use bincc::disasm::{Statement, StatementFamily};
     /// let stmt = Statement::new(
     ///     0x600,
     ///     StatementFamily::MOV,

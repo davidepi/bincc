@@ -45,7 +45,7 @@ impl Architecture {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::Architecture;
+    /// # use bincc::disasm::Architecture;
     /// let arch = Architecture::X86(32);
     ///
     /// assert_eq!(arch.name(), "x86");
@@ -105,7 +105,7 @@ impl Architecture {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::disasm::{Architecture, JumpType};
+    /// # use bincc::disasm::{Architecture, JumpType};
     /// let arch = Architecture::X86(32);
     /// let jmp_type = arch.jump("jge");
     ///

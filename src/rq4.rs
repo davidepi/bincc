@@ -1,7 +1,7 @@
-use bcc::analysis::{
+use bincc::analysis::{
     CFSComparator, CloneClass, FVec, Graph, SemanticComparator, StructureBlock, CFG, CFS,
 };
-use bcc::disasm::radare2::R2Disasm;
+use bincc::disasm::radare2::R2Disasm;
 use clap::Parser;
 use fnv::FnvHashMap;
 use futures::stream::FuturesUnordered;

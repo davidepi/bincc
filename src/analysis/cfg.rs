@@ -172,8 +172,8 @@ impl CFG {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// # use bcc::analysis::{Graph, CFG};
-    /// # use bcc::disasm::{Architecture, Statement, StatementFamily};
+    /// # use bincc::analysis::{Graph, CFG};
+    /// # use bincc::disasm::{Architecture, Statement, StatementFamily};
     /// let stmts = vec![
     ///     Statement::new(0x38, StatementFamily::CMP, "cmp dword [var_4h], 0"),
     ///     Statement::new(0x3C, StatementFamily::CJMP, "jle 0x45"),

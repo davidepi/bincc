@@ -1,5 +1,5 @@
 [package]
-name = "bcc"
+name = "bincc"
 description = "Checks for similarities among different binaries."
 version = "0.1.0"
 authors = [
@@ -7,12 +7,12 @@ authors = [
 ]
 edition = "2021"
 license = "MIT"
-default-run = "bcc"
+default-run = "bincc"
 publish = false
 
 [[bin]]
-name = "bcc"
-path = "src/bcc.rs"
+name = "bincc"
+path = "src/bincc.rs"
 doc = false
 required-features=["build-bin"]
 

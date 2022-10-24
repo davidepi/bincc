@@ -1,5 +1,5 @@
-use bcc::analysis::{Graph, CFG, CFS};
-use bcc::disasm::radare2::R2Disasm;
+use bincc::analysis::{Graph, CFG, CFS};
+use bincc::disasm::radare2::R2Disasm;
 use clap::Parser;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;

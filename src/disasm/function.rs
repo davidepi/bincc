@@ -18,8 +18,7 @@ impl Function {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::disasm::Function;
-    ///
+    /// # use bincc::disasm::Function;
     /// let func = Function::new(0x1060, "entry0");
     /// ```
     pub fn new(offset: u64, name: &str) -> Function {
@@ -35,8 +34,7 @@ impl Function {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::disasm::Function;
-    ///
+    /// # use bincc::disasm::Function;
     /// let func = Function::new(0x1060, "entry0");
     /// let name = func.get_name();
     ///
@@ -52,8 +50,7 @@ impl Function {
     /// # Examples
     /// Basic usage:
     /// ```
-    /// use bcc::disasm::Function;
-    ///
+    /// # use bincc::disasm::Function;
     /// let func = Function::new(0x1060, "entry0");
     /// let offset = func.get_offset();
     ///
