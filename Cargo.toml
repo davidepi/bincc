@@ -16,19 +16,6 @@ path = "src/bincc.rs"
 doc = false
 required-features=["build-bin"]
 
-[[bin]]
-name = "rq1"
-path = "src/rq1.rs"
-doc = false
-required-features=["build-bin"]
-
-[[bin]]
-name = "rq4"
-path = "src/rq4.rs"
-doc = false
-required-features=["build-bin"]
-
-
 [dependencies]
 #lib
 fnv = "1.0"
